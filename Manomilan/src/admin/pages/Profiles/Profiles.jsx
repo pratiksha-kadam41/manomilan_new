@@ -5,7 +5,7 @@ import {
   CheckCircle2, Clock, X, AlertTriangle, Users, RotateCcw, Archive,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
-import { request, download, apiUrl } from "../../../api";
+import { request, download } from "../../../api";
 import "./profiles.css";
 
 const LINKS = {
@@ -13,7 +13,7 @@ const LINKS = {
   view: (id) => `#/admin/profiles/${id}`,
   edit: (id) => `#/admin/profiles/edit/${id}`,
   payment: (id) => `#/admin/profiles/payment/${id}`,
-  receipt: (id) => `${apiUrl}/profiles/generate-receipt/${id}`,
+  receipt: (id) => `#/admin/profiles/receipt/${id}`,
 };
 
 const GENDERS = [

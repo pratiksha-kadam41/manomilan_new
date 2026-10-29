@@ -16,6 +16,7 @@ import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
 import Profiles from "./admin/pages/Profiles/Profiles.jsx";
 import ProfileVerify from "./admin/pages/Profiles/ProfileVerify.jsx";
+import Receipt from "./admin/pages/Profiles/Receipt.jsx";
 
 // Add a page here: "/url-name": Component
 const ROUTES = {
@@ -39,6 +40,7 @@ const ROUTES = {
 const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/profiles\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
+  { pattern: /^\/admin\/profiles\/receipt\/(\d+)$/, Page: Receipt },
 ];
 
 const matchRoute = (path) => {

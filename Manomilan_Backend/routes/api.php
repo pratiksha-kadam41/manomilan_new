@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\MelavaRegistrationController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\WorkshopRegistrationController;
 use Illuminate\Http\Request;
@@ -71,4 +72,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payments/my', [PaymentController::class, 'myPayments']);
     Route::get('/payments', [PaymentController::class, 'index']);
     Route::put('/payments/{id}/status', [PaymentController::class, 'updateStatus']);
+    Route::get('/profiles/{profileId}/receipt', [ReceiptController::class, 'show'])->whereNumber('profileId');
 });
