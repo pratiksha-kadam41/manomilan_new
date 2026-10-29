@@ -50,4 +50,29 @@ class User extends Authenticatable
             'is_password_changed' => 'boolean',
         ];
     }
+
+    public function profile()
+    {
+        return $this->belongsTo(\App\Profile::class, 'profile_id');
+    }
+
+    public function preference()
+    {
+        return $this->hasOne(\App\Preference::class, 'user_id');
+    }
+
+    public function interests()
+    {
+        return $this->hasMany(\App\UserInterest::class, 'user_id');
+    }
+
+    public function receivedInterests()
+    {
+        return $this->hasMany(\App\UserInterest::class, 'profile_id');
+    }
+
+    public function isAdmin(): bool
+    {
+        return (int) $this->role_id === 1 || (string) $this->user_type === '00';
+    }
 }

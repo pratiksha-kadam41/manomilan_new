@@ -1,0 +1,117 @@
+import { useState } from "react";
+import { KeyRound, Loader2, ShieldCheck, AlertTriangle } from "lucide-react";
+import AdminLayout from "../admin/components/AdminLayout";
+import CandidateLayout from "../candidate/components/CandidateLayout";
+import { request } from "../api";
+import { getSession, isAdminRole } from "../auth";
+import "./change-password.css";
+
+const EMPTY = { current_password: "", new_password: "", new_password_confirmation: "" };
+
+export default function ChangePassword() {
+  const session = getSession();
+  const admin = isAdminRole(session?.role);
+  const Layout = admin ? AdminLayout : CandidateLayout;
+  const currentPath = admin ? "/admin/change-password" : "/candidate/change-password";
+
+  const [values, setValues] = useState(EMPTY);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const update = (field) => (event) => {
+    setValues((prev) => ({ ...prev, [field]: event.target.value }));
+    setSuccess("");
+  };
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (values.new_password !== values.new_password_confirmation) {
+      setError("New password and confirmation do not match.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const body = await request("/change-password", {
+        method: "POST",
+        body: values,
+      });
+      setValues(EMPTY);
+      setSuccess(body?.message || "Password changed successfully.");
+    } catch (err) {
+      setError(err.message || "Could not change your password.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Layout currentPath={currentPath}>
+      <div className="cp-page">
+        <div className="cp-card">
+          <div className="cp-head">
+            <span className="cp-icon"><KeyRound size={22} /></span>
+            <div>
+              <h1>Change Password</h1>
+              <p>Choose a strong password you do not use anywhere else.</p>
+            </div>
+          </div>
+
+          {error && (
+            <div className="cp-alert error" role="alert">
+              <AlertTriangle size={17} /> {error}
+            </div>
+          )}
+          {success && (
+            <div className="cp-alert success" role="status">
+              <ShieldCheck size={17} /> {success}
+            </div>
+          )}
+
+          <form onSubmit={submit} className="cp-form">
+            <label>
+              Current password
+              <input
+                type="password"
+                value={values.current_password}
+                onChange={update("current_password")}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            <label>
+              New password
+              <input
+                type="password"
+                value={values.new_password}
+                onChange={update("new_password")}
+                autoComplete="new-password"
+                minLength={6}
+                required
+              />
+            </label>
+            <label>
+              Confirm new password
+              <input
+                type="password"
+                value={values.new_password_confirmation}
+                onChange={update("new_password_confirmation")}
+                autoComplete="new-password"
+                minLength={6}
+                required
+              />
+            </label>
+
+            <button type="submit" className="cp-submit" disabled={saving}>
+              {saving ? <><Loader2 size={17} className="cp-spin" /> Saving…</> : "Update Password"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </Layout>
+  );
+}

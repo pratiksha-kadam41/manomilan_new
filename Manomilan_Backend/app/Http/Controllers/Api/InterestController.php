@@ -3,73 +3,177 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Profile;
 use App\UserInterest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Throwable;
 
 class InterestController extends Controller
 {
     public function sent(Request $request)
     {
         $user = $request->user();
-        $profileId = $user->profile_id;
-        $interests = UserInterest::where('from_profile_id', $profileId)->with('profile')->latest()->paginate($request->get('per_page', 20));
+
+        $interests = UserInterest::with(['profile.user'])
+            ->where('user_id', $user->id)
+            ->latest()
+            ->paginate((int) $request->input('per_page', 20));
+
+        $interests->getCollection()->transform(function (UserInterest $interest) {
+            return [
+                'id' => $interest->id,
+                'status' => $interest->status,
+                'created_at' => optional($interest->created_at)->toIso8601String(),
+                'profile' => $this->presentProfile($interest->profile),
+            ];
+        });
+
         return response()->json(['success' => true, 'data' => $interests]);
     }
 
     public function received(Request $request)
     {
         $user = $request->user();
-        $profileId = $user->profile_id;
-        $interests = UserInterest::where('profile_id', $profileId)->with('fromProfile')->latest()->paginate($request->get('per_page', 20));
+
+        if (! $user->profile_id) {
+            return response()->json(['success' => true, 'data' => $this->emptyPaginator()]);
+        }
+
+        $interests = UserInterest::with(['user.profile'])
+            ->where('profile_id', $user->profile_id)
+            ->latest()
+            ->paginate((int) $request->input('per_page', 20));
+
+        $interests->getCollection()->transform(function (UserInterest $interest) {
+            return [
+                'id' => $interest->id,
+                'status' => $interest->status,
+                'created_at' => optional($interest->created_at)->toIso8601String(),
+                'profile' => $this->presentProfile($interest->user?->profile),
+            ];
+        });
+
         return response()->json(['success' => true, 'data' => $interests]);
     }
 
     public function send(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'to_profile_id' => 'required|integer|exists:profiles,id',
+        $data = $request->validate([
+            'to_profile_id' => ['required', 'integer', 'exists:profiles,id'],
         ]);
-
-        if ($validator->fails()) {
-            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
-        }
 
         $user = $request->user();
-        $interest = UserInterest::firstOrCreate([
-            'from_profile_id' => $user->profile_id,
-            'profile_id' => $request->to_profile_id,
-        ], [
-            'status' => 'pending',
-        ]);
 
-        return response()->json(['success' => true, 'message' => 'Interest sent successfully', 'data' => $interest], 201);
+        if (! $user->profile_id) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Complete your profile before sending an interest.',
+            ], 422);
+        }
+
+        if ((int) $user->profile_id === (int) $data['to_profile_id']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You cannot send an interest to your own profile.',
+            ], 422);
+        }
+
+        try {
+            $interest = DB::transaction(function () use ($user, $data) {
+                return UserInterest::firstOrCreate(
+                    [
+                        'user_id' => $user->id,
+                        'profile_id' => $data['to_profile_id'],
+                    ],
+                    ['status' => 'pending']
+                );
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => $interest->wasRecentlyCreated ? 'Interest sent successfully.' : 'Interest already sent.',
+                'data' => $interest,
+            ], $interest->wasRecentlyCreated ? 201 : 200);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to send the interest right now.',
+            ], 500);
+        }
     }
 
     public function respond(Request $request, $id)
     {
-        $validator = Validator::make($request->all(), [
-            'status' => 'required|in:accepted,rejected',
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['accepted', 'rejected'])],
         ]);
 
-        if ($validator->fails()) {
-            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $validator->errors()], 422);
-        }
-
         $interest = UserInterest::find($id);
-        if (!$interest) {
-            return response()->json(['success' => false, 'message' => 'Interest not found'], 404);
+
+        if (! $interest) {
+            return response()->json(['success' => false, 'message' => 'Interest not found.'], 404);
         }
 
         $user = $request->user();
-        if ($interest->profile_id != $user->profile_id) {
-            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+
+        if (! $user->isAdmin() && (int) $interest->profile_id !== (int) $user->profile_id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
 
-        $interest->status = $request->status;
-        $interest->save();
+        try {
+            DB::transaction(function () use ($interest, $data) {
+                $interest->status = $data['status'];
+                $interest->save();
+            });
 
-        return response()->json(['success' => true, 'message' => 'Interest response updated', 'data' => $interest]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Interest response updated.',
+                'data' => $interest,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update the interest right now.',
+            ], 500);
+        }
+    }
+
+    private function presentProfile(?Profile $profile): ?array
+    {
+        if (! $profile) {
+            return null;
+        }
+
+        return [
+            'id' => $profile->id,
+            'full_name' => $profile->fullName,
+            'photo_url' => $profile->profilePhoto ? url(ltrim($profile->profilePhoto, '/')) : '',
+            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
+            'city' => $profile->location ?: $profile->professionalCity ?: $profile->cityOfEducation,
+            'education' => $profile->education,
+            'profession' => $profile->profession,
+            'gender' => $profile->groomOrBride,
+        ];
+    }
+
+    private function emptyPaginator(): array
+    {
+        return [
+            'data' => [],
+            'current_page' => 1,
+            'last_page' => 1,
+            'per_page' => 20,
+            'total' => 0,
+            'from' => null,
+            'to' => null,
+        ];
     }
 }
-

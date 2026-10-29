@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { PRIVACY_INTRO, PRIVACY_SECTIONS } from "../data/privacy.js";
 
-const SITE_URL = "https://aaryansmanomilan.com";
 const ADDRESS =
   "Aachal Prime' Building, Above Hotel 'Shree Kateel', Next to Navale Bridge, New Pune-Satara Bypass Highway, Near Amrit Bloomfield, Narhe, Pune - 411041.";
 

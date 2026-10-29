@@ -1,36 +1,43 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\Auth\ChangePasswordController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Auth\RegisterController;
-use App\Http\Controllers\Api\ProfileController;
-use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\EnquiryController;
-use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InterestController;
-use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\MelavaRegistrationController;
-use App\Http\Controllers\Api\WorkshopRegistrationController;
 use App\Http\Controllers\Api\PaymentController;
+use App\Http\Controllers\Api\PreferenceController;
+use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\WorkshopRegistrationController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1');
 
-Route::post('/enquiries', [EnquiryController::class, 'store']);
-Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store']);
-Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store']);
+Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('throttle:10,1');
+Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
+Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
-        return response()->json(['user' => $request->user()]);
+        return response()->json(['user' => $request->user()->load('profile')]);
     });
     Route::post('/logout', [LoginController::class, 'logout']);
     Route::put('/change-password', [ChangePasswordController::class, 'changePassword']);
 
     Route::get('/dashboard', [HomeController::class, 'dashboard']);
     Route::get('/home-data', [HomeController::class, 'homeData']);
+
+    // Specific profile routes must stay above the generic /profiles/{id} route.
+    Route::get('/profiles/allProfiles', [ProfileController::class, 'allProfiles']);
+    Route::get('/profiles/export', [ProfileController::class, 'export']);
+    Route::get('/profiles/{id}/verification', [ProfileController::class, 'verification']);
+    Route::post('/profiles/{id}/verify', [ProfileController::class, 'verify']);
+    Route::patch('/profiles/deactivate/{id}', [ProfileController::class, 'deactivate']);
 
     Route::get('/profiles', [ProfileController::class, 'index']);
     Route::get('/profiles/{id}', [ProfileController::class, 'show']);
@@ -65,4 +72,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payments', [PaymentController::class, 'index']);
     Route::put('/payments/{id}/status', [PaymentController::class, 'updateStatus']);
 });
-

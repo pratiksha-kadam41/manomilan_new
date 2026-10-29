@@ -1,4 +1,5 @@
-const BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/+$/, "");
+import { request } from "./api";
+
 const ADMIN_ROLES = ["admin", "super"];
 
 const SESSION_KEY = "auth";
@@ -10,6 +11,7 @@ localStorage.removeItem("authRole");
 localStorage.removeItem("adminToken");
 
 export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
+
 const roleForUser = (user) =>
   Number(user?.role_id) === 1 || String(user?.user_type) === "00"
     ? "admin"
@@ -26,11 +28,11 @@ const read = () => {
   }
 };
 
-export function saveSession({ token, role }) {
+export function saveSession({ token, role, user = null }) {
   const now = Date.now();
   sessionStorage.setItem(
     SESSION_KEY,
-    JSON.stringify({ token, role, startedAt: now, lastActive: now }),
+    JSON.stringify({ token, role, user, startedAt: now, lastActive: now }),
   );
 }
 
@@ -46,7 +48,7 @@ export function getSession() {
     clearSession();
     return null;
   }
-  return { token: session.token, role: session.role };
+  return { token: session.token, role: session.role, user: session.user || null };
 }
 
 export function touchSession() {
@@ -61,9 +63,10 @@ export function clearSession() {
   sessionStorage.removeItem(SESSION_KEY);
 
   if (session?.token) {
-    fetch(`${BASE}/logout`, {
+    request("/logout", {
       method: "POST",
-      headers: { Accept: "application/json", Authorization: `Bearer ${session.token}` },
+      auth: false,
+      headers: { Authorization: `Bearer ${session.token}` },
     }).catch(() => {});
   }
 }
@@ -93,104 +96,92 @@ export function watchActivity(onExpire) {
   };
 }
 
-async function readError(res, fallback) {
-  const body = await res.json().catch(() => ({}));
-  const firstError = Object.values(body.errors || {})[0];
-  if (Array.isArray(firstError)) return firstError[0];
-  return body.message || fallback;
-}
-
 export async function loginUser(username, password) {
-  let res;
   try {
-    res = await fetch(`${BASE}/login`, {
+    const body = await request("/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ username, password }),
+      body: { username, password },
+      auth: false,
     });
-  } catch {
-    throw new Error("Cannot reach the server. Check your internet and try again.");
-  }
 
-  if (res.status === 401) throw new Error("Invalid username or password.");
-  if (res.status === 422) {
-    throw new Error(await readError(res, "Invalid username or password."));
-  }
-  if (res.status === 429) {
-    throw new Error("Too many attempts. Please wait a few minutes and try again.");
-  }
-  if (res.status === 403) {
-    throw new Error(await readError(res, "Your account cannot sign in."));
-  }
-  if (!res.ok) {
-    throw new Error(await readError(res, "Please try again later."));
-  }
+    if (!body?.token || !body?.user) {
+      throw new Error("The server returned an invalid login response.");
+    }
 
-  const body = await res.json();
-  if (!body.token || !body.user) {
-    throw new Error("The server returned an invalid login response.");
+    return {
+      token: body.token,
+      role: roleForUser(body.user),
+      user: body.user,
+    };
+  } catch (error) {
+    if (error.status === 401) {
+      throw new Error("Invalid username or password.", { cause: error });
+    }
+    if (error.status === 429) {
+      throw new Error(
+        "Too many attempts. Please wait a few minutes and try again.",
+        { cause: error },
+      );
+    }
+    throw error;
   }
-  return { token: body.token, role: roleForUser(body.user), user: body.user };
 }
 
 export async function registerUser({ name, email, phone, password }) {
-  let res;
-  try {
-    res = await fetch(`${BASE}/register`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({ name, email, phone, password }),
-    });
-  } catch {
-    throw new Error("Cannot reach the server. Check your internet and try again.");
-  }
+  const body = await request("/register", {
+    method: "POST",
+    body: { name, email, phone, password },
+    auth: false,
+  });
 
-  if (!res.ok) {
-    throw new Error(
-      await readError(res, "Registration failed. Please try again later."),
-    );
-  }
-
-  const body = await res.json();
-  if (!body.token || !body.user) {
+  if (!body?.token || !body?.user) {
     throw new Error("The server returned an invalid registration response.");
   }
-  return { token: body.token, role: roleForUser(body.user), user: body.user };
+
+  return {
+    token: body.token,
+    role: roleForUser(body.user),
+    user: body.user,
+  };
 }
 
-export async function getAdminDashboard() {
-  const session = getSession();
-  if (!session?.token) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
-
-  let res;
-  try {
-    res = await fetch(`${BASE}/dashboard`, {
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.token}`,
-      },
-    });
-  } catch {
-    throw new Error("Cannot reach the server. Check your internet and try again.");
-  }
-
-  if (res.status === 401) {
-    clearSession();
-    window.location.hash = "#/login?expired=1";
-    throw new Error("Your session has expired. Please sign in again.");
-  }
-
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.success || !body.data) {
-    throw new Error(body.message || "Could not load the admin dashboard.");
+export async function getDashboard() {
+  const body = await request("/dashboard");
+  if (!body?.success || !body?.data) {
+    throw new Error(body?.message || "Could not load dashboard data.");
   }
   return body.data;
+}
+
+export const getAdminDashboard = getDashboard;
+
+export async function getHomeData() {
+  const body = await request("/home-data");
+  if (!body?.success || !body?.data) {
+    throw new Error(body?.message || "Could not load profile data.");
+  }
+  return body.data;
+}
+
+export async function getReceivedInterests(perPage = 20) {
+  const body = await request(`/interests/received?per_page=${perPage}`);
+  return body?.data || null;
+}
+
+export async function getSentInterests(perPage = 20) {
+  const body = await request(`/interests/sent?per_page=${perPage}`);
+  return body?.data || null;
+}
+
+export async function getProfiles(params = {}) {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== "" && value != null),
+  ).toString();
+  const body = await request(`/profiles${query ? `?${query}` : ""}`);
+  return body?.data || null;
+}
+
+export async function getMyProfile() {
+  const body = await request("/my-profile");
+  return body?.data || null;
 }

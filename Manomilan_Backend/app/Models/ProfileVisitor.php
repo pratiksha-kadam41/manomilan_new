@@ -20,6 +20,6 @@ class ProfileVisitor extends Model
 
     public function visitor()
     {
-        return $this->belongsTo(User::class, 'visitor_id');
+        return $this->belongsTo(\App\Models\User::class, 'visitor_id');
     }
 }

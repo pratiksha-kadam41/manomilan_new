@@ -9,6 +9,7 @@ import SuccessStories from "./pages/SuccessStories.jsx";
 import OurServices from "./pages/OurServices.jsx";
 import ContactUs from "./pages/ContactUs.jsx";
 import Login from "./pages/Login.jsx";
+import ChangePassword from "./pages/ChangePassword.jsx";
 import Dashboard from "./admin/pages/Dashboard";
 import CandidateDashboard from "./candidate/pages/Dashboard";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
@@ -26,13 +27,17 @@ const ROUTES = {
   "/contactus": ContactUs,
 
   "/login": Login,
+  "/register": Login,
   "/candidate": CandidateDashboard,
+  "/candidate/change-password": ChangePassword,
   "/admin": Dashboard,
+  "/admin/change-password": ChangePassword,
   "/admin/profiles": Profiles,
 };
 
-// Pages whose URL contains an id, e.g. #/admin/profiles/edit/396  (only digits are accepted)
+// Pages whose URL contains an id, e.g. #/admin/profiles/396  (only digits are accepted)
 const DYNAMIC_ROUTES = [
+  { pattern: /^\/admin\/profiles\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
 ];
 
@@ -81,7 +86,7 @@ export default function App() {
 
   const isAdminPath = path.startsWith("/admin");
   const isCandidatePath = path.startsWith("/candidate");
-  const isLogin = path === "/login";
+  const isLogin = path === "/login" || path === "/register";
 
   // Private pages need a login
   const needsLogin = (isAdminPath || isCandidatePath) && !session;
@@ -90,7 +95,7 @@ export default function App() {
   const wrongRole = isAdminPath && session && !isAdminRole(session.role);
   useEffect(() => {
     if (wrongRole) window.location.hash = homeForRole(session.role);
-  }, [wrongRole]);
+  }, [wrongRole, session?.role]);
   if (wrongRole) return null;
 
   // CHANGED: find the page (and the id from the URL, if any)

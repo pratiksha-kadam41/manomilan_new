@@ -56,7 +56,9 @@ export default function Login() {
     name: "",
     email: "",
   });
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(() =>
+    window.location.hash.startsWith("#/register"),
+  );
   const [touched, setTouched] = useState({});
   const [remember, setRemember] = useState(!!localStorage.getItem("rememberedUser"));
   const [showPassword, setShowPassword] = useState(false);
@@ -105,7 +107,7 @@ export default function Login() {
 
     setLoading(true);
     try {
-      const { token, role } = isRegistering
+      const { token, role, user } = isRegistering
         ? await registerUser({
             name: values.name.trim(),
             email: values.email.trim(),
@@ -114,7 +116,7 @@ export default function Login() {
           })
         : await loginUser(values.username, values.password);
 
-      saveSession({ token, role });
+      saveSession({ token, role, user });
       if (!isRegistering && remember)
         localStorage.setItem("rememberedUser", values.username);
       else localStorage.removeItem("rememberedUser");
@@ -281,7 +283,7 @@ export default function Login() {
           <button type="submit" className="login-btn" disabled={loading}>
             {loading ? (
               <>
-                <Loader2 size={16} className="login-spin" /> Signing in...
+                <Loader2 size={16} className="login-spin" /> {isRegistering ? "Creating account..." : "Signing in..."}
               </>
             ) : (
               isRegistering ? "Create account" : "Sign in"

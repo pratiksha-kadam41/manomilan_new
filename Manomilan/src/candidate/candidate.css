@@ -467,3 +467,50 @@
   .cnd-topbar { padding: 0 16px; }
   .cnd-user-text { display: none; }
 }
+
+/* ================= Loading / feedback states ================= */
+.cnd-state {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #86737a;
+}
+
+.cnd-spin { animation: cnd-spin 0.9s linear infinite; }
+@keyframes cnd-spin { to { transform: rotate(360deg); } }
+
+.cnd-empty {
+  color: #86737a;
+  font-size: 14px;
+  padding: 12px 0;
+}
+
+.cnd-empty-error { color: #d03a3a; }
+
+.cnd-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #fdecec;
+  border: 1px solid #f5c2c2;
+  color: #a12a2a;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 18px;
+  font-size: 14px;
+}
+
+.cnd-alert button {
+  flex-shrink: 0;
+  background: #d03a3a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-weight: 600;
+}
+
+.cnd-match-btn.error {
+  background: #d03a3a;
+  color: #fff;
+}

@@ -5,30 +5,15 @@ import {
   CheckCircle2, Clock, X, AlertTriangle, Users, RotateCcw, Archive,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
-import { getSession, clearSession } from "../../../auth";
+import { request, download, apiUrl } from "../../../api";
 import "./profiles.css";
-
-/* =====================================================================
-   1. BACKEND SETTINGS  (the only part you need to adjust)
-   ---------------------------------------------------------------------
-   List API:  GET  {BASE}/profiles/allProfiles?q=&gender=&reg_type=&sort_by=&sort_order=&page=
-   Expected JSON (Laravel paginator):
-   {
-     data: [{ id, registration_number, photo_url, full_name, mobile,
-              registration_date, status, payment_verified }],
-     current_page, last_page, per_page, total, from, to
-   }
-   Deactivate: PATCH {BASE}/profiles/deactivate/:id
-   Export:     GET   {BASE}/profiles/export?q=&gender=&reg_type=
-   ===================================================================== */
-const BASE = import.meta.env.VITE_API_URL;
 
 const LINKS = {
   inactive: "#/admin/inactive-profiles",
   view: (id) => `#/admin/profiles/${id}`,
   edit: (id) => `#/admin/profiles/edit/${id}`,
   payment: (id) => `#/admin/profiles/payment/${id}`,
-  receipt: (id) => `${BASE}/profiles/generate-receipt/${id}`,
+  receipt: (id) => `${apiUrl}/profiles/generate-receipt/${id}`,
 };
 
 const GENDERS = [
@@ -45,95 +30,24 @@ const REG_TYPES = [
   { value: "melava_existing", label: "Melava 3 + Existing Registrations" },
 ];
 
-const headers = () => {
-  const s = getSession();
-  return { Accept: "application/json", ...(s ? { Authorization: `Bearer ${s.token}` } : {}) };
-};
-
-// Sends the person back to login if the server says the session is invalid
-const guard = (res) => {
-  if (res.status === 401) {
-    clearSession();
-    window.location.hash = "#/login?expired=1";
-    throw new Error("Session expired.");
-  }
-  if (!res.ok) throw new Error("Server error. Please try again.");
-  return res;
-};
-
-/* ---- Sample data (used only while VITE_API_URL is not set) ----
-   It reacts to search, filters, sorting and paging exactly like the real API should. */
-const MALE = ["Rohan Patil", "Kunal Mehta", "Amit Kothari", "Vikram Gandhi", "Nikhil Oswal",
-  "Sachin Shah", "Pranav Jain", "Harsh Doshi", "Yash Chopda", "Tejas Bafna"];
-const FEMALE = ["Aarti Shah", "Neha Jain", "Pooja Shaha", "Sneha Doshi", "Riya Chopda",
-  "Kajal Mehta", "Isha Patil", "Divya Gandhi", "Mansi Oswal", "Shruti Bafna"];
-const TYPES = ["quick", "melava", "existing", "melava_existing"];
-
-const MOCK = Array.from({ length: 45 }, (_, i) => ({
-  id: 500 - i,
-  registration_number: `MM3-${String(533 - i).padStart(4, "0")}`,
-  photo_url: "",
-  full_name: i % 2 ? FEMALE[(i >> 1) % 10] : MALE[(i >> 1) % 10],
-  mobile: `98${String(10000000 + i * 111111).slice(0, 8)}`,
-  registration_date: `${String(28 - (i % 20)).padStart(2, "0")}-10-2026`,
-  status: i % 6 === 5 ? "Pending" : "Completed",
-  payment_verified: i % 4 !== 3,
-  gender: i % 2 ? "bride" : "groom",
-  reg_type: TYPES[i % 4],
-}));
-
-const dateKey = (d) => d.split("-").reverse().join("");   // dd-mm-yyyy → yyyymmdd
-
-function mockQuery({ q = "", gender, reg_type, sort_by, sort_order, page = 1 }) {
-  const term = q.toLowerCase();
-  let rows = MOCK.filter((p) =>
-    (!term || [p.registration_number, p.full_name, p.mobile, p.registration_date, p.status]
-      .some((v) => String(v).toLowerCase().includes(term))) &&
-    (!gender || gender === "all" || p.gender === gender) &&
-    (!reg_type || reg_type === "all" || p.reg_type === reg_type ||
-      (reg_type === "melava_existing" && ["melava", "existing"].includes(p.reg_type))),
-  );
-
-  const key = (p) => (sort_by === "registration_number" ? p.registration_number : dateKey(p.registration_date));
-  rows = [...rows].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0) * (sort_order === "asc" ? 1 : -1));
-
-  const per = 10;
-  const total = rows.length;
-  const last = Math.max(1, Math.ceil(total / per));
-  const cur = Math.min(page, last);
-  const data = rows.slice((cur - 1) * per, cur * per);
-  return {
-    data, current_page: cur, last_page: last, per_page: per, total,
-    from: total ? (cur - 1) * per + 1 : 0, to: (cur - 1) * per + data.length,
-  };
-}
-
 async function getProfiles(params) {
-  // Leave out empty filters so the URL only carries what the person actually chose
-  const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== "" && v != null));
-
-  if (!BASE) {
-    await new Promise((r) => setTimeout(r, 300));
-    return mockQuery(clean);
-  }
+  const clean = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== "" && v != null),
+  );
   const qs = new URLSearchParams(clean).toString();
-  const res = guard(await fetch(`${BASE}/profiles/allProfiles?${qs}`, { headers: headers() }));
-  return res.json();
+  return request(`/profiles/allProfiles${qs ? `?${qs}` : ""}`);
 }
 
 async function deactivateProfile(id) {
-  if (!BASE) return;
-  guard(await fetch(`${BASE}/profiles/deactivate/${id}`, { method: "PATCH", headers: headers() }));
+  return request(`/profiles/deactivate/${id}`, { method: "PATCH" });
 }
 
 async function exportProfiles(params) {
-  if (!BASE) throw new Error("Connect the API (VITE_API_URL) to export.");
-  const qs = new URLSearchParams(params).toString();
-  const res = guard(await fetch(`${BASE}/profiles/export?${qs}`, { headers: headers() }));
-  const url = URL.createObjectURL(await res.blob());
-  const a = Object.assign(document.createElement("a"), { href: url, download: "profiles.xlsx" });
-  a.click();
-  URL.revokeObjectURL(url);
+  const clean = Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== "" && v != null),
+  );
+  const qs = new URLSearchParams(clean).toString();
+  await download(`/profiles/export${qs ? `?${qs}` : ""}`, "profiles.csv");
 }
 
 /* ---------- Small helpers ---------- */
@@ -218,7 +132,10 @@ export default function Profiles() {
     }
   }, [filters, sort, page]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
+  }, [load]);
 
   // Close popups with Esc
   useEffect(() => {

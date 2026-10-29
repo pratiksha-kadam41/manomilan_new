@@ -4,7 +4,7 @@ import {
   Eye, ArrowLeft, Save, Loader2, AlertTriangle, CheckCircle2, Clock, XCircle, Ban,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
-import { getSession, clearSession } from "../../../auth";
+import { request } from "../../../api";
 import "./verify.css";
 
 /* =====================================================================
@@ -35,37 +35,12 @@ const STATUSES = [
 ];
 
 /* =====================================================================
-   2. BACKEND SETTINGS  (the only part you need to adjust)
-   Load:  GET  {BASE}/profiles/:id/verification
-          → {
-              profile:   { id, full_name, registration_number, registration_date, photo_url },
-              documents: { identificationProof: { file_url, status, remarks }, birthDateProof: {...}, ... }
-            }
-            (file_url is empty/missing when nothing was uploaded; status is one of the STATUSES values)
-   Save:  POST {BASE}/profiles/:id/verify
-          body (JSON): { identificationProof_status: "verified", identificationProof_remarks: "", ... }
+   2. BACKEND ENDPOINTS
+   Load:  GET  /profiles/:id/verification
+   Save:  POST /profiles/:id/verify
    ===================================================================== */
-const BASE = import.meta.env.VITE_API_URL;
 const LINKS = { back: "#/admin/profiles" };
-const MAX_REMARKS = 255;                    // keep in step with your database column / Laravel validation
-
-const authHeaders = () => {
-  const s = getSession();
-  return { Accept: "application/json", ...(s ? { Authorization: `Bearer ${s.token}` } : {}) };
-};
-
-// Sends the person back to login if the server says the session is invalid
-const guard = (res) => {
-  if (res.status === 401) {
-    clearSession();
-    window.location.hash = "#/login?expired=1";
-    throw new Error("Session expired.");
-  }
-  if (res.status === 404) throw new Error("This profile was not found.");
-  if (res.status === 422) throw new Error("Some values were not accepted. Please check and try again.");
-  if (!res.ok) throw new Error("Server error. Please try again.");
-  return res;
-};
+const MAX_REMARKS = 255;
 
 /* ---- Security helpers ---- */
 // Only whole numbers are accepted as a profile id (blocks "../" tricks and odd characters)
@@ -86,26 +61,9 @@ const safeUrl = (url) => {
 // Only status values the UI knows about are accepted from the server
 const cleanStatus = (s) => (STATUSES.some((x) => x.value === s) ? s : "pending");
 
-/* ---- Sample data so you can see the UI before the API is connected (development only) ---- */
-const MOCK = {
-  profile: {
-    id: 396, full_name: "Aarti Shah", registration_number: "MM3-0533",
-    registration_date: "15 May, 2026", photo_url: "",
-  },
-  documents: {
-    identificationProof: { file_url: "/favicon.svg", status: "verified", remarks: "" },
-    birthDateProof:      { file_url: "/favicon.svg", status: "verified", remarks: "" },
-  },
-};
-
+/* ---- API calls ---- */
 async function getVerification(id) {
-  if (!BASE) {
-    if (!import.meta.env.DEV) throw new Error("The server address is not configured.");
-    await new Promise((r) => setTimeout(r, 400));
-    return MOCK;
-  }
-  const res = guard(await fetch(`${BASE}/profiles/${encodeURIComponent(id)}/verification`, { headers: authHeaders() }));
-  return res.json();
+  return request(`/profiles/${encodeURIComponent(id)}/verification`);
 }
 
 async function saveVerification(id, form) {
@@ -116,15 +74,10 @@ async function saveVerification(id, form) {
     body[`${key}_remarks`] = form[key].remarks.trim().slice(0, MAX_REMARKS);
   });
 
-  if (!BASE) {
-    await new Promise((r) => setTimeout(r, 500));
-    return;                                           // sample mode: pretend it saved
-  }
-  guard(await fetch(`${BASE}/profiles/${encodeURIComponent(id)}/verify`, {
+  return request(`/profiles/${encodeURIComponent(id)}/verify`, {
     method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  }));
+    body,
+  });
 }
 
 /* ---------- Small helpers ---------- */
@@ -188,7 +141,10 @@ export default function ProfileVerify({ params }) {
     }
   }, [id, idOk]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
+  }, [load]);
 
   const setField = (key, field, value) =>
     setForm((f) => ({ ...f, [key]: { ...f[key], [field]: value } }));

@@ -353,7 +353,7 @@ class Profile extends Model
     public function user()
     {
         // Changed to hasOne as users table contains the profile_id foreign key
-        return $this->hasOne('App\User', 'profile_id');
+        return $this->hasOne(\App\Models\User::class, 'profile_id');
     }
 
     /**
@@ -362,12 +362,12 @@ class Profile extends Model
      */
     public function preference()
     {
-        return $this->hasOneThrough(Preference::class, User::class, 'profile_id', 'user_id', 'id', 'id');
+        return $this->hasOneThrough(Preference::class, \App\Models\User::class, 'profile_id', 'user_id', 'id', 'id');
     }
 
     public function interestedUsers()
     {
-        return $this->belongsToMany('App\User', 'user_interests', 'user_id', 'profile_id')
+        return $this->belongsToMany(\App\Models\User::class, 'user_interests', 'user_id', 'profile_id')
             ->withTimestamps();
     }
 
