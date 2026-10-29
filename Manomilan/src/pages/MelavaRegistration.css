@@ -1,0 +1,1046 @@
+.melava-page {
+  --b: #2a6365;
+  --bd: #1e4a4b;
+  --soft: #eaf3f3;
+  --acc: #d94d5c;
+  --bg: #f2f8f9;
+  --ink: #1f2937;
+  --mut: #6b7280;
+  --line: #dce8ed;
+  width: 100%;
+  min-height: 100vh;
+  align-self: stretch;
+  background:
+    radial-gradient(ellipse at 2% 20%, rgba(116, 196, 194, 0.1), transparent 25rem),
+    radial-gradient(ellipse at 98% 75%, rgba(116, 196, 194, 0.1), transparent 25rem),
+    var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 "Nunito Sans", system-ui, sans-serif;
+  text-align: left;
+  padding-bottom: 32px;
+}
+
+.melava-page *,
+.melava-page *::before,
+.melava-page *::after {
+  box-sizing: border-box;
+}
+
+.melava-page .wrap {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 24px 24px 40px;
+}
+
+/* ---------- Header ---------- */
+.melava-page .hero {
+  background: linear-gradient(135deg, var(--b), #3b8a8d);
+  color: #fff;
+  border-radius: 18px;
+  min-height: 0;
+  padding: 14px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 12px 30px rgba(42, 99, 101, 0.18);
+}
+
+.melava-page .hero.compact {
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+}
+
+.melava-page .hero > img {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  padding: 5px;
+}
+
+.melava-page .hero > img.hero-qr {
+  width: 76px;
+  height: 76px;
+  margin-left: auto;
+}
+
+.melava-page .hero-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.melava-page .hero > img + .hero-copy {
+  text-align: left;
+}
+
+.melava-page .hero h1 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.4vw, 1.55rem);
+  line-height: 1.2;
+  color: #fff;
+}
+
+.melava-page .hero p {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  opacity: 0.95;
+}
+
+.melava-page .hero .must {
+  display: inline-block;
+  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.18);
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+/* ---------- Event (calendar) card ---------- */
+.melava-page .campaign-card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.melava-page .campaign-art {
+  width: 100%;
+  height: 84px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff0f1;
+  border: 1px solid var(--line);
+}
+
+.melava-page .campaign-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.melava-page .campaign-details {
+  min-width: 0;
+}
+
+.melava-page .campaign-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.melava-page .campaign-title {
+  min-width: 0;
+}
+
+.melava-page .campaign-eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--mut);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.melava-page .campaign-title h2 {
+  margin: 0;
+  color: var(--bd);
+  font-size: 1.32rem;
+  line-height: 1.3;
+}
+
+.melava-page .campaign-select-label select {
+  max-width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--bd);
+  font: inherit;
+  font-size: 1.32rem;
+  font-weight: 800;
+  padding: 0 24px 0 0;
+}
+
+.melava-page .campaign-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 12px;
+  padding: 9px 12px;
+  background: #ecf8f2;
+  color: #18764d;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.melava-page .campaign-status i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #20a36a;
+}
+
+.melava-page .campaign-description {
+  margin: 6px 0 0;
+  color: var(--mut);
+  font-size: 0.92rem;
+}
+
+.melava-page .campaign-price {
+  display: flex;
+  gap: 14px 22px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  color: #49657a;
+  font-weight: 700;
+}
+
+.melava-page .campaign-price strong {
+  color: var(--bd);
+}
+
+/* ---------- Stepper ---------- */
+.melava-page .stepper {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.melava-page .stepper::-webkit-scrollbar {
+  display: none;
+}
+
+.melava-page .st {
+  flex: 1;
+  min-width: 112px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 8px;
+  text-align: center;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--mut);
+  cursor: pointer;
+  transition: 0.2s;
+  scroll-snap-align: start;
+}
+
+.melava-page .st i {
+  display: block;
+  font-style: normal;
+  font-size: 1.25rem;
+}
+
+.melava-page .st.on {
+  background: var(--b);
+  color: #fff;
+  border-color: var(--b);
+  box-shadow: 0 6px 16px rgba(42, 99, 101, 0.3);
+}
+
+.melava-page .st.done {
+  background: var(--soft);
+  color: var(--b);
+  border-color: #b9d6d7;
+}
+
+.melava-page .bar {
+  height: 6px;
+  background: #dde5ea;
+  border-radius: 9px;
+  overflow: hidden;
+  margin: 0 0 16px;
+}
+
+.melava-page .bar b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--b), #5fb3b6);
+  transition: 0.35s;
+}
+
+/* ---------- Cards & form ---------- */
+.melava-page .card {
+  background: #fff;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.055);
+  margin-bottom: 18px;
+}
+
+.melava-page .card > h2 {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+  color: var(--b);
+}
+
+.melava-page .card > .sub {
+  color: var(--mut);
+  font-size: 0.94rem;
+  margin: 0 0 22px;
+}
+
+.melava-page .sec {
+  grid-column: 1 / -1;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--soft);
+  border-radius: 10px;
+  font-weight: 800;
+  color: var(--bd);
+}
+
+.melava-page .grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px 16px;
+}
+
+.melava-page .w3 { grid-column: span 3; }
+.melava-page .w4 { grid-column: span 4; }
+.melava-page .w6 { grid-column: span 6; }
+.melava-page .w9 { grid-column: span 9; }
+.melava-page .w12 { grid-column: span 12; }
+
+.melava-page .f label {
+  display: block;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 6px;
+  color: var(--ink);
+}
+
+.melava-page .f label b {
+  color: var(--acc);
+  margin-left: 3px;
+}
+
+.melava-page .f input,
+.melava-page .f select,
+.melava-page .f textarea,
+.melava-page .srow input {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 13px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  background: #fff;
+  color: var(--ink);
+  transition: 0.15s;
+}
+
+.melava-page .f textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.melava-page ::placeholder {
+  color: #9aa5b1;
+  font-weight: 400;
+  opacity: 1;
+}
+
+.melava-page .f select:invalid,
+.melava-page .f select:has(option[value=""]:checked) {
+  color: #9aa5b1;
+}
+
+.melava-page .f select option {
+  color: var(--ink);
+}
+
+.melava-page .f input:focus,
+.melava-page .f select:focus,
+.melava-page .f textarea:focus,
+.melava-page .srow input:focus {
+  outline: 0;
+  border-color: var(--b);
+  box-shadow: 0 0 0 4px rgba(42, 99, 101, 0.15);
+}
+
+.melava-page .f input[readonly] {
+  background: #f3f4f6;
+}
+
+.melava-page .f select:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.melava-page .f input[type="file"] {
+  padding: 9px;
+  background: var(--soft);
+  border-style: dashed;
+}
+
+.melava-page .f small {
+  display: block;
+  color: var(--mut);
+  font-size: 0.78rem;
+  margin-top: 5px;
+}
+
+.melava-page .f small.err {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.melava-page .r2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.melava-page .r3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 92px;
+  gap: 8px;
+}
+
+/* ---------- Search ---------- */
+.melava-page .search {
+  background: linear-gradient(180deg, #f4fafa, #fff);
+  border: 1.5px solid #cfe3e3;
+}
+
+.melava-page .srow {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.melava-page .srow input {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ---------- Buttons & alerts ---------- */
+.melava-page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 46px;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 26px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.melava-page .btn.p {
+  background: var(--b);
+  color: #fff;
+}
+
+.melava-page .btn.p:hover {
+  background: var(--bd);
+}
+
+.melava-page .btn.g {
+  background: #fff;
+  border: 1.5px solid var(--line);
+  color: var(--ink);
+}
+
+.melava-page .btn:disabled {
+  background: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+  color: #fff;
+}
+
+.melava-page .al {
+  padding: 10px 14px;
+  border-radius: 10px;
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.melava-page .al p {
+  margin: 6px 0 0;
+}
+
+.melava-page .al.ok {
+  background: #e7f6ec;
+  color: #17673a;
+}
+
+.melava-page .al.er {
+  background: #fdecea;
+  color: #b42318;
+}
+
+/* ---------- Back / Next (no background bar) ---------- */
+.melava-page .nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.melava-page .card .nav {
+  margin-top: 22px;
+}
+
+/* ---------- Preview ---------- */
+.melava-page .pv {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.melava-page .pv header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: var(--soft);
+  padding: 10px 16px;
+  font-weight: 800;
+  color: var(--bd);
+}
+
+.melava-page .pv header button {
+  background: #fff;
+  border: 1.5px solid var(--b);
+  color: var(--b);
+  border-radius: 8px;
+  padding: 4px 14px;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.melava-page .pv dl {
+  margin: 0;
+  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px 18px;
+}
+
+.melava-page .pv dt {
+  font-size: 0.78rem;
+  color: var(--mut);
+  font-weight: 700;
+}
+
+.melava-page .pv dd {
+  margin: 0;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.melava-page .pv dd.wide {
+  grid-column: 1 / -1;
+}
+
+.melava-page .ph {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.melava-page .ph img {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
+.melava-page .ph-item {
+  display: inline-flex;
+}
+
+.melava-page .doc-name {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.melava-page .mini {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--bd);
+  cursor: pointer;
+}
+
+.melava-page .note {
+  background: #fffbe6;
+  border: 1px solid #f3e08a;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.melava-page .opt {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--soft);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin-top: 16px;
+}
+
+.melava-page .opt p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.melava-page .opt small {
+  color: var(--mut);
+}
+
+.melava-page .pills {
+  display: flex;
+  gap: 10px;
+}
+
+.melava-page .pills label {
+  cursor: pointer;
+}
+
+.melava-page .pills input {
+  display: none;
+}
+
+.melava-page .pills span {
+  display: inline-block;
+  padding: 8px 24px;
+  border: 1.5px solid var(--line);
+  border-radius: 99px;
+  background: #fff;
+  font-weight: 700;
+}
+
+.melava-page .pills input:checked + span {
+  background: var(--b);
+  color: #fff;
+  border-color: var(--b);
+}
+
+.melava-page .legal {
+  background: #fff5f8;
+  border: 1px solid #f5c2d4;
+  border-radius: 14px;
+  padding: 18px;
+  margin-top: 16px;
+  font-size: 0.9rem;
+  color: #444;
+}
+
+.melava-page .legal ul {
+  padding-left: 20px;
+  margin: 8px 0 14px;
+}
+
+.melava-page .legal label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.melava-page .legal input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--b);
+}
+
+.melava-page .legal small {
+  display: block;
+  color: var(--mut);
+  margin-top: 6px;
+}
+
+.melava-page .fee-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: var(--soft);
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+.melava-page .fee-preview strong {
+  color: var(--bd);
+  font-size: 1.2rem;
+}
+
+/* ---------- Payment ---------- */
+.melava-page .pay-grid {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 18px;
+  align-items: start;
+}
+
+.melava-page .fee-box {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  background: #fbfdfd;
+}
+
+.melava-page .fee-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.melava-page .fee-row.total {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--line);
+  border-bottom: 0;
+  font-size: 1.1rem;
+  color: var(--bd);
+}
+
+.melava-page .fee-box small {
+  display: block;
+  margin-top: 10px;
+  color: var(--mut);
+}
+
+.melava-page .qr-box {
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+}
+
+.melava-page .qr-box img {
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+}
+
+.melava-page .qr-box small {
+  display: block;
+  margin-top: 8px;
+  color: var(--mut);
+  font-weight: 700;
+}
+
+.melava-page .qr-empty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--mut);
+  font-size: 0.85rem;
+}
+
+.melava-page .screenshot-field {
+  margin-top: 18px;
+}
+
+/* ---------- Success ---------- */
+.melava-page .actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+.melava-page .success-card {
+  text-align: center;
+}
+
+.melava-page .success-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #e7f6ec;
+  color: #17673a;
+  font-size: 1.6rem;
+  margin-bottom: 8px;
+}
+
+.melava-page .success-card h2 {
+  color: var(--bd);
+}
+
+.melava-page .summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+  text-align: left;
+}
+
+.melava-page .summary div {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #fbfdfd;
+}
+
+.melava-page .summary span {
+  display: block;
+  color: var(--mut);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.melava-page .summary strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--bd);
+  word-break: break-word;
+}
+
+/* ---------- Tablet ---------- */
+@media (max-width: 860px) {
+  .melava-page .wrap {
+    padding: 20px 18px 32px;
+  }
+
+  .melava-page .w3,
+  .melava-page .w4 {
+    grid-column: span 6;
+  }
+
+  .melava-page .w9 {
+    grid-column: span 12;
+  }
+
+  .melava-page .pay-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 560px) {
+  .melava-page {
+    font-size: 15px;
+  }
+
+  .melava-page .wrap {
+    padding: 12px 12px 28px;
+  }
+
+  .melava-page .hero {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 52px;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+  }
+
+  .melava-page .hero.compact {
+    display: block;
+    padding: 20px 16px;
+  }
+
+  .melava-page .hero > img {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    padding: 3px;
+  }
+
+  .melava-page .hero > img.hero-qr {
+    width: 52px;
+    height: 52px;
+  }
+
+  .melava-page .hero h1 {
+    font-size: 1.16rem;
+    line-height: 1.25;
+  }
+
+  .melava-page .hero p {
+    display: none;
+  }
+
+  .melava-page .hero .must {
+    margin-top: 6px;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+  }
+
+  .melava-page .campaign-card {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+  }
+
+  .melava-page .campaign-art {
+    height: 64px;
+    border-radius: 10px;
+  }
+
+  .melava-page .campaign-title-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .melava-page .campaign-title h2,
+  .melava-page .campaign-select-label select {
+    font-size: 1.1rem;
+  }
+
+  .melava-page .campaign-select-label select {
+    width: 100%;
+  }
+
+  .melava-page .campaign-status {
+    padding: 6px 10px;
+    font-size: 0.74rem;
+  }
+
+  .melava-page .campaign-price {
+    gap: 7px 14px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-size: 0.85rem;
+  }
+
+  .melava-page .st {
+    flex: 0 0 96px;
+    min-width: 96px;
+    border-radius: 11px;
+    padding: 8px 6px;
+    font-size: 0.72rem;
+  }
+
+  .melava-page .grid > * {
+    grid-column: span 12;
+  }
+
+  .melava-page .card {
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+
+  .melava-page .r3 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 76px;
+    gap: 6px;
+  }
+
+  .melava-page .f input,
+  .melava-page .f select,
+  .melava-page .f textarea,
+  .melava-page .srow input {
+    font-size: 16px;
+  }
+
+  .melava-page .srow {
+    display: grid;
+  }
+
+  .melava-page .srow input {
+    min-width: 0;
+  }
+
+  .melava-page .srow .btn {
+    width: 100%;
+  }
+
+  .melava-page .btn {
+    padding: 10px 16px;
+    font-size: 0.95rem;
+  }
+
+  .melava-page .nav .btn {
+    flex: 1;
+  }
+
+  .melava-page .fee-preview,
+  .melava-page .opt {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .melava-page .pills {
+    width: 100%;
+  }
+
+  .melava-page .pills label,
+  .melava-page .pills span {
+    flex: 1;
+    text-align: center;
+  }
+
+  .melava-page .pv dl {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .melava-page .pv header {
+    padding: 10px 12px;
+  }
+
+  .melava-page .actions .btn {
+    width: 100%;
+  }
+
+  .melava-page .legal {
+    padding: 14px;
+    font-size: 0.86rem;
+  }
+}

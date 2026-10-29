@@ -1,6 +1,7 @@
 import {
   Heart, LayoutDashboard, Users, Globe, BadgeCheck, ShieldAlert,
   CalendarHeart, GraduationCap, UserPlus, KeyRound, FileText, LogOut,
+  CalendarPlus,
 } from "lucide-react";
 
 import { clearSession } from "../../auth";
@@ -13,6 +14,7 @@ const ICONS = {
   "/admin/verified-profiles": BadgeCheck,
   "/admin/unverified-profiles": ShieldAlert,
   "/admin/melava": CalendarHeart,
+  "/admin/melava-campaigns": CalendarPlus,
   "/admin/workshop": GraduationCap,
   "/admin/requests": UserPlus,
   "/admin/reset-passwords": KeyRound,

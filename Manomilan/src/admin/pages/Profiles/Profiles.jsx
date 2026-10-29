@@ -27,7 +27,7 @@ const REG_TYPES = [
   { value: "quick", label: "Quick Registration" },
   { value: "melava", label: "Melava Registration" },
   { value: "existing", label: "Existing Registration" },
-  { value: "melava_existing", label: "Melava 3 + Existing Registrations" },
+  { value: "melava_existing", label: "Melava + Existing Registrations" },
 ];
 
 async function getProfiles(params) {

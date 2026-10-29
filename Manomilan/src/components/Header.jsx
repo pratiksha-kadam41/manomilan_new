@@ -24,7 +24,7 @@ const MOBILE_LINKS = [
   ["Contact us", "#/contactus"],
 ];
 
-const REGISTER_URL = "#/register";
+const REGISTER_URL = "#/melava-registration";
 const LOGIN_URL = "#/login";
 
 export default function Header() {
@@ -61,7 +61,7 @@ export default function Header() {
               <span className="reg-dropdown">
                 <span className="reg-trigger">Registration Plan</span>
                 <div className="reg-menu">
-                  <a href={REGISTER_URL}>Registration</a>
+                  <a href={REGISTER_URL}>Melava Registration</a>
                   <a href={LOGIN_URL}>Login</a>
                 </div>
               </span>
@@ -92,6 +92,8 @@ export default function Header() {
           {MOBILE_LINKS.map(([label, href]) => (
             <a key={label} href={href} onClick={toggle}>{label}</a>
           ))}
+          <a href={REGISTER_URL} onClick={toggle}>Melava Registration</a>
+          <a href={LOGIN_URL} onClick={toggle}>Login</a>
         </nav>
       </div>
     </>

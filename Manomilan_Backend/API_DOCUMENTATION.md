@@ -43,9 +43,16 @@ Base URL: http://localhost:8000/api
 - DELETE /enquiries/{id} (auth)
 
 ## Melava Registrations
-- POST /melava-registrations (public)
+- GET /melava-campaigns/active (public) - Active event titles, backend-set fees and payment QR images
+- GET /melava-registrations/settings (public) - Active Melava event settings
+- POST /melava-registrations (public) - Submit registration and payment screenshot; include `melava_campaign_id`
+- GET /melava-registrations/check?mobile={mobile}&melava_campaign_id={id} (public) - Find a candidate and event registration
 - GET /melava-registrations (auth)
 - GET /melava-registrations/{id} (auth)
+- PUT /melava-registrations/{id}/payment-status (admin) - Verify or reopen payment review
+- GET /melava-campaigns (admin) - List Melava batches
+- POST /melava-campaigns (admin, multipart/form-data) - Create a batch with fees, booklet option and QR image
+- PUT /melava-campaigns/{id}/status (admin) - Open or close registration for a batch
 
 ## Workshop Registrations
 - POST /workshop-registrations (public)
@@ -56,4 +63,3 @@ Base URL: http://localhost:8000/api
 - GET /payments/my (auth)
 - GET /payments (auth)
 - PUT /payments/{id}/status (auth)
-
