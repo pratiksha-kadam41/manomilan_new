@@ -1,24 +1,35 @@
 import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
 import { FaLinkedinIn, FaFacebookF, FaInstagram } from "react-icons/fa";
-import { loginUser, saveSession, getSession, homeForRole } from "../auth";
+import {
+  loginUser,
+  registerUser,
+  saveSession,
+  getSession,
+  homeForRole,
+} from "../auth";
 import "./Login.css";
 
 /* ---------- Validation rules ---------- */
 // Admin usernames: start with a letter, then letters / numbers / . _ -  (3 to 30 characters)
 const USERNAME_RE = /^[A-Za-z][A-Za-z0-9._-]{2,29}$/;
 
-const validate = ({ username, password }) => {
+const validate = ({ username, password, name, email }, registering = false) => {
   const errors = {};
 
-  if (!username) {
+  if (registering) {
+    if (!name.trim()) errors.name = "Name is required.";
+    if (!email.trim()) errors.email = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      errors.email = "Enter a valid email address.";
+    if (!/^[6-9]\d{9}$/.test(username))
+      errors.username = "Enter a valid 10-digit mobile number.";
+  } else if (!username) {
     errors.username = "Mobile number or username is required.";
   } else if (/^\d+$/.test(username)) {
-    // Only digits → treated as a candidate mobile number
     if (username.length !== 10) errors.username = "Enter a valid 10-digit mobile number.";
     else if (!/^[6-9]/.test(username)) errors.username = "Mobile number must start with 6, 7, 8 or 9.";
   } else if (!USERNAME_RE.test(username)) {
-    // Contains letters → treated as an admin username
     errors.username =
       "Username must start with a letter (3-30 characters) and use only letters, numbers, dot, dash or underscore.";
   }
@@ -42,7 +53,10 @@ export default function Login() {
   const [values, setValues] = useState({
     username: localStorage.getItem("rememberedUser") || "",
     password: "",
+    name: "",
+    email: "",
   });
+  const [isRegistering, setIsRegistering] = useState(false);
   const [touched, setTouched] = useState({});
   const [remember, setRemember] = useState(!!localStorage.getItem("rememberedUser"));
   const [showPassword, setShowPassword] = useState(false);
@@ -59,7 +73,7 @@ export default function Login() {
     if (session) window.location.hash = homeForRole(session.role);
   }, []);
 
-  const errors = validate(values);
+  const errors = validate(values, isRegistering);
   const showError = (field) => touched[field] && errors[field];
 
   const handleChange = (e) => {
@@ -78,20 +92,31 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError("");
-    setTouched({ username: true, password: true });
+    setTouched({ username: true, password: true, name: true, email: true });
 
-    const currentErrors = validate(values);
+    const currentErrors = validate(values, isRegistering);
     if (Object.keys(currentErrors).length > 0) {
-      (currentErrors.username ? userRef : passRef).current.focus();
+      const firstInvalid = ["name", "email", "username", "password"].find(
+        (field) => currentErrors[field],
+      );
+      e.currentTarget.elements.namedItem(firstInvalid)?.focus();
       return;
     }
 
     setLoading(true);
     try {
-      const { token, role } = await loginUser(values.username, values.password);
+      const { token, role } = isRegistering
+        ? await registerUser({
+            name: values.name.trim(),
+            email: values.email.trim(),
+            phone: values.username,
+            password: values.password,
+          })
+        : await loginUser(values.username, values.password);
 
       saveSession({ token, role });
-      if (remember) localStorage.setItem("rememberedUser", values.username);
+      if (!isRegistering && remember)
+        localStorage.setItem("rememberedUser", values.username);
       else localStorage.removeItem("rememberedUser");
 
       window.location.hash = homeForRole(role); // admin → /admin, candidate → /candidate
@@ -119,8 +144,12 @@ export default function Login() {
 
       <div className="login-main">
         <form onSubmit={handleSubmit} noValidate>
-          <h2>Sign in to account</h2>
-          <p className="login-sub">Enter your username &amp; password to login</p>
+          <h2>{isRegistering ? "Create your account" : "Sign in to account"}</h2>
+          <p className="login-sub">
+            {isRegistering
+              ? "Enter your details to register"
+              : "Enter your username &amp; password to login"}
+          </p>
 
           {serverError && (
             <div className="login-alert" role="alert">
@@ -129,22 +158,62 @@ export default function Login() {
             </div>
           )}
 
-          {/* Username (mobile number for candidates, text username for admins) */}
+          {isRegistering && (
+            <>
+              <div className="login-field">
+                <label htmlFor="name">Full name</label>
+                <div className="login-control">
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    autoComplete="name"
+                    value={values.name}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    aria-invalid={!!showError("name")}
+                  />
+                </div>
+                {showError("name") && (
+                  <small className="login-error" role="alert">{errors.name}</small>
+                )}
+              </div>
+              <div className="login-field">
+                <label htmlFor="email">Email</label>
+                <div className="login-control">
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    value={values.email}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    aria-invalid={!!showError("email")}
+                  />
+                </div>
+                {showError("email") && (
+                  <small className="login-error" role="alert">{errors.email}</small>
+                )}
+              </div>
+            </>
+          )}
+
           <div className="login-field">
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">{isRegistering ? "Mobile number" : "Username"}</label>
             <div className={`login-control ${showError("username") ? "invalid" : ""}`}>
               <input
                 ref={userRef}
                 id="username"
                 name="username"
                 type="text"
-                inputMode="text"
-                autoComplete="username"
+                inputMode={isRegistering ? "numeric" : "text"}
+                autoComplete={isRegistering ? "tel" : "username"}
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
                 maxLength={30}
-                placeholder="Mobile Number / Username"
+                placeholder={isRegistering ? "10-digit mobile number" : "Mobile Number / Username"}
                 value={values.username}
                 onChange={handleChange}
                 onBlur={handleBlur}
@@ -195,16 +264,19 @@ export default function Login() {
           </div>
 
           {/* Remember + Forgot */}
-          <label className="login-check">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-            />
-            <span>Remember password</span>
-          </label>
-
-          <a href="#/forgot-password" className="login-forgot">Forgot password?</a>
+          {!isRegistering && (
+            <>
+              <label className="login-check">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                />
+                <span>Remember password</span>
+              </label>
+              <a href="#/forgot-password" className="login-forgot">Forgot password?</a>
+            </>
+          )}
 
           <button type="submit" className="login-btn" disabled={loading}>
             {loading ? (
@@ -212,11 +284,12 @@ export default function Login() {
                 <Loader2 size={16} className="login-spin" /> Signing in...
               </>
             ) : (
-              "Sign in"
+              isRegistering ? "Create account" : "Sign in"
             )}
           </button>
 
-          {/* Social */}
+          {!isRegistering && (
+          <>
           <div className="login-divider">Or Sign in with</div>
 
           <ul className="login-social">
@@ -251,9 +324,22 @@ export default function Login() {
               </a>
             </li>
           </ul>
+          </>
+          )}
 
           <p className="login-foot">
-            Don't have account?<a href="#/registration">Create Account</a>
+            {isRegistering ? "Already have an account?" : "Don't have account?"}
+            <a
+              href="#/login"
+              onClick={(event) => {
+                event.preventDefault();
+                setIsRegistering(!isRegistering);
+                setTouched({});
+                setServerError("");
+              }}
+            >
+              {isRegistering ? "Sign in" : "Create Account"}
+            </a>
           </p>
         </form>
       </div>

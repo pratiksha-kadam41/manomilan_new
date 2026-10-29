@@ -1,25 +1,23 @@
-const BASE = import.meta.env.VITE_API_URL;
+const BASE = (import.meta.env.VITE_API_URL || "http://localhost:8000/api").replace(/\/+$/, "");
 const ADMIN_ROLES = ["admin", "super"];
 
 const SESSION_KEY = "auth";
-const IDLE_LIMIT = 15 * 60 * 1000; // sign out after 15 minutes of no activity
-const MAX_AGE = 8 * 60 * 60 * 1000; // sign out after 8 hours no matter what
+const IDLE_LIMIT = 15 * 60 * 1000;
+const MAX_AGE = 8 * 60 * 60 * 1000;
 
-// One-time cleanup of old sessions saved by earlier versions of this app
 localStorage.removeItem("authToken");
 localStorage.removeItem("authRole");
 localStorage.removeItem("adminToken");
 
 export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
+const roleForUser = (user) =>
+  Number(user?.role_id) === 1 || String(user?.user_type) === "00"
+    ? "admin"
+    : "candidate";
 
-// Where each type of person lands after login
 export const homeForRole = (role) =>
   isAdminRole(role) ? "#/admin" : "#/candidate";
 
-/* ---------- Session helpers ----------
-   sessionStorage is wiped when the tab or browser is closed.
-   When your backend uses httpOnly cookies, these functions will ask the
-   server instead, and nothing will be stored in the browser. */
 const read = () => {
   try {
     return JSON.parse(sessionStorage.getItem(SESSION_KEY));
@@ -37,39 +35,39 @@ export function saveSession({ token, role }) {
 }
 
 export function getSession() {
-  const s = read();
-  if (!s) return null;
+  const session = read();
+  if (!session) return null;
 
   const now = Date.now();
-  if (now - s.lastActive > IDLE_LIMIT || now - s.startedAt > MAX_AGE) {
-    clearSession(); // expired
+  if (
+    now - session.lastActive > IDLE_LIMIT ||
+    now - session.startedAt > MAX_AGE
+  ) {
+    clearSession();
     return null;
   }
-  return { token: s.token, role: s.role };
+  return { token: session.token, role: session.role };
 }
 
-// Records that the person is still active
 export function touchSession() {
-  const s = read();
-  if (!s) return;
-  s.lastActive = Date.now();
-  sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+  const session = read();
+  if (!session) return;
+  session.lastActive = Date.now();
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
 
-// Logout: clears the browser copy and tells the server to cancel the session
 export function clearSession() {
-  const s = read();
+  const session = read();
   sessionStorage.removeItem(SESSION_KEY);
 
-  if (BASE && s?.token) {
+  if (session?.token) {
     fetch(`${BASE}/logout`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${s.token}` },
-    }).catch(() => {}); // even if this fails, the person is logged out here
+      headers: { Accept: "application/json", Authorization: `Bearer ${session.token}` },
+    }).catch(() => {});
   }
 }
 
-// Watches for activity; calls onExpire when the session has timed out
 export function watchActivity(onExpire) {
   let last = 0;
   const bump = () => {
@@ -81,59 +79,118 @@ export function watchActivity(onExpire) {
   };
 
   const events = ["click", "keydown", "mousemove", "scroll", "touchstart"];
-  events.forEach((e) => window.addEventListener(e, bump, { passive: true }));
+  events.forEach((event) =>
+    window.addEventListener(event, bump, { passive: true }),
+  );
 
   const timer = setInterval(() => {
     if (!getSession()) onExpire();
   }, 15000);
 
   return () => {
-    events.forEach((e) => window.removeEventListener(e, bump));
+    events.forEach((event) => window.removeEventListener(event, bump));
     clearInterval(timer);
   };
 }
 
-/* ---------- Login ---------- */
-export async function loginUser(username, password) {
-  // ---- TEMPORARY TEST LOGINS (only run when VITE_API_URL is not set) ----
-  //   Admin:      admin / Admin@123
-  //   Candidate:  8888888888 / Candidate@123
-  // Delete this block once your real API is connected.
-  if (!BASE) {
-    await new Promise((r) => setTimeout(r, 800));
-    if (import.meta.env.DEV) {
-      if (username.toLowerCase() === "admin" && password === "Admin@123")
-        return { token: "dev-admin", role: "admin" };
-      if (username === "8888888888" && password === "Candidate@123")
-        return { token: "dev-candidate", role: "candidate" };
-    }
-    throw new Error("Invalid username or password.");
-  }
-  // -----------------------------------------------------------------------
+async function readError(res, fallback) {
+  const body = await res.json().catch(() => ({}));
+  const firstError = Object.values(body.errors || {})[0];
+  if (Array.isArray(firstError)) return firstError[0];
+  return body.message || fallback;
+}
 
+export async function loginUser(username, password) {
   let res;
   try {
     res = await fetch(`${BASE}/login`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
       body: JSON.stringify({ username, password }),
     });
   } catch {
+    throw new Error("Cannot reach the server. Check your internet and try again.");
+  }
+
+  if (res.status === 401) throw new Error("Invalid username or password.");
+  if (res.status === 422) {
+    throw new Error(await readError(res, "Invalid username or password."));
+  }
+  if (res.status === 429) {
+    throw new Error("Too many attempts. Please wait a few minutes and try again.");
+  }
+  if (res.status === 403) {
+    throw new Error(await readError(res, "Your account cannot sign in."));
+  }
+  if (!res.ok) {
+    throw new Error(await readError(res, "Please try again later."));
+  }
+
+  const body = await res.json();
+  if (!body.token || !body.user) {
+    throw new Error("The server returned an invalid login response.");
+  }
+  return { token: body.token, role: roleForUser(body.user), user: body.user };
+}
+
+export async function registerUser({ name, email, phone, password }) {
+  let res;
+  try {
+    res = await fetch(`${BASE}/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({ name, email, phone, password }),
+    });
+  } catch {
+    throw new Error("Cannot reach the server. Check your internet and try again.");
+  }
+
+  if (!res.ok) {
     throw new Error(
-      "Cannot reach the server. Check your internet and try again.",
+      await readError(res, "Registration failed. Please try again later."),
     );
   }
 
-  if (res.status === 401 || res.status === 422)
-    throw new Error("Invalid username or password.");
-  if (res.status === 429)
-    throw new Error(
-      "Too many attempts. Please wait a few minutes and try again.",
-    );
-  if (!res.ok)
-    throw new Error(
-      "Something went wrong on our side. Please try again later.",
-    );
+  const body = await res.json();
+  if (!body.token || !body.user) {
+    throw new Error("The server returned an invalid registration response.");
+  }
+  return { token: body.token, role: roleForUser(body.user), user: body.user };
+}
 
-  return res.json(); // expected: { token: "...", role: "admin" | "super" | "candidate" }
+export async function getAdminDashboard() {
+  const session = getSession();
+  if (!session?.token) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  let res;
+  try {
+    res = await fetch(`${BASE}/dashboard`, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${session.token}`,
+      },
+    });
+  } catch {
+    throw new Error("Cannot reach the server. Check your internet and try again.");
+  }
+
+  if (res.status === 401) {
+    clearSession();
+    window.location.hash = "#/login?expired=1";
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || !body.success || !body.data) {
+    throw new Error(body.message || "Could not load the admin dashboard.");
+  }
+  return body.data;
 }
