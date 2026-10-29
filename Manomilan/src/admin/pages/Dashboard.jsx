@@ -32,6 +32,13 @@ export default function Dashboard() {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
   });
 
+  const totalProfiles = Number(stats?.total_profiles || 0);
+  const verifiedProfiles = Number(stats?.verified_profiles || 0);
+  const unverifiedProfiles = Math.max(totalProfiles - verifiedProfiles, 0);
+  const verifiedPct = totalProfiles
+    ? Math.round((verifiedProfiles / totalProfiles) * 100)
+    : 0;
+
   const chartData = {
     labels: ["Total Users", "Total Profiles", "Verified Profiles"],
     datasets: [{
@@ -41,8 +48,12 @@ export default function Dashboard() {
         totalProfiles,
         verifiedProfiles,
       ],
-      backgroundColor: ["rgba(54,162,235,0.7)", "rgba(255,99,132,0.7)"],
-      borderColor: ["#2196f3", "#ff4d79"],
+      backgroundColor: [
+        "rgba(54,162,235,0.7)",
+        "rgba(255,99,132,0.7)",
+        "rgba(30,201,155,0.7)",
+      ],
+      borderColor: ["#2196f3", "#ff4d79", "#1ec99b"],
       borderWidth: 1,
       borderRadius: 8,
     }],
@@ -53,13 +64,6 @@ export default function Dashboard() {
     maintainAspectRatio: false,
     plugins: { legend: { display: false } },
   };
-
-  const totalProfiles = Number(stats?.total_profiles || 0);
-  const verifiedProfiles = Number(stats?.verified_profiles || 0);
-  const unverifiedProfiles = Math.max(totalProfiles - verifiedProfiles, 0);
-  const verifiedPct = totalProfiles
-    ? Math.round((verifiedProfiles / totalProfiles) * 100)
-    : 0;
 
   return (
     <AdminLayout currentPath="/admin">

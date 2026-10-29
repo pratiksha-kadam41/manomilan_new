@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Profile;
-use App\User;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class HomeController extends Controller
 {
@@ -17,8 +17,13 @@ class HomeController extends Controller
         }
 
         $totalUsers = User::count();
-        $totalProfiles = Profile::where('active', 'active')->count();
-        $verifiedProfiles = Profile::where('active', 'active')->where('profileVerificationStatus', 'Completed')->count();
+        $totalProfiles = DB::table('profiles')
+            ->where('active', 'active')
+            ->count();
+        $verifiedProfiles = DB::table('profiles')
+            ->where('active', 'active')
+            ->where('profileVerificationStatus', 'Completed')
+            ->count();
 
         return response()->json([
             'success' => true,
@@ -39,7 +44,9 @@ class HomeController extends Controller
 
         $profile = null;
         if ($user->profile_id) {
-            $profile = Profile::find($user->profile_id);
+            $profile = DB::table('profiles')
+                ->where('id', $user->profile_id)
+                ->first();
         }
 
         return response()->json([
@@ -51,4 +58,3 @@ class HomeController extends Controller
         ]);
     }
 }
-
