@@ -5,27 +5,26 @@ const PLACEHOLDER = "https://placehold.co/200x180/DC143C/FFFFFF?text=Aaryan's+Ma
 // If a logo file is missing, show a placeholder once.
 const logoFallback = (e) => { e.currentTarget.onerror = null; e.currentTarget.src = PLACEHOLDER; };
 
-// "#/xxx" = a page inside this project
 const DESKTOP_LINKS = [
-  ["Home", "#/"],
-  ["About us", "#/aboutus"],
-  ["How It Works", "#/how-it-works"],
-  ["Success Stories", "#/success-stories"],
-  ["Our services", "#/our-services"],
-  ["Contact us", "#/contactus"],
+  ["Home", "/"],
+  ["About us", "/aboutus"],
+  ["How It Works", "/how-it-works"],
+  ["Success Stories", "/success-stories"],
+  ["Our services", "/our-services"],
+  ["Contact us", "/contactus"],
 ];
 
 const MOBILE_LINKS = [
-  ["Home", "#/"],
-  ["About", "#/aboutus"],
-  ["How It Works", "#/how-it-works"],
-  ["Success Stories", "#/success-stories"],
-  ["Our services", "#/our-services"],
-  ["Contact us", "#/contactus"],
+  ["Home", "/"],
+  ["About", "/aboutus"],
+  ["How It Works", "/how-it-works"],
+  ["Success Stories", "/success-stories"],
+  ["Our services", "/our-services"],
+  ["Contact us", "/contactus"],
 ];
 
-const REGISTER_URL = "#/register";
-const LOGIN_URL = "#/login";
+const REGISTER_URL = "/melava-registration";
+const LOGIN_URL = "/login";
 
 export default function Header() {
   const [open, setOpen] = useState(false);
@@ -41,7 +40,7 @@ export default function Header() {
                className="d-none d-lg-block" style={{ width: 100, height: 125 }} />
 
           <div className="header-logo-box">
-            <a href="#/">
+            <a href="/">
               <img src="/website/Mano_Milan_Final_Website.png" onError={logoFallback} alt="Aaryan's Manomilan Logo"
                    className="mx-auto mx-lg-0" style={{ width: 140, height: 155 }} />
             </a>
@@ -61,7 +60,7 @@ export default function Header() {
               <span className="reg-dropdown">
                 <span className="reg-trigger">Registration Plan</span>
                 <div className="reg-menu">
-                  <a href={REGISTER_URL}>Registration</a>
+                  <a href={REGISTER_URL}>Melava Registration</a>
                   <a href={LOGIN_URL}>Login</a>
                 </div>
               </span>
@@ -92,6 +91,8 @@ export default function Header() {
           {MOBILE_LINKS.map(([label, href]) => (
             <a key={label} href={href} onClick={toggle}>{label}</a>
           ))}
+          <a href={REGISTER_URL} onClick={toggle}>Melava Registration</a>
+          <a href={LOGIN_URL} onClick={toggle}>Login</a>
         </nav>
       </div>
     </>

@@ -26,16 +26,16 @@ Vite prints the local development URL after the server starts.
 
 ## Application pages
 
-The app uses hash-based routes. Public pages include:
+The app uses clean path-based routes. Public pages include:
 
-- `#/` - Home
-- `#/aboutus` - About
-- `#/how-it-works` - How it works
-- `#/success-stories` - Success stories
-- `#/our-services` - Services
-- `#/contactus` - Contact
+- `/` - Home
+- `/aboutus` - About
+- `/how-it-works` - How it works
+- `/success-stories` - Success stories
+- `/our-services` - Services
+- `/contactus` - Contact
 
-Login and dashboard routes include `#/login`, `#/candidate`, `#/admin`, and `#/admin/profiles`. Candidate and admin pages require a session.
+Login and dashboard routes include `/login`, `/candidate`, `/admin`, and `/admin/profiles`. Candidate and admin pages require a session. Production web servers must rewrite unknown application paths to `index.html` so direct links and browser refreshes work.
 
 ## Backend configuration
 

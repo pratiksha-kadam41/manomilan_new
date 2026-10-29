@@ -23,11 +23,11 @@ export default function AdminLayout({ currentPath, children }) {
   const handleLogout = () => {
   setMenuOpen(false);
   clearSession();                  // removes the session and cancels it on the server
-  window.location.replace("#/");   // replace, so Back can't return to the admin page
+  window.location.replace("/");   // replace, so Back can't return to the admin page
 };
   const handleChangePassword = () => {
     setMenuOpen(false);
-    window.location.hash = "#/admin/change-password";
+    window.location.assign("/admin/change-password");
   };
 
   return (

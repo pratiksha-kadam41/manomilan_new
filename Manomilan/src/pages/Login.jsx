@@ -57,7 +57,7 @@ export default function Login() {
     email: "",
   });
   const [isRegistering, setIsRegistering] = useState(() =>
-    window.location.hash.startsWith("#/register"),
+    window.location.pathname.startsWith("/register"),
   );
   const [touched, setTouched] = useState({});
   const [remember, setRemember] = useState(!!localStorage.getItem("rememberedUser"));
@@ -72,7 +72,7 @@ export default function Login() {
   // If already signed in, skip the login screen
   useEffect(() => {
     const session = getSession();
-    if (session) window.location.hash = homeForRole(session.role);
+    if (session) window.location.replace(homeForRole(session.role));
   }, []);
 
   const errors = validate(values, isRegistering);
@@ -121,7 +121,7 @@ export default function Login() {
         localStorage.setItem("rememberedUser", values.username);
       else localStorage.removeItem("rememberedUser");
 
-      window.location.hash = homeForRole(role); // admin → /admin, candidate → /candidate
+      window.location.assign(homeForRole(role)); // admin → /admin, candidate → /candidate
     } catch (err) {
       setServerError(err.message || "Login failed. Please try again.");
       setValues((v) => ({ ...v, password: "" }));
@@ -133,7 +133,7 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <a className="login-logo" href="#/">
+      <a className="login-logo" href="/">
         <img
           src="/stories/Mano_Milan_Final_Website.png"
           alt="Aaryans Manomilan"
@@ -276,7 +276,7 @@ export default function Login() {
                 />
                 <span>Remember password</span>
               </label>
-              <a href="#/forgot-password" className="login-forgot">Forgot password?</a>
+              <a href="/forgot-password" className="login-forgot">Forgot password?</a>
             </>
           )}
 
@@ -332,7 +332,7 @@ export default function Login() {
           <p className="login-foot">
             {isRegistering ? "Already have an account?" : "Don't have account?"}
             <a
-              href="#/login"
+              href="/login"
               onClick={(event) => {
                 event.preventDefault();
                 setIsRegistering(!isRegistering);

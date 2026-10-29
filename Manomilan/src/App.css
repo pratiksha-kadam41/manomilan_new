@@ -496,3 +496,41 @@ button { background: none; border: 0; padding: 0; font: inherit; color: inherit;
 .cu-branch:hover { box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 8px 10px -6px rgba(0,0,0,.1); }
 .cu-branch h4 { font-size: 1.25rem; line-height: 1.75rem; font-weight: 700; color: #111827; margin: 0 0 .5rem; }
 .cu-branch p { margin: 0; font-size: .875rem; line-height: 1.25rem; font-weight: 500; color: #6b7280; }
+
+/* Melava registration banner on the home page */
+.melava-banner {
+  padding: 2.5rem 0;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(255,255,255,.16), transparent 28%),
+    linear-gradient(120deg, #7d0437, #b70650 60%, #dc143c);
+  color: #fff;
+}
+.melava-banner-inner {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr)); gap: 1.25rem;
+  padding: 0 .5rem;
+}
+.melava-event-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+  min-width: 0; padding: 1.35rem; border: 1px solid rgba(255,255,255,.2);
+  border-radius: 1rem; background: rgba(70,0,27,.16);
+}
+.melava-banner-kicker {
+  display: inline-block; margin-bottom: .55rem; padding: .25rem .7rem;
+  border: 1px solid rgba(255,255,255,.3); border-radius: 999px;
+  background: rgba(255,255,255,.12); font-size: .72rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+.melava-banner h2 { margin: 0 0 .45rem; color: #fff; font-size: clamp(1.35rem, 2.2vw, 1.9rem); font-weight: 800; }
+.melava-banner p { max-width: 48rem; margin: 0; color: rgba(255,255,255,.82); font-size: .92rem; line-height: 1.6; }
+.melava-banner-actions { display: flex; flex-direction: column; align-items: flex-end; gap: .5rem; flex-shrink: 0; }
+.melava-banner-btn {
+  border: 0; border-radius: 999px; padding: .7rem 1.35rem;
+  background: #fff; color: #b70650; font-weight: 800; white-space: nowrap;
+}
+.melava-banner-btn:hover { background: #ffe9ee; color: #8d043d; }
+.melava-banner-actions span { color: #ffd9e2; font-size: .82rem; font-weight: 600; }
+.melava-banner-actions small { color: rgba(255,255,255,.75); }
+@media (max-width: 767px) {
+  .melava-event-banner { flex-direction: column; align-items: flex-start; gap: 1.25rem; }
+  .melava-banner-actions { align-items: flex-start; }
+}

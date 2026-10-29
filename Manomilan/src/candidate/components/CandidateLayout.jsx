@@ -19,14 +19,14 @@ export default function CandidateLayout({ currentPath, children }) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const go = (hash) => {
+  const go = (path) => {
     setMenuOpen(false);
-    window.location.hash = hash;
+    window.location.assign(path);
   };
 
   const handleLogout = () => {
     clearSession();
-    window.location.hash = "#/login";
+    window.location.assign("/login");
   };
 
   return (
@@ -58,10 +58,10 @@ export default function CandidateLayout({ currentPath, children }) {
 
             {menuOpen && (
               <div className="cnd-dropdown">
-                <button onClick={() => go("#/candidate/profile")}>
+                <button onClick={() => go("/candidate/profile")}>
                   <User size={17} /> My Profile
                 </button>
-                <button onClick={() => go("#/candidate/change-password")}>
+                <button onClick={() => go("/candidate/change-password")}>
                   <KeyRound size={17} /> Change Password
                 </button>
                 <button className="danger" onClick={handleLogout}>

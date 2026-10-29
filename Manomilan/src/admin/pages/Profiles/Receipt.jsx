@@ -6,7 +6,7 @@ import "./receipt.css";
 
 // GET /profiles/:id/receipt returns a verified receipt; amounts stay empty
 // until fee amounts are stored by the backend.
-const LINKS = { back: "#/admin/profiles" };
+const LINKS = { back: "/admin/profiles" };
 
 // Footer details printed on every receipt
 const ORG = {

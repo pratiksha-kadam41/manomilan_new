@@ -18,7 +18,7 @@ const roleForUser = (user) =>
     : "candidate";
 
 export const homeForRole = (role) =>
-  isAdminRole(role) ? "#/admin" : "#/candidate";
+  isAdminRole(role) ? "/admin" : "/candidate";
 
 const read = () => {
   try {

@@ -39,7 +39,7 @@ const STATUSES = [
    Load:  GET  /profiles/:id/verification
    Save:  POST /profiles/:id/verify
    ===================================================================== */
-const LINKS = { back: "#/admin/profiles" };
+const LINKS = { back: "/admin/profiles" };
 const MAX_REMARKS = 255;
 
 /* ---- Security helpers ---- */

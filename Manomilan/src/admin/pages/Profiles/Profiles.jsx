@@ -9,11 +9,11 @@ import { request, download } from "../../../api";
 import "./profiles.css";
 
 const LINKS = {
-  inactive: "#/admin/inactive-profiles",
-  view: (id) => `#/admin/profiles/${id}`,
-  edit: (id) => `#/admin/profiles/edit/${id}`,
-  payment: (id) => `#/admin/profiles/payment/${id}`,
-  receipt: (id) => `#/admin/profiles/receipt/${id}`,
+  inactive: "/admin/inactive-profiles",
+  view: (id) => `/admin/profiles/${id}`,
+  edit: (id) => `/admin/profiles/edit/${id}`,
+  payment: (id) => `/admin/profiles/payment/${id}`,
+  receipt: (id) => `/admin/profiles/receipt/${id}`,
 };
 
 const GENDERS = [
@@ -27,7 +27,7 @@ const REG_TYPES = [
   { value: "quick", label: "Quick Registration" },
   { value: "melava", label: "Melava Registration" },
   { value: "existing", label: "Existing Registration" },
-  { value: "melava_existing", label: "Melava 3 + Existing Registrations" },
+  { value: "melava_existing", label: "Melava + Existing Registrations" },
 ];
 
 async function getProfiles(params) {

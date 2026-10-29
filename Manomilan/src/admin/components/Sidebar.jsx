@@ -1,6 +1,7 @@
 import {
   Heart, LayoutDashboard, Users, Globe, BadgeCheck, ShieldAlert,
   CalendarHeart, GraduationCap, UserPlus, KeyRound, FileText, LogOut,
+  CalendarPlus,
 } from "lucide-react";
 
 import { clearSession } from "../../auth";
@@ -13,6 +14,7 @@ const ICONS = {
   "/admin/verified-profiles": BadgeCheck,
   "/admin/unverified-profiles": ShieldAlert,
   "/admin/melava": CalendarHeart,
+  "/admin/melava-campaigns": CalendarPlus,
   "/admin/workshop": GraduationCap,
   "/admin/requests": UserPlus,
   "/admin/reset-passwords": KeyRound,
@@ -40,7 +42,7 @@ export default function Sidebar({ currentPath }) {
           return (
             <a
               key={item.path}
-              href={`#${item.path}`}
+              href={item.path}
               title={item.label}
               className={`adm-link ${currentPath === item.path ? "active" : ""}`}
             >
@@ -52,13 +54,13 @@ export default function Sidebar({ currentPath }) {
       </nav>
 
       <a
-  href="#/"
+  href="/"
   className="adm-link adm-logout"
   title="Logout"
   onClick={(e) => {
     e.preventDefault();
     clearSession();
-    window.location.replace("#/");
+    window.location.replace("/");
   }}
 >
   <LogOut size={20} />

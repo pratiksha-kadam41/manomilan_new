@@ -189,7 +189,7 @@ export default function Dashboard() {
               </li>
             ))}
           </ul>
-          <a href="#/candidate/profile" className="cnd-outline-btn">Complete Profile</a>
+          <a href="/candidate/profile" className="cnd-outline-btn">Complete Profile</a>
         </div>
 
         <div className="cnd-box">
@@ -212,14 +212,14 @@ export default function Dashboard() {
               ))}
             </ul>
           )}
-          <a href="#/candidate/interests-received" className="cnd-outline-btn">View All</a>
+          <a href="/candidate/interests-received" className="cnd-outline-btn">View All</a>
         </div>
       </section>
 
       <section className="cnd-box cnd-matches-box">
         <div className="cnd-box-head">
           <h2>Suggested Matches</h2>
-          <a href="#/candidate/matches" className="cnd-link-text-btn">See all</a>
+          <a href="/candidate/matches" className="cnd-link-text-btn">See all</a>
         </div>
         {sendError && <p className="cnd-empty cnd-empty-error">{sendError}</p>}
         {matches.length === 0 ? (

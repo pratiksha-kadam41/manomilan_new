@@ -5,21 +5,20 @@ const ADDRESS =
   "Aachal Prime' Building, Above Hotel 'Shree Kateel', Next to Navale Bridge, New Pune-Satara Bypass Highway, Near Amrit Bloomfield, Narhe, Pune - 411041.";
 
 // modal = opens that popup instead of a page
-// "#/xxx" = a page inside this project. modal = opens a popup instead.
 const QUICK_LINKS = [
-  { label: "About Manomilan", href: "#/aboutus" },
-  { label: "How It Works", href: "#/how-it-works" },
-  { label: "Our services and Feature", href: "#/our-services" },
+  { label: "About Manomilan", href: "/aboutus" },
+  { label: "How It Works", href: "/how-it-works" },
+  { label: "Our services and Feature", href: "/our-services" },
   { label: "Privacy Policy", modal: "privacy" },
-  { label: "Payment Policy", href: "#/refund-policy" },
-  { label: "Terms and Conditions", href: "#/terms-and-conditions" },
+  { label: "Payment Policy", href: "/refund-policy" },
+  { label: "Terms and Conditions", href: "/terms-and-conditions" },
 ];
 
 const COMMUNITY_LINKS = [
   { label: "Digambar", modal: "digambar" },
   { label: "Shwetambar", modal: "shwetambar" },
-  { label: "FAQs", href: "#/faq" },
-  { label: "Events and Workshops", href: "#/events-workshops" },
+  { label: "FAQs", href: "/faq" },
+  { label: "Events and Workshops", href: "/events-workshops" },
 ];
 
 const DIGAMBAR = [

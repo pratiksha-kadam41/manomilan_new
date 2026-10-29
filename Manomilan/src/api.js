@@ -37,8 +37,8 @@ const firstValidationError = (body) => {
 
 const expireSession = () => {
   sessionStorage.removeItem(SESSION_KEY);
-  if (!window.location.hash.startsWith("#/login")) {
-    window.location.hash = "#/login?expired=1";
+  if (window.location.pathname !== "/login") {
+    window.location.assign("/login?expired=1");
   }
 };
 

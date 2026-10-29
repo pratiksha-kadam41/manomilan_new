@@ -1,0 +1,274 @@
+.mc-page {
+  --mc-teal: #28686a;
+  --mc-line: #dce5eb;
+  --mc-muted: #687584;
+  display: grid;
+  gap: 18px;
+}
+
+.mc-heading,
+.mc-panel-title,
+.mc-event,
+.mc-event-name,
+.mc-prices {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.mc-heading {
+  align-items: flex-start;
+}
+
+.mc-heading h1,
+.mc-panel-title h2,
+.mc-event-name h3 {
+  margin: 0;
+  color: #173c3d;
+}
+
+.mc-heading p,
+.mc-panel-title p,
+.mc-event-info p {
+  margin: 5px 0 0;
+  color: var(--mc-muted);
+}
+
+.mc-panel {
+  padding: 22px;
+  border: 1px solid var(--mc-line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(20, 45, 55, 0.04);
+}
+
+.mc-panel-title {
+  justify-content: flex-start;
+  margin-bottom: 18px;
+  color: var(--mc-teal);
+}
+
+.mc-panel-title h2 {
+  font-size: 1.08rem;
+}
+
+.mc-panel-title p {
+  font-size: 0.88rem;
+}
+
+.mc-form {
+  display: grid;
+  gap: 16px;
+}
+
+.mc-form label {
+  display: grid;
+  gap: 7px;
+  color: #334155;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.mc-form label > span {
+  display: inline;
+  color: #dc3545;
+}
+
+.mc-form input:not([type="checkbox"]):not([type="file"]),
+.mc-form select,
+.mc-form textarea {
+  width: 100%;
+  border: 1px solid var(--mc-line);
+  border-radius: 9px;
+  padding: 10px 12px;
+  color: #1f2937;
+  background: #fff;
+  font: inherit;
+}
+
+.mc-form input:focus,
+.mc-form select:focus,
+.mc-form textarea:focus {
+  outline: 2px solid rgba(40, 104, 106, 0.2);
+  border-color: var(--mc-teal);
+}
+
+.mc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  align-items: end;
+  gap: 14px;
+}
+
+.mc-form .mc-check {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.mc-check input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--mc-teal);
+}
+
+.mc-upload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px dashed #9bb9ba;
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--mc-teal);
+}
+
+.mc-upload input {
+  width: 100%;
+  color: #334155;
+  font: inherit;
+}
+
+.mc-form small,
+.mc-muted {
+  color: var(--mc-muted);
+  font-size: 0.82rem;
+}
+
+.mc-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: fit-content;
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 14px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mc-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.mc-button.primary {
+  color: #fff;
+  background: var(--mc-teal);
+}
+
+.mc-button.primary:hover:not(:disabled) {
+  background: #1e5152;
+}
+
+.mc-button.secondary {
+  color: var(--mc-teal);
+  border: 1px solid #b8d2d3;
+  background: #f3f9f9;
+}
+
+.mc-list {
+  display: grid;
+}
+
+.mc-event {
+  justify-content: flex-start;
+  border-top: 1px solid #edf1f4;
+  padding: 15px 0;
+}
+
+.mc-event > img {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border: 1px solid var(--mc-line);
+  border-radius: 10px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.mc-event-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mc-event-name {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.mc-event-name h3 {
+  font-size: 1rem;
+}
+
+.mc-status {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.mc-status.active {
+  color: #17673a;
+  background: #e7f6ec;
+}
+
+.mc-status.inactive {
+  color: #91400c;
+  background: #fff2df;
+}
+
+.mc-prices {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 7px;
+  color: #40515e;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.mc-alert {
+  padding: 11px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.mc-alert.error {
+  color: #8a1f2d;
+  border: 1px solid #f3bdc4;
+  background: #fff0f2;
+}
+
+.mc-alert.success {
+  color: #17673a;
+  border: 1px solid #b6dfc5;
+  background: #edf9f1;
+}
+
+@media (max-width: 680px) {
+  .mc-heading,
+  .mc-event {
+    align-items: flex-start;
+  }
+
+  .mc-event {
+    flex-wrap: wrap;
+  }
+
+  .mc-event-info {
+    flex-basis: calc(100% - 80px);
+  }
+
+  .mc-event > .mc-button {
+    margin-left: 78px;
+  }
+
+  .mc-panel {
+    padding: 16px;
+  }
+}

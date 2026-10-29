@@ -17,7 +17,7 @@ const ICONS = {
 export default function CandidateSidebar({ currentPath }) {
   const handleLogout = () => {
     clearSession();
-    window.location.hash = "#/login";
+    window.location.assign("/login");
   };
 
   return (
@@ -40,7 +40,7 @@ export default function CandidateSidebar({ currentPath }) {
           return (
             <a
               key={item.path}
-              href={`#${item.path}`}
+              href={item.path}
               title={item.label}
               className={`cnd-link ${currentPath === item.path ? "active" : ""}`}
             >

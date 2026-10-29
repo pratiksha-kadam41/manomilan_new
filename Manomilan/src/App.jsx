@@ -10,6 +10,7 @@ import OurServices from "./pages/OurServices.jsx";
 import ContactUs from "./pages/ContactUs.jsx";
 import Login from "./pages/Login.jsx";
 import ChangePassword from "./pages/ChangePassword.jsx";
+import MelavaRegistration from "./pages/MelavaRegistration.jsx";
 import Dashboard from "./admin/pages/Dashboard";
 import CandidateDashboard from "./candidate/pages/Dashboard";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
@@ -17,6 +18,9 @@ import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 import Profiles from "./admin/pages/Profiles/Profiles.jsx";
 import ProfileVerify from "./admin/pages/Profiles/ProfileVerify.jsx";
 import Receipt from "./admin/pages/Profiles/Receipt.jsx";
+import PaymentScreenshot from "./admin/pages/Profiles/PaymentScreenshot.jsx";
+import MelavaPayments from "./admin/pages/MelavaPayments.jsx";
+import MelavaCampaigns from "./admin/pages/MelavaCampaigns.jsx";
 
 // Add a page here: "/url-name": Component
 const ROUTES = {
@@ -29,17 +33,21 @@ const ROUTES = {
 
   "/login": Login,
   "/register": Login,
+  "/melava-registration": MelavaRegistration,
   "/candidate": CandidateDashboard,
   "/candidate/change-password": ChangePassword,
   "/admin": Dashboard,
   "/admin/change-password": ChangePassword,
   "/admin/profiles": Profiles,
+  "/admin/melava": MelavaPayments,
+  "/admin/melava-campaigns": MelavaCampaigns,
 };
 
-// Pages whose URL contains an id, e.g. #/admin/profiles/396  (only digits are accepted)
+// Pages whose URL contains an id (only digits are accepted)
 const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/profiles\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
+  { pattern: /^\/admin\/profiles\/payment\/(\d+)$/, Page: PaymentScreenshot },
   { pattern: /^\/admin\/profiles\/receipt\/(\d+)$/, Page: Receipt },
 ];
 
@@ -52,10 +60,13 @@ const matchRoute = (path) => {
   return { Page: null, params: {} };
 };
 
-const getPath = () => {
-  const p = window.location.hash.replace(/^#/, "").split("?")[0];
-  return p === "" ? "/" : p;
-};
+const legacyHashPath = window.location.hash.match(/^#(\/[^?]*)(?:\?(.*))?$/);
+if (legacyHashPath) {
+  const query = legacyHashPath[2] ? `?${legacyHashPath[2]}` : "";
+  window.history.replaceState(null, "", `${legacyHashPath[1]}${query}`);
+}
+
+const getPath = () => window.location.pathname.replace(/\/+$/, "") || "/";
 
 export default function App() {
   const [path, setPath] = useState(getPath());
@@ -65,8 +76,8 @@ export default function App() {
       setPath(getPath());
       window.scrollTo(0, 0); // every new page starts at the top
     };
-    window.addEventListener("hashchange", onChange);
-    return () => window.removeEventListener("hashchange", onChange);
+    window.addEventListener("popstate", onChange);
+    return () => window.removeEventListener("popstate", onChange);
   }, []);
 
   useEffect(() => {
@@ -82,13 +93,14 @@ export default function App() {
   useEffect(() => {
     if (!loggedIn) return;
     return watchActivity(() => {
-      window.location.hash = "#/login?expired=1";
+      window.location.assign("/login?expired=1");
     });
   }, [loggedIn]);
 
   const isAdminPath = path.startsWith("/admin");
   const isCandidatePath = path.startsWith("/candidate");
   const isLogin = path === "/login" || path === "/register";
+  const isMelavaRegistration = path === "/melava-registration";
 
   // Private pages need a login
   const needsLogin = (isAdminPath || isCandidatePath) && !session;
@@ -96,14 +108,14 @@ export default function App() {
   // A candidate who types /admin is sent to their own page
   const wrongRole = isAdminPath && session && !isAdminRole(session.role);
   useEffect(() => {
-    if (wrongRole) window.location.hash = homeForRole(session.role);
+    if (wrongRole) window.location.replace(homeForRole(session.role));
   }, [wrongRole, session?.role]);
   if (wrongRole) return null;
 
   // CHANGED: find the page (and the id from the URL, if any)
   const { Page: Matched, params } = matchRoute(path);
   const Page = needsLogin ? Login : Matched;
-  const hideChrome = isAdminPath || isCandidatePath || isLogin; // hide public Header/Footer
+  const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration;
 
   return (
     <>

@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\EnquiryController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InterestController;
 use App\Http\Controllers\Api\MelavaRegistrationController;
+use App\Http\Controllers\Api\MelavaCampaignController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProfileController;
@@ -20,6 +21,9 @@ Route::post('/register', [RegisterController::class, 'register'])->middleware('t
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1');
 
 Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('throttle:10,1');
+Route::get('/melava-registrations/settings', [MelavaRegistrationController::class, 'settings']);
+Route::get('/melava-campaigns/active', [MelavaCampaignController::class, 'active']);
+Route::get('/melava-registrations/check', [MelavaRegistrationController::class, 'check'])->middleware('throttle:20,1');
 Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
 Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
 
@@ -65,6 +69,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/melava-registrations', [MelavaRegistrationController::class, 'index']);
     Route::get('/melava-registrations/{id}', [MelavaRegistrationController::class, 'show']);
+    Route::put('/melava-registrations/{id}/payment-status', [MelavaRegistrationController::class, 'updatePaymentStatus']);
+    Route::get('/melava-campaigns', [MelavaCampaignController::class, 'index']);
+    Route::post('/melava-campaigns', [MelavaCampaignController::class, 'store']);
+    Route::put('/melava-campaigns/{id}/status', [MelavaCampaignController::class, 'updateStatus']);
 
     Route::get('/workshop-registrations', [WorkshopRegistrationController::class, 'index']);
 
