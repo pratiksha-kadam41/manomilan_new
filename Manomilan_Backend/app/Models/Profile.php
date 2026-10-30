@@ -480,7 +480,12 @@ class Profile extends Model
             // Document Details
             'identificationProof',
             'birthDateProof',
+            'addressProof',
             'educationProof',
+            'professionProof',
+            'incomeProof',
+            'casteCertificate',
+            'medicalFitnessCertificate',
         ];
 
         $filledCount = 0;
@@ -569,6 +574,12 @@ class Profile extends Model
         }
 
         $percentage = ($totalCount > 0) ? (int) round(($filledCount / $totalCount) * 100) : 0;
+
+        // The candidate dashboard should show 100% once every field required
+        // by the registration form is filled, regardless of optional details.
+        if ($this->hasCompletedMandatoryFields()) {
+            $percentage = 100;
+        }
 
         $this->profile_completion = $percentage;
         $this->save();

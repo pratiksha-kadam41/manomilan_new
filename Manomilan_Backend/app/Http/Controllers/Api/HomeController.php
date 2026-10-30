@@ -45,13 +45,6 @@ class HomeController extends Controller
                     'profile_views' => $profileId ? ProfileVisitor::where('profile_id', $profileId)->count() : 0,
                     'interests_received' => $profileId ? UserInterest::where('profile_id', $profileId)->count() : 0,
                     'interests_sent' => UserInterest::where('user_id', $user->id)->count(),
-                    'shortlisted' => $profileId
-                        ? UserInterest::where('status', 'accepted')
-                            ->where(function ($query) use ($profileId, $user) {
-                                $query->where('profile_id', $profileId)->orWhere('user_id', $user->id);
-                            })
-                            ->count()
-                        : 0,
                     'profile_completion' => (int) ($profile->profile_completion ?? 0),
                     'profile_id' => $profileId,
                 ],
@@ -97,7 +90,7 @@ class HomeController extends Controller
                         'profile_id' => $profile->profile_id,
                         'full_name' => $profile->fullName,
                         'gender' => $profile->groomOrBride,
-                        'photo_url' => $profile->profilePhoto ? url(ltrim($profile->profilePhoto, '/')) : '',
+                        'photo_url' => $profile->profilePhoto ? $this->profilePhotoUrl($profile->profilePhoto) : '',
                         'profile_completion' => (int) $profile->profile_completion,
                         'verification_status' => $profile->profileVerificationStatus,
                         'birth_date' => $profile->birthDate,
@@ -119,5 +112,26 @@ class HomeController extends Controller
                 'message' => 'Unable to load profile data right now.',
             ], 500);
         }
+    }
+
+    private function profilePhotoUrl(string $path): string
+    {
+        $path = trim($path);
+
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return url($path);
+        }
+
+        if (str_starts_with($path, 'candidate/')) {
+            return url('storage/'.$path);
+        }
+
+        return url($path);
     }
 }

@@ -52,8 +52,9 @@ class ProfileController extends Controller
             });
         }
 
-        if ($request->filled('groomOrBride') && $request->input('groomOrBride') !== 'all') {
-            $query->where('groomOrBride', $request->input('groomOrBride'));
+        $gender = strtolower(trim((string) $request->input('groomOrBride', '')));
+        if ($gender !== '' && $gender !== 'all') {
+            $query->whereRaw('LOWER(groomOrBride) = ?', [$gender]);
         }
 
         if ($request->filled('religion')) {
@@ -887,6 +888,16 @@ class ProfileController extends Controller
             return $path;
         }
 
-        return url(ltrim($path, '/'));
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return url($path);
+        }
+
+        if (str_starts_with($path, 'candidate/')) {
+            return url('storage/'.$path);
+        }
+
+        return url($path);
     }
 }

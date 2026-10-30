@@ -1,60 +1,66 @@
 import {
-  Heart, LayoutDashboard, User, Search, Inbox, Send, Star, Crown, LogOut,
+  Bell, Heart, Home, Inbox, KeyRound, LogOut, Send, User, Users,
 } from "lucide-react";
-import { menuItems } from "../data/candidateData";
-import { clearSession } from "../../auth";
+import { accountItems, menuItems } from "../data/candidateData";
 
 const ICONS = {
-  "/candidate": LayoutDashboard,
-  "/candidate/profile": User,
-  "/candidate/matches": Search,
-  "/candidate/interests-received": Inbox,
-  "/candidate/interests-sent": Send,
-  "/candidate/shortlisted": Star,
-  "/candidate/membership": Crown,
+  home: Home,
+  user: User,
+  search: Users,
+  inbox: Inbox,
+  send: Send,
+  bell: Bell,
+  key: KeyRound,
 };
 
-export default function CandidateSidebar({ currentPath }) {
-  const handleLogout = () => {
-    clearSession();
-    window.location.assign("/login");
+export default function CandidateSidebar({ currentPath, unreadCount = 0, onLogout }) {
+  const renderItem = (item) => {
+    const Icon = ICONS[item.icon] || Heart;
+    const active = currentPath === item.path;
+    const showBadge = item.path === "/candidate/notifications" && unreadCount > 0;
+
+    return (
+      <a
+        key={item.path}
+        href={item.path}
+        title={item.label}
+        className={`cnd-nav-link ${active ? "active" : ""}`}
+        aria-current={active ? "page" : undefined}
+      >
+        <span className="cnd-nav-icon"><Icon size={19} /></span>
+        <span className="cnd-nav-text">{item.label}</span>
+        {showBadge ? (
+          <span className="cnd-nav-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+        ) : null}
+      </a>
+    );
   };
 
   return (
     <aside className="cnd-sidebar">
-      <div className="cnd-brand">
-        <div className="cnd-brand-icon">
-          <Heart size={22} fill="#fff" />
-        </div>
-        <div className="cnd-brand-text">
-          <strong>Manomilan</strong>
-          <small>Candidate Panel</small>
-        </div>
+      <a className="cnd-sidebar-brand" href="/candidate" aria-label="Aaryans Manomilan candidate portal">
+        <img src="/img/aaryan-manomilan-logo.png" alt="Aaryans Manomilan" />
+      </a>
+
+      <div className="cnd-sidebar-scroll">
+        <span className="cnd-menu-label">Main menu</span>
+        <nav className="cnd-nav" aria-label="Candidate navigation">
+          {menuItems.map(renderItem)}
+        </nav>
+
+        <span className="cnd-menu-label">Account</span>
+        <nav className="cnd-nav" aria-label="Account navigation">
+          {accountItems.map(renderItem)}
+        </nav>
       </div>
 
-      <div className="cnd-menu-label">MENU</div>
-
-      <nav className="cnd-nav">
-        {menuItems.map((item) => {
-          const Icon = ICONS[item.path] || LayoutDashboard;
-          return (
-            <a
-              key={item.path}
-              href={item.path}
-              title={item.label}
-              className={`cnd-link ${currentPath === item.path ? "active" : ""}`}
-            >
-              <Icon size={20} />
-              <span className="cnd-link-text">{item.label}</span>
-            </a>
-          );
-        })}
-      </nav>
-
-      <button className="cnd-link cnd-logout" onClick={handleLogout} title="Log Out">
-        <LogOut size={20} />
-        <span className="cnd-link-text">Log Out</span>
-      </button>
+      <div className="cnd-sidebar-foot">
+        <button type="button" className="cnd-nav-link cnd-logout" onClick={onLogout}>
+          <span className="cnd-nav-icon"><LogOut size={19} /></span>
+          <span className="cnd-nav-text">Log Out</span>
+        </button>
+        <p>Manomilan candidate portal</p>
+      </div>
     </aside>
   );
 }

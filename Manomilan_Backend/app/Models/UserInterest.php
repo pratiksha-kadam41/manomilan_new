@@ -24,7 +24,7 @@ class UserInterest extends Model
     protected $fillable = [
         'user_id',
         'profile_id',
-        'status', // Added status column
+        'status',
     ];
 
     /**

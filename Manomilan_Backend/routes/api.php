@@ -14,6 +14,12 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\WorkshopRegistrationController;
+use App\Http\Controllers\Candidate\DashboardController as CandidateDashboardController;
+use App\Http\Controllers\Candidate\InterestController as CandidateInterestController;
+use App\Http\Controllers\Candidate\MatchController as CandidateMatchController;
+use App\Http\Controllers\Candidate\NotificationController as CandidateNotificationController;
+use App\Http\Controllers\Candidate\PreferenceController as CandidatePreferenceController;
+use App\Http\Controllers\Candidate\ProfileController as CandidateProfileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -88,4 +94,34 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/profiles/{profileId}/payment-screenshots/{paymentId}/verify', [PaymentController::class, 'verifyForProfile'])->whereNumber('profileId')->whereNumber('paymentId');
     Route::post('/profiles/{profileId}/payment-screenshot', [PaymentController::class, 'uploadForProfile'])->whereNumber('profileId');
     Route::get('/profiles/{profileId}/receipt', [ReceiptController::class, 'show'])->whereNumber('profileId');
+
+    Route::prefix('candidate')->group(function () {
+        Route::get('/dashboard', [CandidateDashboardController::class, 'index']);
+
+        Route::get('/profile', [CandidateProfileController::class, 'show']);
+        Route::post('/profile', [CandidateProfileController::class, 'store']);
+        Route::put('/profile', [CandidateProfileController::class, 'update']);
+        Route::post('/profile/photo', [CandidateProfileController::class, 'uploadPhoto']);
+        Route::delete('/profile/photo', [CandidateProfileController::class, 'deletePhoto']);
+        Route::post('/profile/documents', [CandidateProfileController::class, 'uploadDocuments']);
+        Route::delete('/profile/documents/{key}', [CandidateProfileController::class, 'deleteDocument']);
+
+        Route::get('/preferences', [CandidatePreferenceController::class, 'show']);
+        Route::put('/preferences', [CandidatePreferenceController::class, 'update']);
+        Route::post('/preferences', [CandidatePreferenceController::class, 'update']);
+
+        Route::get('/matches', [CandidateMatchController::class, 'index']);
+        Route::get('/matches/{id}', [CandidateMatchController::class, 'show'])->whereNumber('id');
+
+        Route::get('/interests/sent', [CandidateInterestController::class, 'sent']);
+        Route::get('/interests/received', [CandidateInterestController::class, 'received']);
+        Route::post('/interests', [CandidateInterestController::class, 'store']);
+        Route::post('/interests/{id}/respond', [CandidateInterestController::class, 'respond'])->whereNumber('id');
+
+        Route::get('/notifications', [CandidateNotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [CandidateNotificationController::class, 'unreadCount']);
+        Route::post('/notifications/read-all', [CandidateNotificationController::class, 'markAllRead']);
+        Route::post('/notifications/{id}/read', [CandidateNotificationController::class, 'markRead'])->whereNumber('id');
+        Route::delete('/notifications/{id}', [CandidateNotificationController::class, 'destroy'])->whereNumber('id');
+    });
 });

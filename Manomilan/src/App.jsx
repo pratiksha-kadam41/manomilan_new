@@ -14,6 +14,10 @@ import ChangePassword from "./pages/ChangePassword.jsx";
 import MelavaRegistration from "./pages/MelavaRegistration.jsx";
 import Dashboard from "./admin/pages/Dashboard";
 import CandidateDashboard from "./candidate/pages/Dashboard";
+import CandidateMatches from "./candidate/pages/Matches";
+import CandidateProfile from "./candidate/pages/Profile";
+import CandidateActivity from "./candidate/pages/Activity";
+import CandidateNotifications from "./candidate/pages/Notifications";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
 import Profiles from "./admin/pages/Profiles/Profiles.jsx";
@@ -37,6 +41,15 @@ const ROUTES = {
   "/register": Login,
   "/melava-registration": MelavaRegistration,
   "/candidate": CandidateDashboard,
+  "/candidate/profile": CandidateProfile,
+  "/candidate/matches": CandidateMatches,
+  "/candidate/interests-received": () => (
+    <CandidateActivity currentPath="/candidate/interests-received" mode="received" />
+  ),
+  "/candidate/interests-sent": () => (
+    <CandidateActivity currentPath="/candidate/interests-sent" />
+  ),
+  "/candidate/notifications": CandidateNotifications,
   "/candidate/change-password": ChangePassword,
   "/admin": Dashboard,
   "/admin/change-password": ChangePassword,
@@ -97,7 +110,9 @@ export default function App() {
   const needsLogin = (isAdminPath || isCandidatePath) && !session;
 
   // A candidate who types /admin is sent to their own page
-  const wrongRole = isAdminPath && session && !isAdminRole(session.role);
+  const wrongRole =
+    (isAdminPath && session && !isAdminRole(session.role))
+    || (isCandidatePath && session && isAdminRole(session.role));
   useEffect(() => {
     if (wrongRole) window.location.replace(homeForRole(session.role));
   }, [wrongRole, session?.role]);
@@ -112,7 +127,7 @@ export default function App() {
     <>
       {!hideChrome && <Header />}
       {/* CHANGED: pass params so the page receives the profile id */}
-      {Page ? <Page key={Matched === ProfileDetail ? path : undefined} params={params} /> : <ComingSoon path={path} />}
+      {Page ? <Page key={`${path}-${params.id || ""}`} params={params} /> : <ComingSoon path={path} />}
       {!hideChrome && <Footer />}
     </>
   );

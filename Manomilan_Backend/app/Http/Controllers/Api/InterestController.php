@@ -37,25 +37,19 @@ class InterestController extends Controller
     public function received(Request $request)
     {
         $user = $request->user();
-
         if (! $user->profile_id) {
-            return response()->json(['success' => true, 'data' => $this->emptyPaginator()]);
+            return response()->json(['success' => true, 'data' => []]);
         }
-
         $interests = UserInterest::with(['user.profile'])
             ->where('profile_id', $user->profile_id)
             ->latest()
             ->paginate((int) $request->input('per_page', 20));
-
-        $interests->getCollection()->transform(function (UserInterest $interest) {
-            return [
-                'id' => $interest->id,
-                'status' => $interest->status,
-                'created_at' => optional($interest->created_at)->toIso8601String(),
-                'profile' => $this->presentProfile($interest->user?->profile),
-            ];
-        });
-
+        $interests->getCollection()->transform(fn (UserInterest $interest) => [
+            'id' => $interest->id,
+            'status' => $interest->status,
+            'created_at' => optional($interest->created_at)->toIso8601String(),
+            'profile' => $this->presentProfile($interest->user?->profile),
+        ]);
         return response()->json(['success' => true, 'data' => $interests]);
     }
 
@@ -109,41 +103,15 @@ class InterestController extends Controller
 
     public function respond(Request $request, $id)
     {
-        $data = $request->validate([
-            'status' => ['required', Rule::in(['accepted', 'rejected'])],
-        ]);
-
-        $interest = UserInterest::find($id);
-
-        if (! $interest) {
-            return response()->json(['success' => false, 'message' => 'Interest not found.'], 404);
-        }
-
+        $data = $request->validate(['status' => ['required', Rule::in(['accepted', 'rejected'])]]);
+        $interest = UserInterest::findOrFail($id);
         $user = $request->user();
-
         if (! $user->isAdmin() && (int) $interest->profile_id !== (int) $user->profile_id) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
         }
-
-        try {
-            DB::transaction(function () use ($interest, $data) {
-                $interest->status = $data['status'];
-                $interest->save();
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Interest response updated.',
-                'data' => $interest,
-            ]);
-        } catch (Throwable $e) {
-            report($e);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Unable to update the interest right now.',
-            ], 500);
-        }
+        $interest->status = $data['status'];
+        $interest->save();
+        return response()->json(['success' => true, 'data' => $interest]);
     }
 
     private function presentProfile(?Profile $profile): ?array

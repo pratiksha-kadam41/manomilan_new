@@ -69,6 +69,9 @@ export async function request(
   }
 
   const options = { method, headers: finalHeaders };
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+  options.signal = controller.signal;
 
   if (body !== undefined && body !== null) {
     if (body instanceof FormData) {
@@ -82,11 +85,16 @@ export async function request(
   let response;
   try {
     response = await fetch(url, options);
-  } catch {
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new ApiError("The server took too long to respond. Please try again.", 0);
+    }
     throw new ApiError(
       "Cannot reach the server. Please check your connection and try again.",
       0,
     );
+  } finally {
+    window.clearTimeout(timeoutId);
   }
 
   if (raw) {

@@ -51,6 +51,34 @@ export function getSession() {
   return { token: session.token, role: session.role, user: session.user || null };
 }
 
+export function getCachedHomeData() {
+  const user = getSession()?.user;
+  if (!user) return null;
+
+  const source = user.profile;
+  const profile = source
+    ? {
+        ...source,
+        registration_number: source.registration_number || source.profile_id,
+        full_name: source.full_name || source.fullName,
+        gender: source.gender || source.groomOrBride,
+        photo_url: source.photo_url || "",
+        birth_date: source.birth_date || source.birthDate,
+        city: source.city || source.location || source.professionalCity,
+        education: source.education || "",
+        profession: source.profession || "",
+        verification_status: source.verification_status || source.profileVerificationStatus,
+        profile_completion: Number(source.profile_completion || 0),
+        has_education: Boolean(source.has_education || (source.education && source.profession)),
+        has_family: Boolean(source.has_family || (source.fathersName && source.mothersName)),
+        has_photos: Boolean(source.has_photos || source.profilePhoto),
+        has_preferences: Boolean(source.has_preferences),
+      }
+    : null;
+
+  return { user, profile };
+}
+
 export function touchSession() {
   const session = read();
   if (!session) return;
