@@ -152,9 +152,6 @@ class MelavaRegistrationController extends Controller
 
         $pending = MelavaPendingRegistration::where('mobile', $mobile)
             ->where('status', 'pending')
-            ->where(function ($query) {
-                $query->whereNull('expires_at')->orWhere('expires_at', '>', now());
-            })
             ->latest('id')
             ->first();
 
@@ -176,6 +173,16 @@ class MelavaRegistrationController extends Controller
                         'identification_proof_url' => $this->fileUrl($pendingData['identificationProof'] ?? null),
                         'birth_date_proof_url' => $this->fileUrl($pendingData['birthDateProof'] ?? null),
                         'education_proof_url' => $this->fileUrl($pendingData['educationProof'] ?? null),
+                        'candidate_photos_urls' => collect(is_array($pendingData['candidate_photos'] ?? null) ? $pendingData['candidate_photos'] : [])
+                            ->filter()
+                            ->map(fn ($path) => $this->fileUrl($path))
+                            ->values()
+                            ->all(),
+                        'additional_photos_urls' => collect(is_array($pendingData['additionalPhotos'] ?? null) ? $pendingData['additionalPhotos'] : [])
+                            ->filter()
+                            ->map(fn ($path) => $this->fileUrl($path))
+                            ->values()
+                            ->all(),
                         'is_existing_website_user' => (bool) $pending->is_existing_website_user,
                         'user_id' => $pending->user_id,
                         'profile_id' => $pending->profile_id,
@@ -229,11 +236,9 @@ class MelavaRegistrationController extends Controller
                 $profile->birthDateProof ?: ($registration?->birth_verification_doc ?: null)
             ),
             'education_proof_url' => $this->fileUrl($profile->educationProof),
-            'candidate_photos_urls' => collect(array_merge(
-                is_array($registration?->candidate_photos) ? $registration->candidate_photos : [],
-                []
-            ))->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
-            'additional_photos_urls' => collect(is_array($profile->additional_photos) ? $profile->additional_photos : [])
+            'candidate_photos_urls' => collect($this->normalizePathList($registration?->getRawOriginal('candidate_photos')))
+                ->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
+            'additional_photos_urls' => collect($this->normalizePathList($profile->getRawOriginal('additional_photos')))
                 ->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
             'preference' => $user->preference,
             'has_registration' => (bool) $registration,
@@ -243,6 +248,7 @@ class MelavaRegistrationController extends Controller
                     'melava_batch' => $registration->melava_batch,
                     'melava_registered_at' => $registration->melava_registered_at,
                     'is_booklet_req' => (bool) $registration->is_booklet_req,
+                    'payment_verified' => (bool) $registration->payment_verified,
                 ]
                 : null,
         ]);
@@ -355,7 +361,7 @@ class MelavaRegistrationController extends Controller
             'melava_campaign_id' => $validated['melava_campaign_id'],
             'melava_number' => strtoupper($melavaNumber),
             'status' => 'pending',
-            'expires_at' => now()->addDays(30),
+            'expires_at' => null,
             ]);
             $draft->save();
         });
@@ -513,6 +519,17 @@ class MelavaRegistrationController extends Controller
         if ($request->boolean('booklet_required') && ! $campaign->booklet_available) {
             throw ValidationException::withMessages([
                 'booklet_required' => ['A booklet is not available for this Melava event.'],
+            ]);
+        }
+
+        $paidRegistration = MelavaRegistration::where('username', $data['username'])
+            ->where('melava_campaign_id', $campaign->id)
+            ->where('payment_verified', true)
+            ->latest('id')
+            ->first();
+        if ($paidRegistration) {
+            throw ValidationException::withMessages([
+                'payment_screenshot' => ['Payment for this Melava registration is already verified.'],
             ]);
         }
 
@@ -820,6 +837,28 @@ class MelavaRegistrationController extends Controller
         }
 
         return url('storage/'.$path);
+    }
+
+    private function normalizePathList($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map(fn ($item) => is_string($item) ? trim($item) : null, $value)));
+        }
+
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (is_string($decoded)) {
+            $decoded = json_decode($decoded, true);
+        }
+
+        if (is_array($decoded)) {
+            return array_values(array_filter(array_map(fn ($item) => is_string($item) ? trim($item) : null, $decoded)));
+        }
+
+        return [trim(str_replace(['\\"', '\\\\'], ['"', '\\'], $value))];
     }
 
     private function normalizeInput(Request $request): void

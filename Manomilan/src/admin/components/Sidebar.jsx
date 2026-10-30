@@ -1,8 +1,9 @@
 import {
-  Heart, LayoutDashboard, Users, Globe, BadgeCheck, ShieldAlert,
+  LayoutDashboard, Users, Globe, BadgeCheck, ShieldAlert,
   CalendarHeart, GraduationCap, UserPlus, KeyRound, FileText, LogOut,
   CalendarPlus,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 import { clearSession } from "../../auth";
 import { menuItems } from "../data/adminData";
@@ -21,17 +22,25 @@ const ICONS = {
   "/admin/report": FileText,
 };
 
+const ICON_COLORS = {
+  "/admin": "#2f80ed",
+  "/admin/profiles": "#8b5cf6",
+  "/admin/nri-profiles": "#14b8a6",
+  "/admin/verified-profiles": "#22c55e",
+  "/admin/unverified-profiles": "#f97316",
+  "/admin/melava": "#ec4899",
+  "/admin/melava-campaigns": "#e11d48",
+  "/admin/workshop": "#7c3aed",
+  "/admin/requests": "#0ea5e9",
+  "/admin/reset-passwords": "#f59e0b",
+  "/admin/report": "#6366f1",
+};
+
 export default function Sidebar({ currentPath }) {
   return (
     <aside className="adm-sidebar">
       <div className="adm-brand">
-        <div className="adm-brand-icon">
-          <Heart size={22} fill="#fff" />
-        </div>
-        <div className="adm-brand-text">
-          <strong>Manomilan</strong>
-          <small>Admin Panel</small>
-        </div>
+        <img className="adm-brand-icon" src="/img/aaryan-manomilan-logo.png" alt="Manomilan" />
       </div>
 
       <div className="adm-menu-label">MENU</div>
@@ -40,15 +49,17 @@ export default function Sidebar({ currentPath }) {
         {menuItems.map((item) => {
           const Icon = ICONS[item.path] || LayoutDashboard;
           return (
-            <a
+            <Link
               key={item.path}
-              href={item.path}
+              to={item.path}
               title={item.label}
               className={`adm-link ${currentPath === item.path ? "active" : ""}`}
             >
-              <Icon size={20} />
+              <span className="adm-link-icon" style={{ "--adm-icon-color": ICON_COLORS[item.path] || "#64748b" }}>
+                <Icon size={20} strokeWidth={2.2} />
+              </span>
               <span className="adm-link-text">{item.label}</span>
-            </a>
+            </Link>
           );
         })}
       </nav>

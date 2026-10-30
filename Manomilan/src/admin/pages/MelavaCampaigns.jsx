@@ -8,6 +8,8 @@ const EMPTY_FORM = {
   melava_code: "",
   title: "",
   description: "",
+  start_date: "",
+  end_date: "",
   currency: "INR",
   registration_fee: "",
   booklet_available: false,
@@ -82,6 +84,8 @@ export default function MelavaCampaigns() {
     payload.append("melava_code", form.melava_code.trim().toUpperCase());
     payload.append("title", form.title.trim());
     payload.append("description", form.description.trim());
+    payload.append("start_date", form.start_date);
+    payload.append("end_date", form.end_date);
     payload.append("currency", form.currency);
     payload.append("registration_fee", form.registration_fee);
     payload.append("booklet_available", form.booklet_available ? "1" : "0");
@@ -107,6 +111,8 @@ export default function MelavaCampaigns() {
       melava_code: campaign.melava_code || "",
       title: campaign.title || "",
       description: campaign.description || "",
+      start_date: campaign.start_date || "",
+      end_date: campaign.end_date || "",
       currency: campaign.currency || "INR",
       registration_fee: campaign.registration_fee ?? "",
       booklet_available: Boolean(campaign.booklet_available),
@@ -134,6 +140,8 @@ export default function MelavaCampaigns() {
     payload.append("melava_code", form.melava_code.trim().toUpperCase());
     payload.append("title", form.title.trim());
     payload.append("description", form.description.trim());
+    payload.append("start_date", form.start_date);
+    payload.append("end_date", form.end_date);
     payload.append("currency", form.currency);
     payload.append("registration_fee", form.registration_fee);
     payload.append("booklet_available", form.booklet_available ? "1" : "0");
@@ -233,6 +241,22 @@ export default function MelavaCampaigns() {
               />
               <small>Use a unique two-digit number, for example MM-04.</small>
             </label>
+            <div className="mc-form-grid">
+              <label>
+                Event start date
+                <input name="start_date" type="date" value={form.start_date} onChange={setField} />
+              </label>
+              <label>
+                Event end date
+                <input
+                  name="end_date"
+                  type="date"
+                  min={form.start_date || undefined}
+                  value={form.end_date}
+                  onChange={setField}
+                />
+              </label>
+            </div>
             <label>
               Melava batch / event title <span>*</span>
               <input name="title" value={form.title} onChange={setField} placeholder="Melava 4 - October 2026" maxLength={255} required />
@@ -299,6 +323,13 @@ export default function MelavaCampaigns() {
                     <span className={`mc-status ${campaign.status}`}>{campaign.status}</span>
                   </div>
                   {campaign.description ? <p>{campaign.description}</p> : null}
+                  {campaign.start_date ? (
+                    <p>
+                      Event date: {campaign.start_date}
+                      {campaign.end_date && campaign.end_date !== campaign.start_date ? ` to ${campaign.end_date}` : ""}
+                    </p>
+                  ) : null}
+                  <p className="mc-schedule">Schedule status: {campaign.schedule_status || "Undated"} · Registration: {campaign.status}</p>
                   <div className="mc-prices">
                     <span>Registration: {amount(campaign.registration_fee, campaign.currency)}</span>
                     {campaign.booklet_available

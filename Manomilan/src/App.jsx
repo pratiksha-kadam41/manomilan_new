@@ -18,6 +18,7 @@ import CandidateMatches from "./candidate/pages/Matches";
 import CandidateProfile from "./candidate/pages/Profile";
 import CandidateActivity from "./candidate/pages/Activity";
 import CandidateNotifications from "./candidate/pages/Notifications";
+import CandidateProfileView from "./candidate/pages/CandidateProfileView";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
 import Profiles from "./admin/pages/Profiles/Profiles.jsx";
@@ -65,6 +66,7 @@ const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/payment\/(\d+)$/, Page: PaymentScreenshot },
   { pattern: /^\/admin\/profiles\/receipt\/(\d+)$/, Page: Receipt },
+  { pattern: /^\/candidate\/matches\/(\d+)$/, Page: CandidateProfileView },
 ];
 
 const matchRoute = (path) => {

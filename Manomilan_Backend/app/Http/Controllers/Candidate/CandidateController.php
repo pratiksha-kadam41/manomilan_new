@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Candidate;
 
 use App\DocumentVerification;
 use App\Http\Controllers\Controller;
+use App\MelavaRegistration;
 use App\Models\CandidateNotification;
 use App\Models\User;
 use App\Preference;
@@ -140,7 +141,13 @@ abstract class CandidateController extends Controller
 
     protected function presentPublicProfile(Profile $profile): array
     {
-        return [
+        $additionalPhotos = $this->normalizePathList($profile->additional_photos);
+        $melavaRegistration = MelavaRegistration::where('profile_id', $profile->id)->latest('id')->first();
+        $candidatePhotos = $this->normalizePathList($melavaRegistration?->getRawOriginal('candidate_photos'));
+
+        $details = $this->profileDetails($profile);
+
+        return array_merge([
             'id' => $profile->id,
             'registration_number' => $profile->registration_number ?: $profile->profile_id,
             'profile_id' => $profile->profile_id,
@@ -180,7 +187,13 @@ abstract class CandidateController extends Controller
             'verification_status' => $profile->profileVerificationStatus,
             'verified' => $profile->profileVerificationStatus === 'Completed',
             'profile_completion' => (int) $profile->profile_completion,
-        ];
+            'full_body_photo_url' => $this->fileUrl($profile->full_body_photo),
+            'half_body_photo_url' => $this->fileUrl($profile->half_body_photo),
+            'selfie_photo_url' => $this->fileUrl($profile->selfie_photo),
+            'additional_photo_urls' => collect($additionalPhotos)->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
+            'candidate_photo_urls' => collect($candidatePhotos)->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
+            'details' => $details,
+        ], $details);
     }
 
     protected function presentPreference(?Preference $preference): ?array
@@ -449,6 +462,34 @@ abstract class CandidateController extends Controller
         }
 
         return url($path);
+    }
+
+    protected function normalizePathList($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map(
+                fn ($item) => is_string($item) ? trim($item) : null,
+                $value
+            )));
+        }
+
+        if (! is_string($value) || trim($value) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($value, true);
+        if (is_string($decoded)) {
+            $decoded = json_decode($decoded, true);
+        }
+
+        if (is_array($decoded)) {
+            return array_values(array_filter(array_map(
+                fn ($item) => is_string($item) ? trim($item) : null,
+                $decoded
+            )));
+        }
+
+        return [trim($value)];
     }
 
     protected function rethrowClientError(Throwable $e): void

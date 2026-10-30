@@ -1,5 +1,5 @@
 const API_URL = (
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000/api"
+  import.meta.env.VITE_API_URL || "/api"
 ).replace(/\/+$/, "");
 
 const SESSION_KEY = "auth";
@@ -70,7 +70,7 @@ export async function request(
 
   const options = { method, headers: finalHeaders };
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 30000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 60000);
   options.signal = controller.signal;
 
   if (body !== undefined && body !== null) {

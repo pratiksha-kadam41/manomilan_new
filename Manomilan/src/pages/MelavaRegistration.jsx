@@ -427,6 +427,7 @@ export default function MelavaRegistration() {
   const [step, setStep] = useState(0);
   const [stage, setStage] = useState("form");
   const [lookup, setLookup] = useState({ status: "", message: "", tone: "" });
+  const [paidRegistration, setPaidRegistration] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [paymentError, setPaymentError] = useState("");
@@ -501,6 +502,7 @@ export default function MelavaRegistration() {
       if (name === "username" && nextValue !== previous.username) {
         next.is_existing_website_user = "";
         setWebsiteChoice(null);
+        setPaidRegistration(false);
       }
       if (name === "caste") next.subCaste = "";
       if (name === "preferred_caste") next.preferred_sub_caste = "";
@@ -574,6 +576,7 @@ export default function MelavaRegistration() {
       );
 
       if (data.type === "website_user") {
+        setPaidRegistration(Boolean(data.registration?.payment_verified));
         setWebsiteChoice("existing");
         hydrate(
           {
@@ -624,7 +627,9 @@ export default function MelavaRegistration() {
         });
         setLookup({
           status: "existing",
-          message: data.has_registration
+          message: data.registration?.payment_verified
+            ? "Payment for this Melava registration is already verified. No further payment is required."
+            : data.has_registration
             ? "Your existing details are restored. Submitting will update your Melava registration for this batch."
             : "Your website details are restored. Complete the remaining information to register for Melava.",
           tone: "ok",
@@ -666,6 +671,11 @@ export default function MelavaRegistration() {
           educationProof: pending.education_proof_url
             ? { preview: pending.education_proof_url, existing: true }
             : previous.educationProof,
+        }));
+        setFiles((previous) => ({
+          ...previous,
+          candidatePhotos: (pending.candidate_photos_urls || []).map((preview) => ({ preview, existing: true })),
+          additionalPhotos: (pending.additional_photos_urls || []).map((preview) => ({ preview, existing: true })),
         }));
         setMeta({
           is_existing_website_user: pending.is_existing_website_user ? "1" : "0",
@@ -869,6 +879,12 @@ export default function MelavaRegistration() {
     Object.entries(documents).forEach(([field, item]) => {
       if (item?.existing) existingPaths[field] = item.preview;
     });
+    existingPaths.candidate_photos = files.candidatePhotos
+      .filter((item) => item.existing)
+      .map((item) => item.preview);
+    existingPaths.additionalPhotos = files.additionalPhotos
+      .filter((item) => item.existing)
+      .map((item) => item.preview);
 
     payload.append("registration_data", JSON.stringify({
       ...form,
@@ -880,6 +896,10 @@ export default function MelavaRegistration() {
   };
 
   const startPayment = async () => {
+    if (paidRegistration) {
+      setPaymentError("Payment is already verified. You do not need to upload another payment screenshot.");
+      return;
+    }
     if (!validateAll()) return;
     setPaymentError("");
     setSubmitError("");
@@ -1011,6 +1031,7 @@ export default function MelavaRegistration() {
     }
     setSelectedCampaignId(String(campaign.id));
     setSettings(settingsFromCampaign(campaign));
+    setPaidRegistration(false);
     if (!campaign.booklet_available) update("booklet_required", false);
     setLookup({ status: "", message: "", tone: "" });
   };

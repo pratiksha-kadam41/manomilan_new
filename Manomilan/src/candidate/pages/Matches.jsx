@@ -4,13 +4,13 @@ import {
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchResultCard from "../components/MatchResultCard";
-import MatchDetailModal from "../components/MatchDetailModal";
 import {
   CardGridSkeleton, EmptyState, ErrorState, FormField, PageHeader, Pagination,
   Toasts,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
+import { useNavigate } from "react-router-dom";
 import { getCandidateProfile, getMatches, sendInterest } from "../api";
 import { humanGender, text } from "../utils";
 
@@ -34,6 +34,7 @@ const SORTS = [
 ];
 
 export default function Matches() {
+  const navigate = useNavigate();
   const cached = useMemo(() => getCachedHomeData(), []);
   const [profile, setProfile] = useState(cached?.profile || null);
   const [account, setAccount] = useState(cached?.user || null);
@@ -322,7 +323,7 @@ export default function Matches() {
                   <MatchResultCard
                     key={match.id}
                     match={match}
-                    onOpen={(item) => setSelected({ id: item.id, match: item })}
+                    onOpen={(item) => navigate(`/candidate/matches/${item.id}`)}
                     onInterest={handleInterest}
                     interestBusy={Boolean(busy[match.id])}
                   />
@@ -334,14 +335,6 @@ export default function Matches() {
         </>
       )}
 
-      <MatchDetailModal
-        key={selected?.id || "closed"}
-        open={Boolean(selected)}
-        profileId={selected?.id}
-        initialMatch={selected?.match}
-        onClose={() => setSelected(null)}
-        onUpdated={(updated) => updateMatch(updated.id, updated)}
-      />
     </CandidateLayout>
   );
 }

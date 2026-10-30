@@ -204,14 +204,19 @@ export function clearDashboardCache() {
   sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
 
-export async function getDashboard({ force = false } = {}) {
+export async function getDashboard({ force = false, period = "", from = "", to = "" } = {}) {
   if (!force) {
     const cached = readDashboardCache();
     if (cached) return cached;
   }
 
-  if (!dashboardRequest) {
-    dashboardRequest = request("/dashboard").then((body) => {
+  const query = new URLSearchParams();
+  if (period) query.set("period", period);
+  if (from) query.set("from", from);
+  if (to) query.set("to", to);
+  const queryString = query.toString();
+
+  dashboardRequest = request(`/dashboard${queryString ? `?${queryString}` : ""}`).then((body) => {
       if (!body?.success || !body?.data) {
         throw new Error(body?.message || "Could not load dashboard data.");
       }
@@ -223,7 +228,6 @@ export async function getDashboard({ force = false } = {}) {
     }).finally(() => {
       dashboardRequest = null;
     });
-  }
 
   return dashboardRequest;
 }

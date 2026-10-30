@@ -4,6 +4,10 @@ import { updateCachedUserProfile } from "../auth";
 const data = (body) => body?.data ?? null;
 let candidateProfileCache;
 let candidateProfileCachedAt = 0;
+let matchesCache = new Map();
+let matchesRequestCache = new Map();
+let matchCache = new Map();
+let matchRequestCache = new Map();
 
 const CANDIDATE_PROFILE_CACHE_MS = 5 * 60 * 1000;
 const DASHBOARD_CACHE_KEY = "candidate_dashboard_cache";
@@ -120,13 +124,40 @@ export const getMatches = async (params = {}) => {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== "" && value != null),
   ).toString();
-  return data(await request(`/candidate/matches${query ? `?${query}` : ""}`));
+  const cacheKey = query || "__default__";
+  if (matchesCache.has(cacheKey)) return matchesCache.get(cacheKey);
+  if (!matchesRequestCache.has(cacheKey)) {
+    matchesRequestCache.set(cacheKey, request(`/candidate/matches${query ? `?${query}` : ""}`)
+      .then((body) => data(body))
+      .then((result) => {
+        matchesCache.set(cacheKey, result);
+        return result;
+      })
+      .finally(() => matchesRequestCache.delete(cacheKey)));
+  }
+  return matchesRequestCache.get(cacheKey);
 };
 
 export const getMatch = async (id) => {
-  const result = data(await request(`/candidate/matches/${id}`));
+  const cacheKey = String(id);
+  if (matchCache.has(cacheKey)) return matchCache.get(cacheKey);
+  if (!matchRequestCache.has(cacheKey)) {
+    matchRequestCache.set(cacheKey, request(`/candidate/matches/${cacheKey}`)
+      .then((body) => data(body))
+      .then((result) => {
+        matchCache.set(cacheKey, result);
+        return result;
+      })
+      .finally(() => matchRequestCache.delete(cacheKey)));
+  }
+  const result = await matchRequestCache.get(cacheKey);
   sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
   return result;
+};
+
+export const invalidateMatchesCache = () => {
+  matchesCache.clear();
+  matchCache.clear();
 };
 
 export const getInterests = async (mode = "sent", params = {}) => {
@@ -137,11 +168,15 @@ export const getInterests = async (mode = "sent", params = {}) => {
   return data(await request(`${path}${query ? `?${query}` : ""}`));
 };
 
-export const sendInterest = async (profileId) =>
-  data(await request("/candidate/interests", {
+export const sendInterest = async (profileId) => {
+  const result = data(await request("/candidate/interests", {
     method: "POST",
     body: { to_profile_id: profileId },
   }));
+  invalidateMatchesCache();
+  matchRequestCache.clear();
+  return result;
+};
 
 export const respondToInterest = async (id, status) =>
   data(await request(`/candidate/interests/${id}/respond`, {

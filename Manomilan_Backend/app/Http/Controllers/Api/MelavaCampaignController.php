@@ -47,6 +47,8 @@ class MelavaCampaignController extends Controller
             'melava_code' => ['required', 'string', 'max:20', 'regex:/^MM-\d{2}$/i', 'unique:melava_campaigns,melava_code'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'currency' => ['required', 'string', 'size:3', 'alpha'],
             'registration_fee' => ['required', 'numeric', 'min:0', 'max:10000000'],
             'booklet_available' => ['required', 'boolean'],
@@ -66,6 +68,8 @@ class MelavaCampaignController extends Controller
             'melava_code' => strtoupper(trim($data['melava_code'])),
             'title' => trim($data['title']),
             'description' => $data['description'] ?? null,
+            'start_date' => $data['start_date'] ?? null,
+            'end_date' => $data['end_date'] ?? null,
             'currency' => strtoupper($data['currency']),
             'registration_fee' => $data['registration_fee'],
             'booklet_available' => (bool) $data['booklet_available'],
@@ -125,6 +129,8 @@ class MelavaCampaignController extends Controller
                 'melava_code' => ['required', 'string', 'max:20', 'regex:/^MM-\d{2}$/i', Rule::unique('melava_campaigns', 'melava_code')->ignore($id)],
                 'title' => ['required', 'string', 'max:255'],
                 'description' => ['nullable', 'string', 'max:5000'],
+                'start_date' => ['nullable', 'date'],
+                'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
                 'currency' => ['required', 'string', 'size:3', 'alpha'],
                 'registration_fee' => ['required', 'numeric', 'min:0', 'max:10000000'],
                 'booklet_available' => ['required', 'boolean'],
@@ -142,6 +148,8 @@ class MelavaCampaignController extends Controller
                 'melava_code' => strtoupper(trim($data['melava_code'])),
                 'title' => trim($data['title']),
                 'description' => $data['description'] ?? null,
+                'start_date' => $data['start_date'] ?? null,
+                'end_date' => $data['end_date'] ?? null,
                 'currency' => strtoupper($data['currency']),
                 'registration_fee' => $data['registration_fee'],
                 'booklet_available' => (bool) $data['booklet_available'],
@@ -204,12 +212,22 @@ class MelavaCampaignController extends Controller
         $qrUrl = preg_match('#^https?://#i', $path)
             ? $path
             : ($path !== '' ? $request->getSchemeAndHttpHost().'/'.ltrim($path, '/') : '');
+        $today = now()->toDateString();
+        $scheduleStatus = 'Undated';
+        if ($campaign->start_date) {
+            $endDate = $campaign->end_date ?: $campaign->start_date;
+            $scheduleStatus = $campaign->start_date > $today
+                ? 'Upcoming'
+                : ($endDate < $today ? 'Completed' : 'Ongoing');
+        }
 
         return [
             'id' => (int) $campaign->id,
             'melava_code' => $campaign->melava_code,
             'title' => $campaign->title,
             'description' => $campaign->description,
+            'start_date' => $campaign->start_date,
+            'end_date' => $campaign->end_date,
             'currency' => $campaign->currency,
             'fee' => (float) $campaign->registration_fee,
             'registration_fee' => (float) $campaign->registration_fee,
@@ -217,6 +235,7 @@ class MelavaCampaignController extends Controller
             'booklet_fee' => (float) $campaign->booklet_fee,
             'qr_image_url' => $qrUrl,
             'status' => $campaign->status,
+            'schedule_status' => $scheduleStatus,
         ];
     }
 

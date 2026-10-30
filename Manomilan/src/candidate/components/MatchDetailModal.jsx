@@ -4,7 +4,7 @@ import {
   Sparkles, UserRound, Users,
 } from "lucide-react";
 import { getMatch, sendInterest } from "../api";
-import { Avatar, EmptyState, ErrorState, InlineNote, Modal, ProgressRing, Skeleton } from "./Ui";
+import { Avatar, EmptyState, ErrorState, InlineNote, Modal, Skeleton } from "./Ui";
 import { displayValue, humanGender, text } from "../utils";
 
 const detailGroups = (profile) => [
@@ -174,10 +174,6 @@ export default function MatchDetailModal({
                 {profile.education ? <span><GraduationCap size={14} /> {profile.education}</span> : null}
                 {profile.profession ? <span><Briefcase size={14} /> {profile.profession}</span> : null}
               </div>
-            </div>
-            <div className="cnd-pm-score">
-              <ProgressRing value={profile.match_percentage} size={88} stroke={8} />
-              <small>Match score</small>
             </div>
           </div>
 

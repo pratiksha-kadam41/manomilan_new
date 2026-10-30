@@ -1,7 +1,7 @@
 import {
   BadgeCheck, Briefcase, Check, GraduationCap, Heart, Loader2, MapPin,
 } from "lucide-react";
-import { Avatar, ProgressRing } from "./Ui";
+import { Avatar } from "./Ui";
 import { humanGender, text } from "../utils";
 
 export default function MatchResultCard({
@@ -28,9 +28,6 @@ export default function MatchResultCard({
           {match.verified ? (
             <span className="cnd-verified" title="Verified profile"><BadgeCheck size={16} /> Verified</span>
           ) : null}
-          <span className="cnd-match-score">
-            <ProgressRing value={match.profile_completion} size={58} stroke={5} label="Profile completion" />
-          </span>
         </span>
 
         <span className="cnd-match-body">

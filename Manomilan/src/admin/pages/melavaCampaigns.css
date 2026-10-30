@@ -237,6 +237,12 @@
   background: #fff2df;
 }
 
+.mc-schedule {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--mc-teal);
+}
+
 .mc-prices {
   justify-content: flex-start;
   flex-wrap: wrap;
