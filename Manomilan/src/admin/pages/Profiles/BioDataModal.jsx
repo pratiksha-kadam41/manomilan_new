@@ -26,7 +26,12 @@ const dateText = (value) => {
   if (!value) return "N/A";
   const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(date.getTime())) return display(value);
-  const age = Math.max(0, Math.floor((Date.now() - date.getTime()) / 31557600000));
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  if (
+    today.getMonth() < date.getMonth()
+    || (today.getMonth() === date.getMonth() && today.getDate() < date.getDate())
+  ) age -= 1;
   return `${date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })} (Age: ${age})`;
 };
 
@@ -114,7 +119,8 @@ function BioDataPaper({ profile, template, paperRef }) {
     ["Current City", display(profile.current_city)],
     ["Education", display(profile.education)],
     ["Occupation", display(profile.profession)],
-    ["Monthly Income", profile.monthly_income ? `₹${Number(profile.monthly_income).toLocaleString("en-IN")}` : "N/A"],
+    ["Monthly Income", Number.isFinite(Number(profile.monthly_income)) && profile.monthly_income !== null && profile.monthly_income !== ""
+      ? `₹${Number(profile.monthly_income).toLocaleString("en-IN")}` : display(profile.monthly_income)],
     ["Hobbies", display(profile.hobbies)],
   ];
   const siblingCount = [profile.brothers, profile.sisters]
@@ -260,14 +266,14 @@ export default function BioDataModal({ profile, onClose }) {
         {!selected ? (
           <div className="bd-template-grid">
             {TEMPLATES.map((template) => (
-              <button type="button" className="bd-template-option" key={template.id} onClick={() => setSelected(template)}>
+              <button type="button" className={`bd-template-option ${template.className}`} key={template.id}
+                aria-label={`Select ${template.name} template`} onClick={() => setSelected(template)}>
                 <div className={`bd-template-sample ${template.className}`} aria-hidden="true">
                   <FloralFrame />
                   <span className="bd-sample-logo">Aaryans<br />Manomilan</span>
                   <span className="bd-sample-title">॥ जय जिनेन्द्र ॥</span>
                   <span className="bd-sample-lines"><i /><i /><i /><i /><i /></span>
                 </div>
-                <span className="bd-template-label">{template.name}</span>
               </button>
             ))}
           </div>
