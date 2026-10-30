@@ -14,6 +14,8 @@ class MelavaPendingRegistration extends Model
         'is_existing_website_user',
         'user_id',
         'profile_id',
+        'melava_campaign_id',
+        'melava_number',
         'registration_data',
         'status',
         'expires_at',

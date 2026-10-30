@@ -17,6 +17,9 @@ class DashboardController extends CandidateController
             $user = $this->candidate($request);
             $profile = $this->candidateProfile($request);
             $preference = $profile?->preference;
+            if ($profile) {
+                $preference = $profile->preference;
+            }
 
             $stats = [
                 'profile_completion' => $profile ? (int) $profile->profile_completion : 0,
@@ -29,7 +32,9 @@ class DashboardController extends CandidateController
             $missing = [];
 
             if ($profile) {
-                $stats['profile_views'] = ProfileVisitor::where('profile_id', $profile->id)->count();
+                $stats['profile_views'] = ProfileVisitor::where('profile_id', $profile->id)
+                    ->distinct('visitor_id')
+                    ->count('visitor_id');
                 $stats['matches_available'] = Profile::query()
                     ->where('groomOrBride', $profile->groomOrBride === 'groom' ? 'bride' : 'groom')
                     ->where('active', 'active')

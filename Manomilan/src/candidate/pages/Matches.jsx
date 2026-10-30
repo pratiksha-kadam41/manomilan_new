@@ -48,6 +48,7 @@ export default function Matches() {
   const [busy, setBusy] = useState({});
   const [selected, setSelected] = useState(null);
   const [profileChecked, setProfileChecked] = useState(Boolean(cached?.profile));
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
   const { toasts, push, dismiss } = useToasts();
 
   useEffect(() => {
@@ -101,6 +102,14 @@ export default function Matches() {
     setPage(1);
   };
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setApplied((current) => ({ ...current, q: draft.q, sort: draft.sort }));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [draft.q, draft.sort]);
+
   const updateMatch = (profileId, patch) => {
     setMatches((items) => items.map((item) => (
       item.id === profileId ? { ...item, ...patch } : item
@@ -111,7 +120,7 @@ export default function Matches() {
     if (busy[match.id]) return;
     setBusy((state) => ({ ...state, [match.id]: true }));
     try {
-      await sendInterest(match.id);
+      const result = await sendInterest(match.id);
       updateMatch(match.id, { interest_id: result?.interest?.id || -1 });
       push(`Interest sent to ${text(match.full_name, "this profile")}.`);
     } catch (sendError) {
@@ -176,16 +185,10 @@ export default function Matches() {
                   <p>{activeFilterCount ? `${activeFilterCount} filters applied` : "Use filters to narrow down your search"}</p>
                 </div>
               </div>
-              <label className="cnd-sort-select">
-                <SlidersHorizontal size={16} />
-                <select value={draft.sort} onChange={(event) => updateDraft("sort", event.target.value)} aria-label="Sort matches">
-                  {SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
             </header>
 
             <form className="cnd-filter-form" onSubmit={applyFilters}>
-              <FormField label="Search" name="match-q" className="cnd-field-wide">
+              <FormField label="Search" name="match-q" className="cnd-match-search-field">
                 <div className="cnd-input-with-icon">
                   <Search size={17} />
                   <input
@@ -196,6 +199,25 @@ export default function Matches() {
                     placeholder="Name, profile ID, city or profession"
                   />
                 </div>
+              </FormField>
+
+              <button
+                type="button"
+                className="cnd-btn cnd-btn-ghost cnd-more-filters-button"
+                onClick={() => setShowMoreFilters((current) => !current)}
+                aria-expanded={showMoreFilters}
+              >
+                <SlidersHorizontal size={16} />
+                {showMoreFilters ? "Hide filters" : "More filters"}
+                {activeFilterCount ? <span className="cnd-more-filter-count">{activeFilterCount}</span> : null}
+              </button>
+
+              {showMoreFilters ? (
+              <div className="cnd-advanced-filter-grid">
+              <FormField label="Sort by" name="match-sort">
+                <select id="match-sort" value={draft.sort} onChange={(event) => updateDraft("sort", event.target.value)}>
+                  {SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
               </FormField>
 
               <div className="cnd-age-range">
@@ -257,6 +279,8 @@ export default function Matches() {
                   {(options.marital_statuses || []).map((value) => <option key={value} value={value}>{value}</option>)}
                 </select>
               </FormField>
+              </div>
+              ) : null}
 
               <div className="cnd-filter-actions">
                 <button type="button" className="cnd-btn cnd-btn-ghost" onClick={clearFilters}>Clear</button>

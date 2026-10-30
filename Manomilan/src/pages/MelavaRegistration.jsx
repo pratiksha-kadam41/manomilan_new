@@ -133,6 +133,9 @@ const STEPS = [
         o: ["WhatsApp", "Instagram", "Facebook", "Poster/Flex in Temple", "Outside Banner", "People References", "Call by Manomilan Executive", "Family/Friends"],
       }),
       F("profilePhoto", "Profile Photo", "file", 3, 1, { acc: "image/*", h: "Clear face photo, max 5 MB" }),
+      F("full_body_photo", "Full Body Photo", "file", 3, 1, { acc: "image/jpeg,image/png,image/webp", h: "Full-body image, max 5 MB" }),
+      F("half_body_photo", "Half Body Photo", "file", 3, 1, { acc: "image/jpeg,image/png,image/webp", h: "Half-body image, max 5 MB" }),
+      F("selfie_photo", "Selfie Photo", "file", 3, 1, { acc: "image/jpeg,image/png,image/webp", h: "Clear selfie, max 5 MB" }),
       F("groomOrBride", "Groom / Bride", "select", 3, 1, { o: [["groom", "Groom"], ["bride", "Bride"]] }),
       F("religion", "Religion", "text", 3, 1, { v: "Jain" }),
       F("caste", "Caste", "select", 3, 1, { o: ["N/A", "Shwetambar", "Digambar"] }),
@@ -308,7 +311,7 @@ const INITIAL_FORM = STEPS.reduce(
 
 const RESTORE_KEYS = STEPS.flatMap((step) => step.f.filter((field) => !isVirtualField(field)).map((field) => field.n));
 
-const EMPTY_FILES = { profilePhoto: null, candidatePhotos: [], additionalPhotos: [] };
+const EMPTY_FILES = { profilePhoto: null, full_body_photo: null, half_body_photo: null, selfie_photo: null, candidatePhotos: [], additionalPhotos: [] };
 const EMPTY_DOCUMENTS = { identificationProof: null, birthDateProof: null, educationProof: null };
 const CONTACT_FIELDS = ["fatherContactNumber", "motherContactNumber", "referenceContactNumber"];
 
@@ -367,7 +370,7 @@ const money = (amount, currency = "INR") => {
 };
 
 const settingsFromCampaign = (campaign) => ({
-  batch_label: campaign.title,
+  batch_label: `${campaign.melava_code ? `${campaign.melava_code} - ` : ""}${campaign.title}`,
   currency: campaign.currency,
   fee: campaign.fee,
   booklet_fee: campaign.booklet_fee,
@@ -377,6 +380,7 @@ const settingsFromCampaign = (campaign) => ({
 
 const fileBucket = (field) => {
   if (field.n === "profilePhoto") return "profilePhoto";
+  if (["full_body_photo", "half_body_photo", "selfie_photo"].includes(field.n)) return field.n;
   if (field.n.startsWith("candidate_photos")) return "candidatePhotos";
   if (field.n.startsWith("additionalPhotos")) return "additionalPhotos";
   return field.n;
@@ -411,6 +415,7 @@ function FieldError({ message }) {
 
 export default function MelavaRegistration() {
   const [form, setForm] = useState({ ...INITIAL_FORM });
+  const [websiteChoice, setWebsiteChoice] = useState(null);
   const [files, setFiles] = useState({ ...EMPTY_FILES });
   const [documents, setDocuments] = useState({ ...EMPTY_DOCUMENTS });
   const [meta, setMeta] = useState({ ...EMPTY_META });
@@ -493,7 +498,10 @@ export default function MelavaRegistration() {
 
     setForm((previous) => {
       const next = { ...previous, [name]: nextValue };
-      if (name === "username" && nextValue !== previous.username) next.is_existing_website_user = "0";
+      if (name === "username" && nextValue !== previous.username) {
+        next.is_existing_website_user = "";
+        setWebsiteChoice(null);
+      }
       if (name === "caste") next.subCaste = "";
       if (name === "preferred_caste") next.preferred_sub_caste = "";
       return next;
@@ -566,10 +574,48 @@ export default function MelavaRegistration() {
       );
 
       if (data.type === "website_user") {
+        setWebsiteChoice("existing");
         hydrate(
-          { ...data.profile, ...(data.preference || {}), is_booklet_req: data.registration?.is_booklet_req },
+          {
+            ...(data.profile || {}),
+            ...(data.melava_registration || {}),
+            ...(data.preference || {}),
+            is_booklet_req: data.registration?.is_booklet_req,
+          },
           { existing: true, username: data.user.username },
         );
+        setFiles((previous) => ({
+          ...previous,
+          profilePhoto: data.profile_photo_url
+            ? { preview: data.profile_photo_url, existing: true }
+            : previous.profilePhoto,
+          full_body_photo: data.full_body_photo_url
+            ? { preview: data.full_body_photo_url, existing: true }
+            : previous.full_body_photo,
+          half_body_photo: data.half_body_photo_url
+            ? { preview: data.half_body_photo_url, existing: true }
+            : previous.half_body_photo,
+          selfie_photo: data.selfie_photo_url
+            ? { preview: data.selfie_photo_url, existing: true }
+            : previous.selfie_photo,
+        }));
+        setDocuments((previous) => ({
+          ...previous,
+          identificationProof: data.identification_proof_url
+            ? { preview: data.identification_proof_url, existing: true }
+            : previous.identificationProof,
+          birthDateProof: data.birth_date_proof_url
+            ? { preview: data.birth_date_proof_url, existing: true }
+            : previous.birthDateProof,
+          educationProof: data.education_proof_url
+            ? { preview: data.education_proof_url, existing: true }
+            : previous.educationProof,
+        }));
+        setFiles((previous) => ({
+          ...previous,
+          candidatePhotos: (data.candidate_photos_urls || []).map((preview) => ({ preview, existing: true })),
+          additionalPhotos: (data.additional_photos_urls || []).map((preview) => ({ preview, existing: true })),
+        }));
         setMeta({
           is_existing_website_user: "1",
           user_id: String(data.user.id || ""),
@@ -585,11 +631,42 @@ export default function MelavaRegistration() {
         });
       } else if (data.type === "pending_registration" && data.pending_registration) {
         const pending = data.pending_registration;
+        setWebsiteChoice(pending.is_existing_website_user ? "existing" : "new");
         const pendingData = pending.registration_data || {};
         hydrate(pendingData, {
           existing: Boolean(pending.is_existing_website_user),
           username: pendingData.username || mobile,
         });
+        if (pending.profile_photo_url) {
+          setFiles((previous) => ({
+            ...previous,
+            profilePhoto: { preview: pending.profile_photo_url, existing: true },
+          }));
+        }
+        setFiles((previous) => ({
+          ...previous,
+          full_body_photo: pending.full_body_photo_url
+            ? { preview: pending.full_body_photo_url, existing: true }
+            : previous.full_body_photo,
+          half_body_photo: pending.half_body_photo_url
+            ? { preview: pending.half_body_photo_url, existing: true }
+            : previous.half_body_photo,
+          selfie_photo: pending.selfie_photo_url
+            ? { preview: pending.selfie_photo_url, existing: true }
+            : previous.selfie_photo,
+        }));
+        setDocuments((previous) => ({
+          ...previous,
+          identificationProof: pending.identification_proof_url
+            ? { preview: pending.identification_proof_url, existing: true }
+            : previous.identificationProof,
+          birthDateProof: pending.birth_date_proof_url
+            ? { preview: pending.birth_date_proof_url, existing: true }
+            : previous.birthDateProof,
+          educationProof: pending.education_proof_url
+            ? { preview: pending.education_proof_url, existing: true }
+            : previous.educationProof,
+        }));
         setMeta({
           is_existing_website_user: pending.is_existing_website_user ? "1" : "0",
           user_id: String(pending.user_id || ""),
@@ -602,6 +679,7 @@ export default function MelavaRegistration() {
           tone: "ok",
         });
       } else {
+        setWebsiteChoice("new");
         setForm((previous) => ({ ...previous, username: mobile, is_existing_website_user: "0" }));
         setMeta({ ...EMPTY_META });
         setLookup({
@@ -619,6 +697,28 @@ export default function MelavaRegistration() {
     }
   };
 
+  const chooseWebsiteRegistration = (isRegistered) => {
+    setWebsiteChoice(isRegistered ? "existing" : "new");
+    setErrors((previous) => removeFieldError(previous, "username"));
+    setForm((previous) => ({
+      ...previous,
+      is_existing_website_user: isRegistered ? "1" : "0",
+    }));
+    setMeta((previous) => ({
+      ...previous,
+      is_existing_website_user: isRegistered ? "1" : "0",
+      user_id: isRegistered ? previous.user_id : "",
+      profile_id: isRegistered ? previous.profile_id : "",
+    }));
+    setLookup({
+      status: "",
+      message: isRegistered
+        ? "Website registration selected. Enter your mobile number, then click Fetch Details."
+        : "New candidate selected. Enter your mobile number and continue.",
+      tone: "ok",
+    });
+  };
+
   const handleFileChange = (field, event) => {
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
@@ -633,6 +733,8 @@ export default function MelavaRegistration() {
 
     if (bucket === "profilePhoto") {
       setFiles((previous) => ({ ...previous, profilePhoto: { file: selected[0], preview: makeObjectUrl(selected[0]) } }));
+    } else if (["full_body_photo", "half_body_photo", "selfie_photo"].includes(bucket)) {
+      setFiles((previous) => ({ ...previous, [bucket]: { file: selected[0], preview: makeObjectUrl(selected[0]) } }));
     } else if (bucket === "additionalPhotos" || bucket === "candidatePhotos") {
       const max = bucket === "candidatePhotos" ? 5 : 4;
       if ((files[bucket] || []).length + selected.length > max) {
@@ -650,14 +752,14 @@ export default function MelavaRegistration() {
 
   const removeFile = (field) => {
     const bucket = fileBucket(field);
-    if (bucket === "profilePhoto") setFiles((previous) => ({ ...previous, profilePhoto: null }));
+    if (["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo"].includes(bucket)) setFiles((previous) => ({ ...previous, [bucket]: null }));
     else if (bucket === "additionalPhotos" || bucket === "candidatePhotos") setFiles((previous) => ({ ...previous, [bucket]: [] }));
     else setDocuments((previous) => ({ ...previous, [bucket]: null }));
   };
 
   const fileItems = (field) => {
     const bucket = fileBucket(field);
-    if (bucket === "profilePhoto") return files.profilePhoto ? [files.profilePhoto] : [];
+    if (["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo"].includes(bucket)) return files[bucket] ? [files[bucket]] : [];
     if (bucket === "additionalPhotos") return files.additionalPhotos;
     if (bucket === "candidatePhotos") return files.candidatePhotos;
     return documents[bucket] ? [documents[bucket]] : [];
@@ -753,11 +855,50 @@ export default function MelavaRegistration() {
     goToStep(target);
   };
 
-  const startPayment = () => {
+  const buildPendingPayload = () => {
+    const payload = buildPayload();
+    payload.delete("payment_screenshot");
+    payload.append("mobile", cleanMobile(form.username));
+    payload.append("token", meta.pending_registration_token || "");
+
+    const existingPaths = {};
+    if (files.profilePhoto?.existing) existingPaths.profilePhoto = files.profilePhoto.preview;
+    ["full_body_photo", "half_body_photo", "selfie_photo"].forEach((field) => {
+      if (files[field]?.existing) existingPaths[field] = files[field].preview;
+    });
+    Object.entries(documents).forEach(([field, item]) => {
+      if (item?.existing) existingPaths[field] = item.preview;
+    });
+
+    payload.append("registration_data", JSON.stringify({
+      ...form,
+      username: cleanMobile(form.username),
+      is_existing_website_user: meta.is_existing_website_user || "0",
+      ...existingPaths,
+    }));
+    return payload;
+  };
+
+  const startPayment = async () => {
     if (!validateAll()) return;
     setPaymentError("");
-    setStage("payment");
-    scrollTop();
+    setSubmitError("");
+    setSubmitting(true);
+    try {
+      const response = await request("/melava-registrations/draft", {
+        method: "POST",
+        body: buildPendingPayload(),
+        auth: false,
+      });
+      setMeta((previous) => ({ ...previous, pending_registration_token: response.token || "" }));
+      setStage("payment");
+      scrollTop();
+    } catch (error) {
+      setSubmitError(error?.message || "Unable to save registration details. Please try again.");
+      setPaymentError(error?.message || "Unable to save registration details. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const buildPayload = () => {
@@ -775,6 +916,9 @@ export default function MelavaRegistration() {
     if (timeText) payload.append("timeOfBirth", timeText);
 
     if (files.profilePhoto?.file) payload.append("profilePhoto", files.profilePhoto.file);
+    ["full_body_photo", "half_body_photo", "selfie_photo"].forEach((field) => {
+      if (files[field]?.file) payload.append(field, files[field].file);
+    });
     files.candidatePhotos.forEach((item) => payload.append("candidate_photos[]", item.file));
     files.additionalPhotos.forEach((item) => payload.append("additionalPhotos[]", item.file));
     Object.entries(documents).forEach(([key, item]) => {
@@ -843,6 +987,7 @@ export default function MelavaRegistration() {
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
     objectUrls.current = [];
     setForm({ ...INITIAL_FORM });
+    setWebsiteChoice(null);
     setFiles({ ...EMPTY_FILES });
     setDocuments({ ...EMPTY_DOCUMENTS });
     setMeta({ ...EMPTY_META });
@@ -859,7 +1004,11 @@ export default function MelavaRegistration() {
 
   const selectCampaign = (id) => {
     const campaign = campaigns.find((item) => String(item.id) === String(id));
-    if (!campaign) return;
+    if (!campaign) {
+      setSelectedCampaignId("");
+      setLookup({ status: "", message: "", tone: "" });
+      return;
+    }
     setSelectedCampaignId(String(campaign.id));
     setSettings(settingsFromCampaign(campaign));
     if (!campaign.booklet_available) update("booklet_required", false);
@@ -886,7 +1035,13 @@ export default function MelavaRegistration() {
           <div className="ph">
             {items.map((item, index) => (
               <span className="ph-item" key={`${field.n}-${index}`}>
-                {item.file.type.startsWith("image/") ? <img src={item.preview} alt="" /> : <span className="doc-name">{item.file.name}</span>}
+                {item.file ? (
+                  item.file.type.startsWith("image/") ? <img src={item.preview} alt="" /> : <span className="doc-name">{item.file.name}</span>
+                ) : ["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo", "candidatePhotos", "additionalPhotos"].includes(bucket) ? (
+                  <img src={item.preview} alt="Existing uploaded file" />
+                ) : item.preview ? (
+                  <a className="doc-name" href={item.preview} target="_blank" rel="noreferrer">View uploaded document</a>
+                ) : null}
               </span>
             ))}
             <button type="button" className="mini" onClick={() => removeFile(field)}>Remove</button>
@@ -999,10 +1154,14 @@ export default function MelavaRegistration() {
       return (
         <div className="ph">
           {items.map((item, index) =>
-            item.file.type.startsWith("image/") ? (
-              <img key={`${field.n}-${index}`} src={item.preview} alt="" />
+            item.file?.type ? (
+              item.file.type.startsWith("image/") ? (
+                <img key={`${field.n}-${index}`} src={item.preview} alt="" />
+              ) : (
+                <span className="doc-name" key={`${field.n}-${index}`}>{item.file.name}</span>
+              )
             ) : (
-              <span className="doc-name" key={`${field.n}-${index}`}>{item.file.name}</span>
+              <img key={`${field.n}-${index}`} src={item.preview} alt="" />
             ),
           )}
         </div>
@@ -1159,7 +1318,8 @@ export default function MelavaRegistration() {
                 {campaigns.length > 1 ? (
                   <label className="campaign-select-label" htmlFor="melava-campaign">
                     <select id="melava-campaign" value={selectedCampaignId} onChange={(event) => selectCampaign(event.target.value)}>
-                      {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.title}</option>)}
+                      <option value="">Select a Melava</option>
+                      {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.melava_code ? `${campaign.melava_code} - ` : ""}{campaign.title}</option>)}
                     </select>
                   </label>
                 ) : (
@@ -1227,7 +1387,7 @@ export default function MelavaRegistration() {
                 }}
               />
               <button type="button" className="btn p" onClick={findCandidate} disabled={lookup.status === "loading"}>
-                {lookup.status === "loading" ? "Searching..." : "Search Candidate"}
+                {lookup.status === "loading" ? "Fetching..." : "Fetch / Search Details"}
               </button>
             </div>
             {errors.username ? <div className="al er">{errors.username}</div> : null}
@@ -1337,8 +1497,8 @@ export default function MelavaRegistration() {
                 {step === PREVIEW_STEP - 1 ? "Preview" : "Next"} {ICONS.next}
               </button>
             ) : (
-              <button type="submit" className="btn p" disabled={!form.privacyPolicyCheck || !form.termsCheck}>
-                Continue to Payment {ICONS.next}
+              <button type="submit" className="btn p" disabled={submitting || !form.privacyPolicyCheck || !form.termsCheck}>
+                {submitting ? "Saving..." : "Continue to Payment"} {ICONS.next}
               </button>
             )}
           </div>

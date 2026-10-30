@@ -135,6 +135,20 @@ class MelavaRegistrationController extends Controller
         ]);
 
         $mobile = $validated['mobile'];
+        $websiteUser = User::where('username', $mobile)->first();
+        $websiteProfile = $websiteUser && $websiteUser->profile_id
+            ? Profile::find($websiteUser->profile_id)
+            : null;
+
+        $campaign = $this->resolveCampaign((string) $request->input('melava_campaign_id', ''));
+        $campaignId = (int) ($campaign->id ?? 0);
+        $registrationQuery = MelavaRegistration::where('username', $mobile);
+        if ($campaignId > 0) {
+            $registrationQuery->where('melava_campaign_id', $campaignId);
+        } else {
+            $registrationQuery->where('melava_batch', self::CURRENT_MELAVA_BATCH);
+        }
+        $registration = $registrationQuery->latest('id')->first();
 
         $pending = MelavaPendingRegistration::where('mobile', $mobile)
             ->where('status', 'pending')
@@ -144,7 +158,7 @@ class MelavaRegistrationController extends Controller
             ->latest('id')
             ->first();
 
-        if ($pending) {
+        if ($pending && ! $websiteProfile && ! $registration) {
             $pendingData = json_decode((string) $pending->registration_data, true);
 
             if (is_array($pendingData)) {
@@ -155,6 +169,13 @@ class MelavaRegistrationController extends Controller
                     'pending_registration' => [
                         'token' => $pending->token,
                         'registration_data' => $pendingData,
+                        'profile_photo_url' => $this->fileUrl($pendingData['profilePhoto'] ?? null),
+                        'full_body_photo_url' => $this->fileUrl($pendingData['full_body_photo'] ?? null),
+                        'half_body_photo_url' => $this->fileUrl($pendingData['half_body_photo'] ?? null),
+                        'selfie_photo_url' => $this->fileUrl($pendingData['selfie_photo'] ?? null),
+                        'identification_proof_url' => $this->fileUrl($pendingData['identificationProof'] ?? null),
+                        'birth_date_proof_url' => $this->fileUrl($pendingData['birthDateProof'] ?? null),
+                        'education_proof_url' => $this->fileUrl($pendingData['educationProof'] ?? null),
                         'is_existing_website_user' => (bool) $pending->is_existing_website_user,
                         'user_id' => $pending->user_id,
                         'profile_id' => $pending->profile_id,
@@ -163,7 +184,7 @@ class MelavaRegistrationController extends Controller
             }
         }
 
-        $user = User::where('username', $mobile)->first();
+        $user = $websiteUser;
 
         if (! $user) {
             return response()->json([
@@ -173,9 +194,9 @@ class MelavaRegistrationController extends Controller
             ]);
         }
 
-        $profile = $user->profile_id ? Profile::find($user->profile_id) : null;
+        $profile = $websiteProfile;
 
-        if (! $profile) {
+        if (! $profile && ! $registration) {
             return response()->json([
                 'success' => false,
                 'type' => 'website_user_without_profile',
@@ -188,15 +209,6 @@ class MelavaRegistrationController extends Controller
             ]);
         }
 
-        $campaignId = $request->integer('melava_campaign_id');
-        $registrationQuery = MelavaRegistration::where('username', $mobile);
-        if ($campaignId > 0) {
-            $registrationQuery->where('melava_campaign_id', $campaignId);
-        } else {
-            $registrationQuery->where('melava_batch', self::CURRENT_MELAVA_BATCH);
-        }
-        $registration = $registrationQuery->latest('id')->first();
-
         return response()->json([
             'success' => true,
             'type' => 'website_user',
@@ -206,7 +218,23 @@ class MelavaRegistrationController extends Controller
                 'username' => $user->username,
                 'profile_id' => $user->profile_id,
             ],
-            'profile' => $this->profileForRestore($profile),
+            'profile' => $profile ? $this->profileForRestore($profile) : [],
+            'melava_registration' => $registration ? $registration->toArray() : null,
+            'profile_photo_url' => $this->fileUrl($profile->profilePhoto),
+            'full_body_photo_url' => $this->fileUrl($profile->full_body_photo),
+            'half_body_photo_url' => $this->fileUrl($profile->half_body_photo),
+            'selfie_photo_url' => $this->fileUrl($profile->selfie_photo),
+            'identification_proof_url' => $this->fileUrl($profile->identificationProof),
+            'birth_date_proof_url' => $this->fileUrl(
+                $profile->birthDateProof ?: ($registration?->birth_verification_doc ?: null)
+            ),
+            'education_proof_url' => $this->fileUrl($profile->educationProof),
+            'candidate_photos_urls' => collect(array_merge(
+                is_array($registration?->candidate_photos) ? $registration->candidate_photos : [],
+                []
+            ))->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
+            'additional_photos_urls' => collect(is_array($profile->additional_photos) ? $profile->additional_photos : [])
+                ->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
             'preference' => $user->preference,
             'has_registration' => (bool) $registration,
             'registration' => $registration
@@ -220,13 +248,131 @@ class MelavaRegistrationController extends Controller
         ]);
     }
 
+    public function saveDraft(Request $request)
+    {
+        if (is_string($request->input('registration_data'))) {
+            $decoded = json_decode($request->input('registration_data'), true);
+            if (! is_array($decoded)) {
+                throw ValidationException::withMessages([
+                    'registration_data' => ['Registration details are invalid.'],
+                ]);
+            }
+            $request->merge(['registration_data' => $decoded]);
+        }
+
+        $validated = $request->validate([
+            'mobile' => ['required', 'digits:10'],
+            'registration_data' => ['required', 'array'],
+            'token' => ['nullable', 'string', 'max:64'],
+            'melava_campaign_id' => ['required', 'string', 'max:20'],
+            'profilePhoto' => ['nullable', 'image', 'max:5120'],
+            'full_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'half_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'selfie_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'identificationProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'birthDateProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'educationProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'candidate_photos' => ['nullable', 'array', 'max:5'],
+            'candidate_photos.*' => ['image', 'max:5120'],
+            'additionalPhotos' => ['nullable', 'array', 'max:4'],
+            'additionalPhotos.*' => ['image', 'max:5120'],
+        ]);
+
+        $campaign = $this->resolveCampaign($validated['melava_campaign_id']);
+        if (! $campaign) {
+            throw ValidationException::withMessages([
+                'melava_campaign_id' => ['The selected Melava campaign is invalid.'],
+            ]);
+        }
+
+        $request->merge(['melava_campaign_id' => $campaign->id]);
+        $validated['melava_campaign_id'] = $campaign->id;
+        $melavaNumber = strtoupper((string) $campaign->melava_code);
+
+        $token = trim((string) ($validated['token'] ?? ''));
+        $draft = $token
+            ? MelavaPendingRegistration::where('token', $token)
+                ->where('status', 'pending')
+                ->first()
+            : null;
+
+        if (! $draft && ! empty($validated['melava_campaign_id'])) {
+            $draft = MelavaPendingRegistration::where('mobile', $validated['mobile'])
+                ->where('status', 'pending')
+                ->where('melava_campaign_id', $validated['melava_campaign_id'])
+                ->latest('id')
+                ->first();
+        }
+
+        if (! $draft) {
+            $draft = new MelavaPendingRegistration();
+            $draft->token = Str::random(64);
+            $draft->mobile = $validated['mobile'];
+        }
+
+        $registrationData = $validated['registration_data'];
+        $photoFields = [
+            'profilePhoto' => 'profile_photos',
+            'full_body_photo' => 'full_body_photos',
+            'half_body_photo' => 'half_body_photos',
+            'selfie_photo' => 'selfie_photos',
+        ];
+        foreach ($photoFields as $field => $directory) {
+            if ($request->hasFile($field)) {
+                $registrationData[$field] = $this->storeUpload($request->file($field), $directory);
+            }
+        }
+
+        foreach ([
+            'identificationProof' => 'melava_documents',
+            'birthDateProof' => 'melava_documents',
+            'educationProof' => 'melava_documents',
+        ] as $field => $directory) {
+            if ($request->hasFile($field)) {
+                $registrationData[$field] = $this->storeUpload($request->file($field), $directory);
+            }
+        }
+        if ($request->hasFile('candidate_photos')) {
+            $registrationData['candidate_photos'] = $this->storeUploads($request->file('candidate_photos'), 'melava_candidate_photos');
+        }
+        if ($request->hasFile('additionalPhotos')) {
+            $registrationData['additionalPhotos'] = $this->storeUploads($request->file('additionalPhotos'), 'melava_additional_photos');
+        }
+
+        $existingUser = User::where('username', $validated['mobile'])->first();
+        $draftRegistrationData = json_decode((string) $draft->registration_data, true);
+        if (is_array($draftRegistrationData)) {
+            $registrationData = array_replace($draftRegistrationData, $registrationData);
+        }
+
+        DB::transaction(function () use ($draft, $validated, $registrationData, $existingUser, $melavaNumber) {
+            $draft->fill([
+            'mobile' => $validated['mobile'],
+            'registration_data' => json_encode($registrationData, JSON_UNESCAPED_UNICODE),
+            'is_existing_website_user' => (bool) ($validated['registration_data']['is_existing_website_user'] ?? false),
+            'user_id' => $existingUser?->id,
+            'profile_id' => $existingUser?->profile_id,
+            'melava_campaign_id' => $validated['melava_campaign_id'],
+            'melava_number' => strtoupper($melavaNumber),
+            'status' => 'pending',
+            'expires_at' => now()->addDays(30),
+            ]);
+            $draft->save();
+        });
+
+        return response()->json([
+            'success' => true,
+            'token' => $draft->token,
+        ]);
+    }
+
     public function store(Request $request)
     {
         $this->normalizeInput($request);
 
         $data = $request->validate([
-            'melava_campaign_id' => ['required', 'integer', 'exists:melava_campaigns,id'],
-            'is_existing_website_user' => ['required', 'boolean'],
+            'melava_campaign_id' => ['required', 'string', 'max:20'],
+            'is_existing_website_user' => ['nullable', 'boolean'],
             'username' => ['required', 'digits:10'],
             'email' => ['nullable', 'email', 'max:255'],
             'fullName' => ['required', 'string', 'max:255'],
@@ -330,6 +476,9 @@ class MelavaRegistrationController extends Controller
             'booklet_required' => ['nullable', 'boolean'],
             'biodata' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:5120'],
             'profilePhoto' => ['nullable', 'image', 'max:5120'],
+            'full_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'half_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'selfie_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
             'payment_screenshot' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             'identificationProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'birthDateProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
@@ -343,8 +492,15 @@ class MelavaRegistrationController extends Controller
             'disclaimer' => ['nullable', 'in:0,1'],
         ]);
 
+        $campaign = $this->resolveCampaign($data['melava_campaign_id']);
+        if (! $campaign) {
+            throw ValidationException::withMessages([
+                'melava_campaign_id' => ['The selected Melava campaign is invalid.'],
+            ]);
+        }
+        $data['melava_campaign_id'] = $campaign->id;
         $campaign = DB::table('melava_campaigns')
-            ->where('id', $data['melava_campaign_id'])
+            ->where('id', $campaign->id)
             ->where('status', 'active')
             ->first();
 
@@ -367,22 +523,8 @@ class MelavaRegistrationController extends Controller
         $totalAmount = $registrationFee + $bookletFee;
 
         $mobile = $data['username'];
-        $isExisting = (bool) $data['is_existing_website_user'];
         $existingUser = User::where('username', $mobile)->first();
-
-        if ($isExisting && ! $existingUser) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This mobile number is not registered on the website. Please continue as a new candidate.',
-            ], 404);
-        }
-
-        if (! $isExisting && $existingUser) {
-            return response()->json([
-                'success' => false,
-                'message' => 'This mobile number is already website registered. Please select "Yes, I am already registered" and fetch your details.',
-            ], 409);
-        }
+        $isExisting = (bool) $existingUser;
 
         if (! $isExisting && ! empty($data['email']) && User::where('email', $data['email'])->exists()) {
             throw ValidationException::withMessages([
@@ -398,6 +540,15 @@ class MelavaRegistrationController extends Controller
 
                 $profilePhoto = $request->hasFile('profilePhoto')
                     ? $this->storeUpload($request->file('profilePhoto'), 'profile_photos')
+                    : null;
+                $fullBodyPhoto = $request->hasFile('full_body_photo')
+                    ? $this->storeUpload($request->file('full_body_photo'), 'full_body_photos')
+                    : null;
+                $halfBodyPhoto = $request->hasFile('half_body_photo')
+                    ? $this->storeUpload($request->file('half_body_photo'), 'half_body_photos')
+                    : null;
+                $selfiePhoto = $request->hasFile('selfie_photo')
+                    ? $this->storeUpload($request->file('selfie_photo'), 'selfie_photos')
                     : null;
                 $identificationProof = $request->hasFile('identificationProof')
                     ? $this->storeUpload($request->file('identificationProof'), 'melava_documents')
@@ -450,6 +601,9 @@ class MelavaRegistrationController extends Controller
                 $profileData['income_currency'] = $data['income_currency'] ?? 'INR';
                 $profileData['profilePhoto'] = $profilePhoto
                     ?: ($profile?->profilePhoto ?: 'default.png');
+                $profileData['full_body_photo'] = $fullBodyPhoto ?: ($profile?->full_body_photo ?: null);
+                $profileData['half_body_photo'] = $halfBodyPhoto ?: ($profile?->half_body_photo ?: null);
+                $profileData['selfie_photo'] = $selfiePhoto ?: ($profile?->selfie_photo ?: null);
 
                 if ($identificationProof) {
                     $profileData['identificationProof'] = $identificationProof;
@@ -543,6 +697,7 @@ class MelavaRegistrationController extends Controller
                     'melava_registered_at' => now(),
                     'is_booklet_req' => $request->boolean('booklet_required'),
                     'melava_title' => $campaign->title,
+                    'melava_number' => strtoupper($campaign->melava_code),
                     'registration_fee' => $registrationFee,
                     'booklet_fee' => $bookletFee,
                     'total_amount' => $totalAmount,
@@ -558,6 +713,11 @@ class MelavaRegistrationController extends Controller
                         'payment_verified' => false,
                     ]
                 );
+
+                if ($request->filled('pending_registration_token')) {
+                    MelavaPendingRegistration::where('token', $request->input('pending_registration_token'))
+                        ->update(['status' => 'completed']);
+                }
 
                 return [
                     'registration' => $registration,
@@ -584,6 +744,7 @@ class MelavaRegistrationController extends Controller
                     'serial_no' => $profile->serial_no,
                     'melava_batch' => $registration->melava_batch,
                     'melava_title' => $registration->melava_title,
+                    'melava_number' => $registration->melava_number,
                     'is_booklet_req' => (bool) $registration->is_booklet_req,
                     'total_amount' => (float) $registration->total_amount,
                     'payment_verified' => (bool) $registration->payment_verified,
@@ -648,7 +809,17 @@ class MelavaRegistrationController extends Controller
             return $path;
         }
 
-        return url(ltrim($path, '/'));
+        $path = ltrim(str_replace('\\', '/', $path), '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return url($path);
+        }
+
+        if (str_starts_with($path, 'uploads/') || str_starts_with($path, 'public/')) {
+            return url(ltrim($path, '/'));
+        }
+
+        return url('storage/'.$path);
     }
 
     private function normalizeInput(Request $request): void
@@ -779,6 +950,21 @@ class MelavaRegistrationController extends Controller
         }
 
         return $data;
+    }
+
+    private function resolveCampaign(string|int $campaign): ?object
+    {
+        $campaign = trim((string) $campaign);
+        if ($campaign === '') {
+            return null;
+        }
+
+        $query = DB::table('melava_campaigns');
+        if (ctype_digit($campaign)) {
+            return $query->where('id', (int) $campaign)->first();
+        }
+
+        return $query->whereRaw('UPPER(melava_code) = ?', [strtoupper($campaign)])->first();
     }
 
     private function profileForRestore(Profile $profile): array

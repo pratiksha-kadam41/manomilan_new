@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarPlus, ImagePlus, RefreshCw, ToggleLeft, ToggleRight } from "lucide-react";
+import { CalendarPlus, ImagePlus, Pencil, RefreshCw, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { request } from "../../api";
 import "./melavaCampaigns.css";
 
 const EMPTY_FORM = {
+  melava_code: "",
   title: "",
   description: "",
   currency: "INR",
@@ -29,6 +30,7 @@ export default function MelavaCampaigns() {
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [editingId, setEditingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,7 +58,9 @@ export default function MelavaCampaigns() {
         ? checked
         : name === "qr_image"
           ? files?.[0] || null
-          : value,
+          : name === "melava_code"
+            ? value.toUpperCase()
+            : value,
     }));
     setError("");
     setNotice("");
@@ -75,6 +79,7 @@ export default function MelavaCampaigns() {
 
     setSaving(true);
     const payload = new FormData();
+    payload.append("melava_code", form.melava_code.trim().toUpperCase());
     payload.append("title", form.title.trim());
     payload.append("description", form.description.trim());
     payload.append("currency", form.currency);
@@ -93,6 +98,74 @@ export default function MelavaCampaigns() {
       setError(requestError.message || "Unable to create the Melava event.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const startEdit = (campaign) => {
+    setEditingId(campaign.id);
+    setForm({
+      melava_code: campaign.melava_code || "",
+      title: campaign.title || "",
+      description: campaign.description || "",
+      currency: campaign.currency || "INR",
+      registration_fee: campaign.registration_fee ?? "",
+      booklet_available: Boolean(campaign.booklet_available),
+      booklet_fee: campaign.booklet_fee ?? "",
+      qr_image: null,
+    });
+    setError("");
+    setNotice("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm({ ...EMPTY_FORM });
+  };
+
+  const saveCampaign = async (event) => {
+    event.preventDefault();
+    if (!editingId) return;
+    setSaving(true);
+    setError("");
+    setNotice("");
+    const payload = new FormData();
+    payload.append("_method", "PUT");
+    payload.append("melava_code", form.melava_code.trim().toUpperCase());
+    payload.append("title", form.title.trim());
+    payload.append("description", form.description.trim());
+    payload.append("currency", form.currency);
+    payload.append("registration_fee", form.registration_fee);
+    payload.append("booklet_available", form.booklet_available ? "1" : "0");
+    payload.append("booklet_fee", form.booklet_available ? form.booklet_fee : "0");
+    if (form.qr_image) payload.append("qr_image", form.qr_image);
+    try {
+      await request(`/melava-campaigns/${editingId}`, { method: "POST", body: payload });
+      cancelEdit();
+      setNotice("Melava event updated.");
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Unable to update the Melava event.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteCampaign = async (campaign) => {
+    if (busyId) return;
+    if (!window.confirm(`Delete Melava ${campaign.melava_code || ""} (${campaign.title})?`)) return;
+    setBusyId(campaign.id);
+    setError("");
+    setNotice("");
+    try {
+      await request(`/melava-campaigns/${campaign.id}`, { method: "DELETE" });
+      if (editingId === campaign.id) cancelEdit();
+      setNotice("Melava event deleted.");
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Unable to delete the Melava event.");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -141,15 +214,28 @@ export default function MelavaCampaigns() {
           <div className="mc-panel-title">
             <CalendarPlus size={20} />
             <div>
-              <h2>Create a Melava batch</h2>
+              <h2>{editingId ? "Edit Melava batch" : "Create a Melava batch"}</h2>
               <p>New active batches and their server-managed prices appear on the public registration form.</p>
             </div>
           </div>
 
-          <form className="mc-form" onSubmit={createCampaign}>
+          <form className="mc-form" onSubmit={editingId ? saveCampaign : createCampaign}>
+            <label>
+              Melava number / code <span>*</span>
+              <input
+                name="melava_code"
+                value={form.melava_code}
+                onChange={setField}
+                placeholder="MM-04"
+                pattern="MM-[0-9]{2}"
+                maxLength={20}
+                required
+              />
+              <small>Use a unique two-digit number, for example MM-04.</small>
+            </label>
             <label>
               Melava batch / event title <span>*</span>
-              <input name="title" value={form.title} onChange={setField} maxLength={255} required />
+              <input name="title" value={form.title} onChange={setField} placeholder="Melava 4 - October 2026" maxLength={255} required />
             </label>
             <label>
               Description
@@ -181,13 +267,18 @@ export default function MelavaCampaigns() {
               Payment QR image <span>*</span>
               <div className="mc-upload">
                 <ImagePlus size={19} />
-                <input name="qr_image" type="file" accept="image/png,image/jpeg,image/webp" onChange={setField} required />
+                <input name="qr_image" type="file" accept="image/png,image/jpeg,image/webp" onChange={setField} required={!editingId} />
               </div>
               <small>PNG, JPG or WebP; up to 5 MB. This image is uploaded to the backend for this event.</small>
             </label>
-            <button type="submit" className="mc-button primary" disabled={saving}>
-              {saving ? "Creating event..." : "Create event"}
-            </button>
+            <div className="mc-form-actions">
+              <button type="submit" className="mc-button primary" disabled={saving}>
+                {saving ? "Saving..." : editingId ? "Save changes" : "Create event"}
+              </button>
+              {editingId ? (
+                <button type="button" className="mc-button secondary" onClick={cancelEdit} disabled={saving}>Cancel</button>
+              ) : null}
+            </div>
           </form>
         </section>
 
@@ -204,7 +295,7 @@ export default function MelavaCampaigns() {
                 <img src={campaign.qr_image_url} alt="" />
                 <div className="mc-event-info">
                   <div className="mc-event-name">
-                    <h3>{campaign.title}</h3>
+                    <h3>{campaign.melava_code} - {campaign.title}</h3>
                     <span className={`mc-status ${campaign.status}`}>{campaign.status}</span>
                   </div>
                   {campaign.description ? <p>{campaign.description}</p> : null}
@@ -215,17 +306,25 @@ export default function MelavaCampaigns() {
                       : <span>Booklet not offered</span>}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className={`mc-button ${campaign.status === "active" ? "secondary" : "primary"}`}
-                  onClick={() => changeStatus(campaign)}
-                  disabled={busyId === campaign.id}
-                >
-                  {campaign.status === "active" ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                  {busyId === campaign.id
-                    ? "Saving..."
-                    : campaign.status === "active" ? "Close event" : "Open event"}
-                </button>
+                <div className="mc-event-actions">
+                  <button
+                    type="button"
+                    className="mc-button secondary"
+                    onClick={() => changeStatus(campaign)}
+                    disabled={busyId === campaign.id}
+                  >
+                    {campaign.status === "active" ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+                    {busyId === campaign.id
+                      ? "Saving..."
+                      : campaign.status === "active" ? "Close" : "Open"}
+                  </button>
+                  <button type="button" className="mc-button secondary" onClick={() => startEdit(campaign)} disabled={busyId === campaign.id}>
+                    <Pencil size={16} /> Edit
+                  </button>
+                  <button type="button" className="mc-button danger" onClick={() => deleteCampaign(campaign)} disabled={busyId === campaign.id}>
+                    <Trash2 size={16} /> Delete
+                  </button>
+                </div>
               </article>
             ))}
           </div>

@@ -44,7 +44,26 @@ class MatchController extends CandidateController
 
             $this->applyFilters($query, $filters);
 
-            $profiles = $query->get();
+            $sort = $filters['sort'] ?? 'best_match';
+            $perPage = (int) ($filters['per_page'] ?? 12);
+            $page = (int) ($filters['page'] ?? 1);
+
+            if ($sort === 'newest') {
+                $query->orderByDesc('id');
+            } elseif ($sort === 'age_asc') {
+                $query->orderBy('birthDate', 'desc');
+            } elseif ($sort === 'age_desc') {
+                $query->orderBy('birthDate', 'asc');
+            }
+
+            if ($sort !== 'best_match') {
+                $total = (clone $query)->count();
+                $lastPage = max(1, (int) ceil($total / $perPage));
+                $page = min($page, $lastPage);
+                $profiles = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
+            } else {
+                $profiles = $query->limit(500)->get();
+            }
 
             $profileIds = $profiles->pluck('id');
 
@@ -64,21 +83,16 @@ class MatchController extends CandidateController
                 ]);
             });
 
-            $sort = $filters['sort'] ?? 'best_match';
-            $matches = match ($sort) {
-                'newest' => $matches->sortByDesc('id'),
-                'age_asc' => $matches->sortBy(fn (array $item) => $item['age'] ?? 999),
-                'age_desc' => $matches->sortByDesc(fn (array $item) => $item['age'] ?? 0),
-                default => $matches->sortByDesc('match_percentage'),
-            };
-
-            $matches = $matches->values();
-            $perPage = (int) ($filters['per_page'] ?? 12);
-            $page = (int) ($filters['page'] ?? 1);
-            $total = $matches->count();
-            $lastPage = max(1, (int) ceil($total / $perPage));
-            $page = min($page, $lastPage);
-            $items = $matches->forPage($page, $perPage)->values();
+            if ($sort === 'best_match') {
+                $matches = $matches->sortByDesc('match_percentage')->values();
+                $total = $matches->count();
+                $lastPage = max(1, (int) ceil($total / $perPage));
+                $page = min($page, $lastPage);
+                $items = $matches->forPage($page, $perPage)->values();
+            } else {
+                $matches = $matches->values();
+                $items = $matches;
+            }
 
             return response()->json([
                 'success' => true,

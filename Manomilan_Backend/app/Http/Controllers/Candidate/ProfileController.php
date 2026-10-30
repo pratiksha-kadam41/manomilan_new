@@ -323,6 +323,75 @@ class ProfileController extends CandidateController
         }
     }
 
+    public function uploadBodyPhotos(Request $request)
+    {
+        $validated = $request->validate([
+            'full_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'half_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'selfie_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $photoFields = ['full_body_photo', 'half_body_photo', 'selfie_photo'];
+        if (! collect($photoFields)->contains(fn (string $field) => $request->hasFile($field))) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Choose at least one photo to upload.',
+            ], 422);
+        }
+
+        $user = $this->candidate($request);
+        $profile = $this->candidateProfile($request, true);
+        $stored = [];
+
+        try {
+            foreach ($photoFields as $field) {
+                if ($request->hasFile($field)) {
+                    $stored[$field] = $request->file($field)->store(
+                        'candidate/body_photos/'.$profile->id.'/'.$field,
+                        'public'
+                    );
+                }
+            }
+
+            DB::transaction(function () use ($profile, $stored) {
+                $locked = Profile::lockForUpdate()->findOrFail($profile->id);
+                $oldPaths = [];
+
+                foreach ($stored as $field => $path) {
+                    $oldPaths[$field] = $locked->{$field};
+                    $locked->{$field} = $path;
+                }
+
+                $locked->save();
+                foreach ($oldPaths as $path) {
+                    $this->deleteStoredFile($path);
+                }
+                $this->refreshCompletion($locked);
+            });
+
+            $freshProfile = Profile::with(['user', 'preference'])->findOrFail($profile->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Photos updated successfully.',
+                'data' => [
+                    'profile' => $this->presentOwnProfile($freshProfile, $user),
+                ],
+            ]);
+        } catch (Throwable $e) {
+            $this->rethrowClientError($e);
+            foreach ($stored as $path) {
+                Storage::disk('public')->delete($path);
+            }
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to upload the photos right now.',
+            ], 500);
+        }
+    }
+
     public function uploadDocuments(UploadDocumentsRequest $request)
     {
         $user = $this->candidate($request);

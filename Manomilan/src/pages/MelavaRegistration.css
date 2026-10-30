@@ -432,6 +432,51 @@
   min-width: 200px;
 }
 
+.melava-page .website-registration-choice {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #dce9e9;
+}
+
+.melava-page .website-registration-choice > span {
+  color: #3b4b53;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.melava-page .choice-btn {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #b9cece;
+  border-radius: 8px;
+  color: #31595a;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.melava-page .choice-btn.active {
+  color: #fff;
+  border-color: #28686a;
+  background: #28686a;
+}
+
+@media (max-width: 560px) {
+  .melava-page .website-registration-choice {
+    grid-template-columns: 1fr;
+  }
+
+  .melava-page .choice-btn {
+    width: 100%;
+  }
+}
+
 /* ---------- Buttons & alerts ---------- */
 .melava-page .btn {
   display: inline-flex;

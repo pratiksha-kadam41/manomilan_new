@@ -15,7 +15,7 @@ import { getCachedHomeData } from "../../auth";
 import {
   createCandidateProfile, getCandidateProfile, removeCandidateDocument,
   removeCandidatePhoto, savePreferences, updateCandidateProfile,
-  uploadCandidateDocuments, uploadCandidatePhoto,
+  uploadCandidateDocuments, uploadCandidatePhoto, uploadCandidateBodyPhotos,
 } from "../api";
 import {
   displayValue, fileSizeLabel, formatDate, humanGender, text,
@@ -320,6 +320,8 @@ export default function CandidateProfile() {
   const [removeDocBusy, setRemoveDocBusy] = useState(false);
   const [viewDocument, setViewDocument] = useState(null);
   const photoInput = useRef(null);
+  const [bodyPhotoBusy, setBodyPhotoBusy] = useState(false);
+  const [bodyPhotoError, setBodyPhotoError] = useState("");
   const { toasts, push, dismiss } = useToasts();
 
   const load = async () => {
@@ -444,6 +446,32 @@ export default function CandidateProfile() {
       push(removeError.message || "Could not remove the photo.", "error");
     } finally {
       setPhotoBusy(false);
+    }
+  };
+
+  const handleBodyPhoto = async (field, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setBodyPhotoError("Choose a JPG, PNG or WebP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setBodyPhotoError("The photo must be 5 MB or smaller.");
+      return;
+    }
+
+    setBodyPhotoBusy(true);
+    setBodyPhotoError("");
+    try {
+      const result = await uploadCandidateBodyPhotos({ [field]: file });
+      setProfile(result?.profile || profile);
+      push("Photo updated successfully.");
+    } catch (uploadError) {
+      setBodyPhotoError(uploadError.message || "Could not upload the photo.");
+    } finally {
+      setBodyPhotoBusy(false);
     }
   };
 
@@ -664,6 +692,35 @@ export default function CandidateProfile() {
 
           {tab === "overview" ? (
             <div className="cnd-profile-overview">
+              <SectionCard title="Photo requirements" subtitle="Upload clear JPG, PNG or WebP photos (maximum 5 MB each)" icon={Camera}>
+                <div className="cnd-body-photo-grid">
+                  {[
+                    ["full_body_photo", "Full Body Photo", profile.full_body_photo_url],
+                    ["half_body_photo", "Half Body Photo", profile.half_body_photo_url],
+                    ["selfie_photo", "Selfie Photo", profile.selfie_photo_url],
+                  ].map(([field, label, url]) => (
+                    <div className="cnd-body-photo-card" key={field}>
+                      <div className="cnd-body-photo-preview">
+                        {url ? <img src={url} alt={label} /> : <Camera size={30} />}
+                        {bodyPhotoBusy ? <span className="cnd-photo-overlay"><Loader2 size={22} className="cnd-spin" /></span> : null}
+                      </div>
+                      <strong>{label}</strong>
+                      <span>{url ? "Uploaded" : "Not uploaded"}</span>
+                      <label className="cnd-btn cnd-btn-light cnd-btn-sm">
+                        {url ? "Replace photo" : "Upload photo"}
+                        <input
+                          className="cnd-file-hidden"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={bodyPhotoBusy}
+                          onChange={(event) => handleBodyPhoto(field, event)}
+                        />
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {bodyPhotoError ? <InlineNote tone="error">{bodyPhotoError}</InlineNote> : null}
+              </SectionCard>
               <SectionCard title="About" subtitle="A short introduction" icon={UserRound} className="cnd-about-card">
                 <p className="cnd-about-text">
                   {text(profile.details?.about, "Add an introduction so candidates can know you better. A thoughtful description helps you receive more genuine interests.")}

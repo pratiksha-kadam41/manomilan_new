@@ -3,10 +3,13 @@ import {
   Bell, ChevronDown, Heart, Home, KeyRound, LogOut, Menu, Search,
   User, Users,
 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import CandidateSidebar from "./CandidateSidebar";
-import { clearSession, getSession } from "../../auth";
+import {
+  clearSession, getCachedHomeData, getSession, updateCachedUserProfile,
+} from "../../auth";
 import { apiUrl } from "../../api";
-import { getUnreadNotificationCount } from "../api";
+import { getCandidateProfile, getUnreadNotificationCount } from "../api";
 import { initials, text } from "../utils";
 import "../candidate.css";
 
@@ -28,35 +31,95 @@ const TABS = [
 ];
 
 export default function CandidateLayout({ currentPath, candidateInfo, children }) {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const cachedHome = getCachedHomeData();
+  const [sharedCandidate, setSharedCandidate] = useState(() => ({
+    name: candidateInfo?.name
+      || cachedHome?.profile?.full_name
+      || cachedHome?.user?.name
+      || cachedHome?.user?.username
+      || "",
+    id: candidateInfo?.id
+      || cachedHome?.profile?.registration_number
+      || cachedHome?.profile?.profile_id
+      || cachedHome?.user?.username
+      || "",
+    photo: candidateInfo?.photo || cachedHome?.profile?.photo_url || "",
+  }));
   const menuRef = useRef(null);
   const session = getSession();
   const sessionUser = session?.user;
   const sessionProfile = sessionUser?.profile || {};
 
   const candidateName =
-    candidateInfo?.name
+    sharedCandidate.name
+    || candidateInfo?.name
     || sessionProfile.full_name
     || sessionProfile.fullName
     || sessionUser?.name
     || sessionUser?.username
     || "Candidate";
   const candidateId =
-    candidateInfo?.id
+    sharedCandidate.id
+    || candidateInfo?.id
     || sessionProfile.registration_number
     || sessionProfile.profile_id
-    || sessionUser?.username
     || "Member";
   const candidatePhoto =
-    candidateInfo?.photo
+    sharedCandidate.photo
+    || candidateInfo?.photo
     || sessionProfile.photo_url
     || mediaUrl(sessionProfile.profilePhoto);
 
   useEffect(() => {
     document.body.classList.add("candidate-mode");
     return () => document.body.classList.remove("candidate-mode");
+  }, []);
+
+  useEffect(() => {
+    const nextName = candidateInfo?.name
+      && !["Candidate", "Your profile"].includes(candidateInfo.name)
+      ? candidateInfo.name
+      : "";
+    const nextId = candidateInfo?.id && candidateInfo.id !== "Your profile"
+      ? candidateInfo.id
+      : "";
+    if (nextName || candidateInfo?.photo || nextId) {
+      setSharedCandidate((current) => ({
+        name: nextName || current.name,
+        id: nextId || current.id,
+        photo: candidateInfo?.photo || current.photo,
+      }));
+    }
+  }, [candidateInfo?.name, candidateInfo?.photo, candidateInfo?.id]);
+
+  useEffect(() => {
+    const hasSharedIdentity = Boolean(
+      (sharedCandidate.name && !["Candidate", "Your profile"].includes(sharedCandidate.name))
+      && sharedCandidate.photo,
+    );
+    if (hasSharedIdentity) return;
+
+    let active = true;
+    getCandidateProfile()
+      .then((result) => {
+        if (!active || !result?.profile) return;
+        const profile = result.profile;
+        const next = {
+          name: profile.full_name || result.user?.name || result.user?.username || "",
+          id: profile.registration_number || profile.profile_id || result.user?.username || "",
+          photo: profile.photo_url || "",
+        };
+        setSharedCandidate(next);
+        updateCachedUserProfile(profile);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -98,7 +161,7 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
 
   const go = (path) => {
     setMenuOpen(false);
-    window.location.assign(path);
+    navigate(path);
   };
 
   const handleLogout = () => {
@@ -125,9 +188,9 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
             >
               <Menu size={21} />
             </button>
-            <a href="/candidate" className="cnd-mobile-brand" aria-label="Candidate dashboard">
+            <Link to="/candidate" className="cnd-mobile-brand" aria-label="Candidate dashboard">
               <img src="/img/aaryan-manomilan-logo.png" alt="Aaryans Manomilan" />
-            </a>
+            </Link>
             <div className="cnd-topbar-title">
               <span>Candidate Portal</span>
               <small>Find your life partner with confidence</small>
@@ -135,10 +198,10 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
           </div>
 
           <div className="cnd-topbar-right">
-            <a href="/candidate/matches" className="cnd-topbar-search" title="Find matches">
+            <Link to="/candidate/matches" className="cnd-topbar-search" title="Find matches">
               <Search size={17} />
               <span>Find matches</span>
-            </a>
+            </Link>
 
             <button
               type="button"
@@ -165,7 +228,7 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
                 </span>
                 <span className="cnd-user-meta">
                   <strong>{candidateName}</strong>
-                  <small>{candidateId}</small>
+                  <small>{candidateInfo?.id ? candidateId : "Your profile"}</small>
                 </span>
                 <ChevronDown size={16} className="cnd-user-chevron" />
               </button>
@@ -204,15 +267,15 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
             || (path === "/candidate/interests-received"
               && currentPath === "/candidate/interests-sent");
           return (
-            <a
+            <Link
               key={path}
-              href={path}
+              to={path}
               className={`cnd-bottom-tab ${active ? "active" : ""}`}
               aria-current={active ? "page" : undefined}
             >
               <Icon size={21} strokeWidth={active ? 2.6 : 1.9} />
               <span>{label}</span>
-            </a>
+            </Link>
           );
         })}
       </nav>

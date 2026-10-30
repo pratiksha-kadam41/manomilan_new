@@ -200,6 +200,9 @@ class Profile extends Model
         'groomOrBride',
         'fullName',
         'profilePhoto',
+        'full_body_photo',
+        'half_body_photo',
+        'selfie_photo',
         'caste',
         'subCaste', // not updated in database
         'maritalStatus',
@@ -431,6 +434,9 @@ class Profile extends Model
             'fullName',
             'source_of_information',
             'profilePhoto',
+            'full_body_photo',
+            'half_body_photo',
+            'selfie_photo',
             'groomOrBride',
             'religion',
             'caste',
@@ -669,6 +675,12 @@ class Profile extends Model
         // Profile photo and proofs are marked mandatory in the registration form.
         if (empty($this->profilePhoto)) {
             $missing[] = 'profilePhoto';
+        }
+
+        foreach (['full_body_photo', 'half_body_photo', 'selfie_photo'] as $photoField) {
+            if (empty($this->{$photoField})) {
+                $missing[] = $photoField;
+            }
         }
 
         if (empty($this->identificationProof) || empty($this->birthDateProof)) {

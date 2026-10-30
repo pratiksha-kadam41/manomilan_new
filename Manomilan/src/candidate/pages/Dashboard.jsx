@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight, Bell, ChevronRight, CheckCircle2, Eye, Heart, Send, Settings2, Sparkles, UserRound, Users, X,
+  ArrowRight, Bell, ChevronRight, CheckCircle2, Eye, Heart, RefreshCw, Send, Settings2, Sparkles, UserRound, Users, X,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchResultCard from "../components/MatchResultCard";
@@ -11,7 +11,7 @@ import {
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
-import { getDashboard, getMatches, sendInterest } from "../api";
+import { getDashboard, readDashboardCache, sendInterest } from "../api";
 import { humanGender, text, timeAgo } from "../utils";
 
 const greeting = () => {
@@ -37,9 +37,9 @@ const STATS = [
 
 export default function Dashboard() {
   const cached = useMemo(() => getCachedHomeData(), []);
-  const [data, setData] = useState(null);
+  const [data, setData] = useState(() => readDashboardCache());
   const [suggested, setSuggested] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !readDashboardCache());
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
   const [busy, setBusy] = useState({});
@@ -47,43 +47,34 @@ export default function Dashboard() {
   const [showMissingDetails, setShowMissingDetails] = useState(false);
   const { toasts, push, dismiss } = useToasts();
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setLoading(true);
     setError("");
     setSuggestedError("");
-    const results = await Promise.allSettled([
-      getDashboard(),
-      getMatches({ per_page: 6, sort: "best_match" }),
-    ]);
-
-    if (results[0].status === "fulfilled") {
-      setData(results[0].value);
-    } else {
-      setError(results[0].reason?.message || "Could not load your dashboard.");
-    }
-
-    if (results[1].status === "fulfilled") {
-      setSuggested(results[1].value?.matches || []);
-    } else {
-      setSuggestedError(results[1].reason?.message || "Could not load suggested matches.");
+    try {
+      setData(await getDashboard({ force }));
+      setSuggestedError("");
+    } catch (loadError) {
+      setError(loadError.message || "Could not load your dashboard.");
     }
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(load, 0);
-    return () => window.clearTimeout(timer);
+    if (!data) window.setTimeout(() => load(), 0);
+    return () => {};
   }, [load]);
 
-  const profile = data?.profile || cached?.profile;
-  const user = data?.user || cached?.user;
+  const profile = data?.profile || (!loading ? cached?.profile : null);
+  const user = data?.user || (!loading ? cached?.user : null);
   const stats = data?.stats || {};
-  const backendCompletion = Number(stats.profile_completion ?? profile?.profile_completion ?? 0);
+  const backendCompletion = loading
+    ? 0
+    : Number(stats.profile_completion ?? profile?.profile_completion ?? 0);
   const completion = Array.isArray(data?.completion?.missing) && data.completion.missing.length === 0
     ? 100
     : backendCompletion;
-  const displayName = text(profile?.full_name || user?.name || user?.username, "Candidate");
-  const firstName = displayName.split(" ")[0];
+  const displayName = text(profile?.full_name, "Your profile");
   const candidateInfo = {
     name: displayName,
     id: profile?.registration_number || profile?.profile_id || user?.username,
@@ -142,37 +133,8 @@ export default function Dashboard() {
     <CandidateLayout currentPath="/candidate" candidateInfo={candidateInfo}>
       <Toasts items={toasts} onDismiss={dismiss} />
       <PageHeader
-        eyebrow="Dashboard"
-        title={`${greeting()}, ${firstName}`}
-        subtitle="Your matrimonial journey, matches and activity in one place."
-        actions={(
-          <>
-            <a href="/candidate/profile" className="cnd-btn cnd-btn-ghost">
-              <UserRound size={17} /> My profile
-            </a>
-            <a href="/candidate/matches" className="cnd-btn cnd-btn-primary">
-              <Users size={17} /> Find matches
-            </a>
-          </>
-        )}
+        title={`${greeting()}, ${displayName}`}
       />
-
-      <div className="cnd-dashboard-summary-head">
-        <div>
-          <span className="cnd-dashboard-summary-icon"><Sparkles size={18} /></span>
-          <strong>Your Dashboard</strong>
-        </div>
-        <button
-          type="button"
-          className={`cnd-completion-toggle ${completion >= 100 ? "complete" : ""}`}
-          onClick={() => setShowMissingDetails((current) => !current)}
-          aria-expanded={showMissingDetails}
-        >
-          <CheckCircle2 size={16} />
-          Profile {completion}% complete
-          <ChevronRight size={15} />
-        </button>
-      </div>
 
       {loading && !data ? <DashboardSkeleton /> : error ? (
         <ErrorState message={error} onRetry={load} />
@@ -180,11 +142,26 @@ export default function Dashboard() {
         <>
           <section className="cnd-hero">
             <div className="cnd-hero-copy">
-              <span className="cnd-hero-pill"><Sparkles size={15} /> Candidate dashboard</span>
-              <h2>{profile ? `Your profile is ${completion}% complete` : "Let us complete your profile"}</h2>
+              <div className="cnd-hero-title-row">
+                <h2>{profile
+                  ? completion >= 100 ? "Welcome to your dashboard" : "Complete your profile"
+                  : "Let us complete your profile"}</h2>
+                <button
+                  type="button"
+                  className="cnd-hero-refresh"
+                  onClick={() => load(true)}
+                  disabled={loading}
+                  aria-label="Refresh dashboard data"
+                  title="Refresh dashboard data"
+                >
+                  <RefreshCw size={18} className={loading ? "cnd-spin" : ""} />
+                </button>
+              </div>
               <p>
                 {profile
-                  ? "A complete, verified profile receives more genuine interests. Add the missing details to stand out."
+                  ? completion >= 100
+                    ? "Explore compatible matches and manage your interests from here."
+                    : "A complete profile receives more genuine interests. Add the remaining details to stand out."
                   : "Add your basic details, partner preferences and photos to unlock compatible matches."}
               </p>
               <div className="cnd-hero-tags">
@@ -193,6 +170,7 @@ export default function Dashboard() {
                 <span>{text(profile?.city, "Location not added")}</span>
               </div>
             </div>
+            {completion < 100 ? (
             <div className="cnd-hero-side">
               <ProgressRing value={completion} size={124} stroke={10} label="complete" />
               <div className="cnd-hero-side-copy">
@@ -204,6 +182,7 @@ export default function Dashboard() {
                 </ul>
               </div>
             </div>
+            ) : null}
           </section>
 
           <section className="cnd-stat-grid">
@@ -218,6 +197,7 @@ export default function Dashboard() {
             ))}
           </section>
 
+          {completion < 100 ? (
           <section className="cnd-profile-completion-card">
             <div className="cnd-profile-completion-main">
               <ProgressRing value={completion} size={112} stroke={10} label="complete" />
@@ -242,6 +222,7 @@ export default function Dashboard() {
               <ChevronRight size={18} />
             </button>
           </section>
+          ) : null}
 
           {showMissingDetails ? (
             <section className="cnd-missing-details-panel" aria-label="Profile completion details">
@@ -269,6 +250,7 @@ export default function Dashboard() {
             </section>
           ) : null}
 
+          {completion < 100 ? (
           <div className="cnd-dashboard-grid">
             <SectionCard
               title="Your profile"
@@ -308,6 +290,7 @@ export default function Dashboard() {
             </SectionCard>
 
           </div>
+          ) : null}
 
           <SectionCard
             title={`Suggested ${humanGender(profile?.gender === "groom" ? "bride" : "groom") || "matches"}`}

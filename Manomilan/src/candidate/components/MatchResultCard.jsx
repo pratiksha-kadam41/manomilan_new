@@ -29,7 +29,7 @@ export default function MatchResultCard({
             <span className="cnd-verified" title="Verified profile"><BadgeCheck size={16} /> Verified</span>
           ) : null}
           <span className="cnd-match-score">
-            <ProgressRing value={match.match_percentage} size={58} stroke={5} />
+            <ProgressRing value={match.profile_completion} size={58} stroke={5} label="Profile completion" />
           </span>
         </span>
 
