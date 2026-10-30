@@ -58,6 +58,8 @@ class DocumentVerificationController extends Controller
             $request->only(array_keys($rules)) // Get only the validated fields
         );
 
+        $profile->syncDocumentVerificationStatus();
+
         return redirect()->back()->with('success', 'Document verification updated successfully!');
     }
 }

@@ -20,6 +20,7 @@ export default function Activity({ currentPath, mode = "sent" }) {
   });
   const [records, setRecords] = useState([]);
   const [pagination, setPagination] = useState(null);
+  const [counts, setCounts] = useState({});
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -47,6 +48,7 @@ export default function Activity({ currentPath, mode = "sent" }) {
       }
       setRecords(interestsResult?.interests || []);
       setPagination(interestsResult?.pagination || null);
+      setCounts(interestsResult?.counts || {});
     } catch (loadError) {
       setError(loadError.message || "Could not load sent interests.");
     } finally {
@@ -92,8 +94,13 @@ export default function Activity({ currentPath, mode = "sent" }) {
 
       <section className="cnd-card cnd-activity-card">
         <header className="cnd-activity-toolbar">
-          <div className="cnd-segmented">
-            <span className="active">Sent interests</span>
+          <div className="cnd-segmented" aria-label="Interest type">
+            <a className={mode === "received" ? "active" : ""} href="/candidate/interests-received">
+              Received{counts.received ? ` (${counts.received})` : ""}
+            </a>
+            <a className={mode === "sent" ? "active" : ""} href="/candidate/interests-sent">
+              Sent{counts.sent ? ` (${counts.sent})` : ""}
+            </a>
           </div>
           <form className="cnd-search-box" onSubmit={submitSearch}>
             <Search size={16} />
@@ -111,19 +118,30 @@ export default function Activity({ currentPath, mode = "sent" }) {
         ) : error ? (
           <ErrorState message={error} onRetry={load} />
         ) : records.length === 0 ? (
-          <EmptyState icon={Send} title="No interests sent" message={query ? "No sent interests match this search." : "Profiles you send interest to will appear here."} action={<a href="/candidate/matches" className="cnd-btn cnd-btn-primary">Browse matches</a>} />
+          <EmptyState
+            icon={Send}
+            title={mode === "received" ? "No interests received yet" : "No interests sent yet"}
+            message={query
+              ? `No ${mode} interests match this search.`
+              : mode === "received"
+                ? "When another candidate sends you an interest, it will appear here."
+                : "Profiles you send interest to will appear here."}
+            action={<a href="/candidate/matches" className="cnd-btn cnd-btn-primary">Browse matches</a>}
+          />
         ) : (
           <>
             <ul className="cnd-interest-list">
               {records.map((interest) => {
                 const member = interest.profile || {};
                 const name = text(member.full_name, "Member");
+                const status = String(interest.status || "pending").toLowerCase();
+                const statusText = status === "pending" ? "Awaiting response" : status === "accepted" ? "Accepted" : "Declined";
                 return (
                   <li key={interest.id} className="cnd-interest-row">
                     <button type="button" className="cnd-interest-main" onClick={() => setSelected({ id: member.id, match: { ...member, ...interest } })}>
                       <Avatar name={name} src={member.photo_url} size="lg" />
                       <span className="cnd-interest-info">
-                        <span className="cnd-interest-name"><strong>{name}</strong><StatusBadge status={interest.status || "pending"} /></span>
+                        <span className="cnd-interest-name"><strong>{name}</strong><StatusBadge status={interest.status || "pending"}>{statusText}</StatusBadge></span>
                         <small>{[member.age ? `${member.age} years` : "", member.city, member.profession].filter(Boolean).join(" • ") || "Profile details added"}</small>
                         <span className="cnd-interest-meta"><span>{interest.match_percentage || 0}% match</span><span><Clock3 size={13} /> {formatDate(interest.created_at, "Recently")}</span></span>
                       </span>
@@ -150,7 +168,7 @@ export default function Activity({ currentPath, mode = "sent" }) {
         )}
       </section>
 
-      <MatchDetailModal key={selected?.id || "closed"} open={Boolean(selected)} profileId={selected?.id} initialMatch={selected?.match} onClose={() => setSelected(null)} allowInterest />
+      <MatchDetailModal key={selected?.id || "closed"} open={Boolean(selected)} profileId={selected?.id} initialMatch={selected?.match} onClose={() => setSelected(null)} allowInterest={mode === "received" ? false : true} />
     </CandidateLayout>
   );
 }

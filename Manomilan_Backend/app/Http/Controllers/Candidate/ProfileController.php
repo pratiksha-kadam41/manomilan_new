@@ -93,6 +93,10 @@ class ProfileController extends CandidateController
         try {
             $user = $this->candidate($request);
             $profile = $this->candidateProfile($request);
+            if ($profile) {
+                $profile->calculateCompletionPercentage();
+                $profile->refresh();
+            }
 
             return response()->json([
                 'success' => true,

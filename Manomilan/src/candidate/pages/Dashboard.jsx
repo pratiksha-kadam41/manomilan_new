@@ -7,7 +7,7 @@ import MatchResultCard from "../components/MatchResultCard";
 import MatchDetailModal from "../components/MatchDetailModal";
 import {
   Avatar, DashboardSkeleton, EmptyState, ErrorState, PageHeader, ProgressBar,
-  ProgressRing, SectionCard, StatusBadge, Toasts,
+  ProgressRing, SectionCard, Toasts,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
@@ -285,7 +285,6 @@ export default function Dashboard() {
                       <h3>{displayName}</h3>
                       <p>{[profile.age ? `${profile.age} years` : "", humanGender(profile.gender), profile.city].filter(Boolean).join(" • ")}</p>
                       <div className="cnd-snapshot-badges">
-                        <StatusBadge status={profile.verification_status} />
                         {profile.preference ? <span className="cnd-chip">Preferences set</span> : <span className="cnd-chip muted">No preferences</span>}
                       </div>
                     </div>

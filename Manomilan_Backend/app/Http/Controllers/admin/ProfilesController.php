@@ -1206,19 +1206,13 @@ class ProfilesController extends Controller
             $request->only(array_keys($rules)) // Get only the validated fields
         );
 
-        // Only mandatory proofs (Identification and Birth Date) determine completion
-        $idVerified = ($verification->identificationProof_status ?? 'pending') === 'verified';
-        $dobVerified = ($verification->birthDateProof_status ?? 'pending') === 'verified';
+        $profile->syncDocumentVerificationStatus();
 
-        if ($idVerified && $dobVerified) {
+        if ($profile->profileVerificationStatus === 'Completed') {
             // Keep the original MM2B/MM2G registration number as the profile_id for consistency
             if ($profile->registration_number) {
                 $profile->profile_id = $profile->registration_number;
             }
-            $profile->profileVerificationStatus = 'Completed';
-            $profile->save();
-        } else {
-            $profile->profileVerificationStatus = 'Pending';
             $profile->save();
         }
 

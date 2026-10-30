@@ -254,7 +254,6 @@ class Profile extends Model
         'instagram', // not updated in database
         'facebook', // not updated in database
         // Medical Details
-        'hasMedicalHistory',
         'personalMedicalHistory',
         'currentMedicalProblems',
         'medications',
@@ -345,6 +344,28 @@ class Profile extends Model
     protected $casts = [
         'additional_photos' => 'array',
     ];
+
+    public function syncDocumentVerificationStatus(): bool
+    {
+        $verification = DocumentVerification::where('profile_id', $this->id)->first();
+        $normalizedStatus = static function ($status) {
+            return strtolower(trim((string) $status));
+        };
+
+        $completed = $verification
+            && $normalizedStatus($verification->identificationProof_status) === 'verified'
+            && $normalizedStatus($verification->birthDateProof_status) === 'verified';
+
+        $status = $completed ? 'Completed' : 'Pending';
+        if ($this->profileVerificationStatus !== $status) {
+            $this->profileVerificationStatus = $status;
+            $this->save();
+
+            return true;
+        }
+
+        return false;
+    }
 
     /**
      * ✅ THIS FUNCTION IS UPDATED
@@ -595,6 +616,14 @@ class Profile extends Model
      */
     public function hasCompletedMandatoryFields()
     {
+        foreach ($this->missingMandatoryFields() as $field) {
+            return false;
+        }
+        return true;
+    }
+
+    public function missingMandatoryFields(): array
+    {
         $mandatoryFields = [
             'phone', // Mobile Number
             'fullName',
@@ -619,7 +648,6 @@ class Profile extends Model
             'professionalCity',
             'monthlyIncome',
             'hobbies',
-            'hasMedicalHistory',
             'fathersName',
             'fatherAlive',
             'mothersName',
@@ -631,44 +659,48 @@ class Profile extends Model
             'referenceContactNumber',
         ];
 
+        $missing = [];
         foreach ($mandatoryFields as $field) {
             if (!$this->isFieldFilled($this->$field)) {
-                return false;
+                $missing[] = $field;
             }
         }
 
         // Profile photo and proofs are marked mandatory in the registration form.
         if (empty($this->profilePhoto)) {
-            return false;
+            $missing[] = 'profilePhoto';
         }
 
         if (empty($this->identificationProof) || empty($this->birthDateProof)) {
-            return false;
+            if (empty($this->identificationProof)) $missing[] = 'identificationProof';
+            if (empty($this->birthDateProof)) $missing[] = 'birthDateProof';
         }
 
         if (in_array($this->caste, ['Shwetambar', 'Digambar'], true) && empty($this->subCaste)) {
-            return false;
+            $missing[] = 'subCaste';
         }
 
         if ($this->fatherAlive === 'Yes') {
             if (empty($this->fathersOccupation) || empty($this->fatherContactNumber))
-                return false;
+                if (empty($this->fathersOccupation)) $missing[] = 'fathersOccupation';
+                if (empty($this->fatherContactNumber)) $missing[] = 'fatherContactNumber';
         }
 
         if ($this->motherAlive === 'Yes') {
             if (empty($this->mothersOccupation) || empty($this->motherContactNumber))
-                return false;
+                if (empty($this->mothersOccupation)) $missing[] = 'mothersOccupation';
+                if (empty($this->motherContactNumber)) $missing[] = 'motherContactNumber';
         }
 
         if ((int) $this->noOfBrothers > 0 && !$this->isFieldFilled($this->brothersMarried)) {
-            return false;
+            $missing[] = 'brothersMarried';
         }
 
         if ((int) $this->noOfSisters > 0 && !$this->isFieldFilled($this->sistersMarried)) {
-            return false;
+            $missing[] = 'sistersMarried';
         }
 
-        return true;
+        return $missing;
     }
     /**
      * Get the payment screenshots associated with the profile

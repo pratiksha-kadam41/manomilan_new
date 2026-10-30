@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck, Briefcase, Camera, CheckCircle2, FileText, GraduationCap,
-  Heart, Loader2, MapPin, Moon, Save, Settings2, ShieldCheck, Sparkles,
+  Eye, Heart, Loader2, MapPin, Moon, Save, Settings2, ShieldCheck, Sparkles,
   Trash2, Upload, UserRound, Users,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import {
   Avatar, ConfirmDialog, DashboardSkeleton, ErrorState, FormField,
-  InlineNote, PageHeader, ProgressBar, ProgressRing, SectionCard, StatusBadge,
+  InlineNote, Modal, PageHeader, ProgressBar, ProgressRing, SectionCard,
   Toasts,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
@@ -318,6 +318,7 @@ export default function CandidateProfile() {
   const [docError, setDocError] = useState("");
   const [removeDoc, setRemoveDoc] = useState(null);
   const [removeDocBusy, setRemoveDocBusy] = useState(false);
+  const [viewDocument, setViewDocument] = useState(null);
   const photoInput = useRef(null);
   const { toasts, push, dismiss } = useToasts();
 
@@ -621,11 +622,12 @@ export default function CandidateProfile() {
                   <h2>{text(profile.full_name, "Candidate")}</h2>
                   <p>{[profile.age ? `${profile.age} years` : "", humanGender(profile.gender), profile.city].filter(Boolean).join(" • ")}</p>
                 </div>
-                <StatusBadge status={profile.verification_status} />
               </div>
               <div className="cnd-profile-id-row">
                 <span>ID: {text(profile.registration_number || profile.profile_id, "Not assigned")}</span>
-                <span><BadgeCheck size={15} /> {profile.verification_status === "Completed" ? "Verified profile" : "Verification in progress"}</span>
+                {profile.verification_status === "Completed" ? (
+                  <span><BadgeCheck size={15} /> Verified profile</span>
+                ) : null}
               </div>
               <div className="cnd-profile-hero-progress">
                 <ProgressBar value={completion} label="Profile completion" />
@@ -700,7 +702,6 @@ export default function CandidateProfile() {
                   <div><span>Registered mobile</span><strong>{text(profile.mobile || account?.username, "Not available")}</strong></div>
                   <div><span>Email</span><strong>{text(profile.email || account?.email, "Not added")}</strong></div>
                   <div><span>Member since</span><strong>{formatDate(profile.created_at, "Recently")}</strong></div>
-                  <div><span>Verification</span><strong>{text(profile.verification_status, "Pending")}</strong></div>
                   <div><span>Documents uploaded</span><strong>{uploadedDocuments.length} of {DOCUMENT_LABELS.length}</strong></div>
                   <div><span>Profile completion</span><strong>{completion}%</strong></div>
                 </div>
@@ -800,6 +801,11 @@ export default function CandidateProfile() {
                               <Trash2 size={16} />
                             </button>
                           ) : null}
+                          {doc.file_url ? (
+                            <button type="button" className="cnd-btn cnd-btn-ghost cnd-btn-sm" onClick={() => setViewDocument({ ...doc, label })}>
+                              <Eye size={15} /> View
+                            </button>
+                          ) : null}
                         </div>
                       </article>
                     );
@@ -839,6 +845,24 @@ export default function CandidateProfile() {
         onCancel={() => setRemoveDoc(null)}
         onConfirm={deleteDocument}
       />
+
+      <Modal
+        open={Boolean(viewDocument)}
+        onClose={() => setViewDocument(null)}
+        title={viewDocument?.label || "Document preview"}
+        eyebrow="Uploaded document"
+        size="lg"
+      >
+        {viewDocument?.file_url ? (
+          <div className="cnd-document-viewer">
+            {String(viewDocument.file_url).toLowerCase().includes(".pdf") ? (
+              <iframe src={viewDocument.file_url} title={viewDocument.label || "Document preview"} />
+            ) : (
+              <img src={viewDocument.file_url} alt={viewDocument.label || "Uploaded document"} />
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </CandidateLayout>
   );
 }
