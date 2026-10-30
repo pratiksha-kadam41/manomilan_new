@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Header from "./components/Header.jsx";
 import Footer from "./components/Footer.jsx";
 import Home from "./pages/Home.jsx";
@@ -21,6 +22,7 @@ import Receipt from "./admin/pages/Profiles/Receipt.jsx";
 import PaymentScreenshot from "./admin/pages/Profiles/PaymentScreenshot.jsx";
 import MelavaPayments from "./admin/pages/MelavaPayments.jsx";
 import MelavaCampaigns from "./admin/pages/MelavaCampaigns.jsx";
+import ProfileDetail from "./pages/ProfileDetail.jsx";
 
 // Add a page here: "/url-name": Component
 const ROUTES = {
@@ -45,6 +47,7 @@ const ROUTES = {
 
 // Pages whose URL contains an id (only digits are accepted)
 const DYNAMIC_ROUTES = [
+  { pattern: /^\/admin\/profiles\/(\d+)\/details$/, Page: ProfileDetail },
   { pattern: /^\/admin\/profiles\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/payment\/(\d+)$/, Page: PaymentScreenshot },
@@ -66,25 +69,13 @@ if (legacyHashPath) {
   window.history.replaceState(null, "", `${legacyHashPath[1]}${query}`);
 }
 
-const getPath = () => window.location.pathname.replace(/\/+$/, "") || "/";
-
 export default function App() {
-  const [path, setPath] = useState(getPath());
+  const location = useLocation();
+  const path = location.pathname.replace(/\/+$/, "") || "/";
 
   useEffect(() => {
-    const onChange = () => {
-      setPath(getPath());
-      window.scrollTo(0, 0); // every new page starts at the top
-    };
-    window.addEventListener("popstate", onChange);
-    return () => window.removeEventListener("popstate", onChange);
-  }, []);
-
-  useEffect(() => {
-    const onShow = (e) => { if (e.persisted) setPath(getPath()); };
-    window.addEventListener("pageshow", onShow);
-    return () => window.removeEventListener("pageshow", onShow);
-  }, []);
+    window.scrollTo(0, 0);
+  }, [path]);
 
   const session = getSession();
   const loggedIn = !!session;
@@ -121,7 +112,7 @@ export default function App() {
     <>
       {!hideChrome && <Header />}
       {/* CHANGED: pass params so the page receives the profile id */}
-      {Page ? <Page params={params} /> : <ComingSoon path={path} />}
+      {Page ? <Page key={Matched === ProfileDetail ? path : undefined} params={params} /> : <ComingSoon path={path} />}
       {!hideChrome && <Footer />}
     </>
   );

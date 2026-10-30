@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Search, Download, UserX, Pencil, CreditCard, Receipt, BadgeCheck,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Phone,
@@ -6,11 +7,12 @@ import {
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
 import { request, download } from "../../../api";
+import { touchSession } from "../../../auth";
 import "./profiles.css";
 
 const LINKS = {
   inactive: "/admin/inactive-profiles",
-  view: (id) => `/admin/profiles/${id}`,
+  view: (id, rowNumber) => `/admin/profiles/${id}/details?sr_no=${rowNumber}`,
   edit: (id) => `/admin/profiles/edit/${id}`,
   payment: (id) => `/admin/profiles/payment/${id}`,
   receipt: (id) => `/admin/profiles/receipt/${id}`,
@@ -109,6 +111,40 @@ export default function Profiles() {
   const showToast = (type, text) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 3500);
+  };
+
+  const openReceipt = (event, id) => {
+    event.preventDefault();
+    touchSession();
+    const storedSession = sessionStorage.getItem("auth");
+
+    if (!storedSession) {
+      showToast("error", "Your session has expired. Please sign in again.");
+      return;
+    }
+
+    let receiptTab;
+    try {
+      const session = JSON.parse(storedSession);
+      if (!session?.token || !["admin", "super"].includes(session.role)) {
+        showToast("error", "Administrator access is required to open receipts.");
+        return;
+      }
+
+      receiptTab = window.open("about:blank", "_blank");
+      if (!receiptTab) {
+        showToast("error", "Allow pop-ups to open the receipt in a new tab.");
+        return;
+      }
+
+      receiptTab.sessionStorage.setItem("auth", storedSession);
+      receiptTab.opener = null;
+      receiptTab.location.replace(new URL(LINKS.receipt(id), window.location.origin).href);
+    } catch (error) {
+      receiptTab?.close();
+      showToast("error", "Could not open the receipt. Please try again.");
+      console.error("Could not open receipt tab:", error);
+    }
   };
 
   // Wait 400 ms after typing stops, then search
@@ -259,12 +295,13 @@ export default function Profiles() {
 
                 {rows.map((p, i) => {
                   const done = String(p.status).toLowerCase() === "completed";
+                  const rowNumber = (result.from ?? 1) + i;
                   return (
                     <tr key={p.id}>
-                      <td className="pf-muted">{(result.from ?? 1) + i}</td>
+                      <td className="pf-muted">{rowNumber}</td>
                       <td><span className="pf-regno">{p.registration_number}</span></td>
                       <td><Avatar p={p} onOpen={setPhoto} /></td>
-                      <td><a className="pf-name" href={LINKS.view(p.id)}>{p.full_name}</a></td>
+                      <td><Link className="pf-name" to={LINKS.view(p.id, rowNumber)}>{p.full_name}</Link></td>
                       <td><span className="pf-mobile"><Phone size={13} /> {p.mobile}</span></td>
                       <td className="pf-muted">{p.registration_date}</td>
                       <td>
@@ -284,7 +321,7 @@ export default function Profiles() {
                           </a>
 
                           {p.payment_verified ? (
-                            <a href={LINKS.receipt(p.id)} target="_blank" rel="noopener noreferrer" className="pf-act receipt" title="Receipt" aria-label="Receipt">
+                            <a href={LINKS.receipt(p.id)} onClick={(event) => openReceipt(event, p.id)} className="pf-act receipt" title="Receipt" aria-label="Receipt">
                               <Receipt size={15} /><span className="pf-lbl">Receipt</span>
                             </a>
                           ) : (

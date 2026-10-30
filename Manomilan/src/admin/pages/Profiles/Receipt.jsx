@@ -1,20 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Printer, FileDown, Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { apiUrl } from "../../../api";
 import { getSession, clearSession } from "../../../auth";
 import "./receipt.css";
-
-// GET /profiles/:id/receipt returns a verified receipt; amounts stay empty
-// until fee amounts are stored by the backend.
-const LINKS = { back: "/admin/profiles" };
 
 // Footer details printed on every receipt
 const ORG = {
   name: "AARYANS MANOMILAN",
   phone: "7030932526",
   website: "www.aaryansmanomilan.com",
-  logo: "/website/Mano_Milan_Final_Website.png",   // already in your project: public/website/
-  qr: "/website/Manomilan-QR.jpeg",                // copy this file into public/website/ (see the steps)
+  logo: "/website/Mano_Milan_Final_Website.png",
+  qr: "/website/Manomilan-QR.jpeg",
 };
 
 const authHeaders = () => {
@@ -119,15 +115,9 @@ export default function Receipt({ params }) {
     <div className="rc-page">
       {/* ---------- Buttons (not printed) ---------- */}
       <div className="rc-bar">
-        <a href={LINKS.back} className="rc-btn rc-btn-ghost"><ArrowLeft size={16} /> Back to Profiles</a>
-        <div className="rc-bar-right">
-          <button type="button" className="rc-btn rc-btn-ghost" onClick={() => window.print()} disabled={!receipt}>
-            <Printer size={16} /> Print
-          </button>
-          <button type="button" className="rc-btn rc-btn-red" onClick={downloadPdf} disabled={!receipt || making}>
-            {making ? <><Loader2 size={16} className="rc-spin" /> Creating PDF…</> : <><FileDown size={16} /> Download Receipt PDF</>}
-          </button>
-        </div>
+        <button type="button" className="rc-btn rc-btn-red" onClick={downloadPdf} disabled={!receipt || making}>
+          {making ? <><Loader2 size={16} className="rc-spin" /> Creating PDF…</> : <>Download Receipt PDF</>}
+        </button>
       </div>
       {pdfError && <p className="rc-pdf-error" role="alert">{pdfError}</p>}
 
@@ -148,8 +138,8 @@ export default function Receipt({ params }) {
           </header>
 
           <section className="rc-meta">
-            <div><span>Receipt Date</span><strong>{text(receipt.receipt_date)}</strong></div>
-            <div><span>Receipt No</span><strong>{text(receipt.receipt_no)}</strong></div>
+            <div><strong>Receipt Date:</strong><span>{text(receipt.receipt_date)}</span></div>
+            <div><strong>Receipt No:</strong><span>{text(receipt.receipt_no)}</span></div>
           </section>
 
           <table className="rc-table">

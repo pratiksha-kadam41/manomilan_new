@@ -49,6 +49,18 @@ class ReceiptController extends Controller
                 ], 404);
             }
 
+            $registrationFee = $verifiedMelava?->registration_fee;
+            $bookletFee = $verifiedMelava?->booklet_fee;
+            $total = $verifiedMelava?->total_amount;
+
+            if ($verifiedMelava && $verifiedMelava->melava_batch === config('melava.batch')) {
+                $registrationFee = (float) ($registrationFee ?? config('melava.fee', 0));
+                $bookletFee = $verifiedMelava->is_booklet_req
+                    ? (float) ($bookletFee ?: config('melava.booklet_fee', 0))
+                    : 0;
+                $total = $registrationFee + $bookletFee;
+            }
+
             $gender = strtolower((string) $profile->groomOrBride);
             $issuedAt = now();
             return response()->json([
@@ -68,9 +80,9 @@ class ReceiptController extends Controller
                         ?: $profile->location
                         ?: $profile->professionalCity
                         ?: $profile->cityOfEducation,
-                    'registration_fee' => null,
-                    'booklet_fee' => null,
-                    'total' => null,
+                    'registration_fee' => $registrationFee,
+                    'booklet_fee' => $bookletFee,
+                    'total' => $total,
                     'payment_status' => 'verified',
                 ],
             ])->header('Cache-Control', 'private, no-store');

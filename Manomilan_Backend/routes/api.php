@@ -46,6 +46,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/profiles', [ProfileController::class, 'index']);
     Route::get('/profiles/{id}', [ProfileController::class, 'show']);
+    Route::get('/profiles/{id}/biodata-preview', [ProfileController::class, 'biodataPreview']);
+    Route::get('/profiles/{id}/documents/{docId}/file', [ProfileController::class, 'showDocument']);
+    Route::delete('/profiles/{id}/documents/{docId}', [ProfileController::class, 'deleteDocument']);
+    Route::get('/profiles/{id}/biodata', [ProfileController::class, 'downloadBiodata']);
     Route::get('/my-profile', [ProfileController::class, 'myProfile']);
     Route::post('/profiles', [ProfileController::class, 'store']);
 
@@ -80,5 +84,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/payments/my', [PaymentController::class, 'myPayments']);
     Route::get('/payments', [PaymentController::class, 'index']);
     Route::put('/payments/{id}/status', [PaymentController::class, 'updateStatus']);
+    Route::get('/profiles/{profileId}/payment-screenshots', [PaymentController::class, 'forProfile'])->whereNumber('profileId');
+    Route::post('/profiles/{profileId}/payment-screenshots/{paymentId}/verify', [PaymentController::class, 'verifyForProfile'])->whereNumber('profileId')->whereNumber('paymentId');
+    Route::post('/profiles/{profileId}/payment-screenshot', [PaymentController::class, 'uploadForProfile'])->whereNumber('profileId');
     Route::get('/profiles/{profileId}/receipt', [ReceiptController::class, 'show'])->whereNumber('profileId');
 });

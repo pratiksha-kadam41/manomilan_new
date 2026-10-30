@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\MelavaRegistration;
 use App\PaymentScreenshot;
+use App\Profile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -12,6 +14,196 @@ use Throwable;
 
 class PaymentController extends Controller
 {
+    public function forProfile(Request $request, int $profileId)
+    {
+        if (! $this->isAdmin($request->user())) {
+            return $this->forbidden();
+        }
+
+        try {
+            $profile = Profile::with('user')->find($profileId);
+
+            if (! $profile) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found.',
+                ], 404);
+            }
+
+            $screenshots = PaymentScreenshot::where('profile_id', $profile->id)
+                ->latest()
+                ->get()
+                ->map(fn (PaymentScreenshot $payment) => [
+                    'id' => $payment->id,
+                    'type' => 'payment',
+                    'status' => $payment->payment_verified ? 'verified' : 'pending',
+                    'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                ]);
+
+            $melavaScreenshots = MelavaRegistration::where('profile_id', $profile->id)
+                ->whereNotNull('payment_screenshot')
+                ->where('payment_screenshot', '<>', '')
+                ->latest()
+                ->get()
+                ->map(fn (MelavaRegistration $registration) => [
+                    'id' => $registration->id,
+                    'type' => 'melava',
+                    'status' => $registration->payment_verified ? 'verified' : 'pending',
+                    'image_url' => $this->screenshotUrl($request, $registration->payment_screenshot),
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'profile' => [
+                    'id' => $profile->id,
+                    'full_name' => $profile->fullName,
+                    'registration_number' => $profile->profile_id ?: $profile->serial_no,
+                    'mobile' => $profile->user?->username ?: $profile->phone,
+                ],
+                'screenshots' => $screenshots
+                    ->concat($melavaScreenshots)
+                    ->sortByDesc('id')
+                    ->values(),
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load payment screenshots right now.',
+            ], 500);
+        }
+    }
+
+    public function verifyForProfile(Request $request, int $profileId, int $paymentId)
+    {
+        if (! $this->isAdmin($request->user())) {
+            return $this->forbidden();
+        }
+
+        $data = $request->validate([
+            'type' => ['required', Rule::in(['payment', 'melava'])],
+        ]);
+
+        try {
+            if (! Profile::whereKey($profileId)->exists()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profile not found.',
+                ], 404);
+            }
+
+            $payment = $data['type'] === 'melava'
+                ? MelavaRegistration::where('profile_id', $profileId)->find($paymentId)
+                : PaymentScreenshot::where('profile_id', $profileId)->find($paymentId);
+
+            if (! $payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment screenshot not found.',
+                ], 404);
+            }
+
+            DB::transaction(function () use ($data, $payment, $profileId) {
+                $payment->payment_verified = true;
+                $payment->save();
+
+                if ($data['type'] === 'melava') {
+                    PaymentScreenshot::where('profile_id', $profileId)
+                        ->where('screenshot_path', $payment->payment_screenshot)
+                        ->update(['payment_verified' => true]);
+                }
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment verified successfully.',
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to verify this payment right now.',
+            ], 500);
+        }
+    }
+
+    public function uploadForProfile(Request $request, int $profileId)
+    {
+        if (! $this->isAdmin($request->user())) {
+            return $this->forbidden();
+        }
+
+        $data = $request->validate([
+            'payment_screenshot' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $profile = Profile::find($profileId);
+
+        if (! $profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Profile not found.',
+            ], 404);
+        }
+
+        $path = null;
+
+        try {
+            $path = $data['payment_screenshot']->store('payment_screenshots', 'public');
+
+            if (! $path) {
+                throw new \RuntimeException('The payment screenshot could not be stored.');
+            }
+
+            $payment = DB::transaction(fn () => PaymentScreenshot::create([
+                'profile_id' => $profile->id,
+                'screenshot_path' => $path,
+                'payment_verified' => false,
+            ]));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment screenshot uploaded successfully.',
+                'data' => [
+                    'id' => $payment->id,
+                    'type' => 'payment',
+                    'status' => 'pending',
+                    'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                ],
+            ], 201);
+        } catch (Throwable $e) {
+            if ($path) {
+                Storage::disk('public')->delete($path);
+            }
+
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to upload the payment screenshot right now.',
+            ], 500);
+        }
+    }
+
+    private function screenshotUrl(Request $request, ?string $path): string
+    {
+        if (! $path) {
+            return '';
+        }
+
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        if (str_starts_with(ltrim($path, '/'), 'uploads/')) {
+            return $request->getSchemeAndHttpHost().'/'.ltrim($path, '/');
+        }
+
+        return Storage::disk('public')->url($path);
+    }
+
     public function uploadScreenshot(Request $request)
     {
         $data = $request->validate([

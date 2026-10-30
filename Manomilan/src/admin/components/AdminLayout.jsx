@@ -4,7 +4,7 @@ import { clearSession } from "../../auth";
 import Sidebar from "./Sidebar";
 import "../admin.css";
 
-export default function AdminLayout({ currentPath, children }) {
+export default function AdminLayout({ currentPath, contentClassName = "", children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -70,7 +70,7 @@ export default function AdminLayout({ currentPath, children }) {
           </div>
         </header>
 
-        <main className="adm-content">{children}</main>
+        <main className={`adm-content ${contentClassName}`.trim()}>{children}</main>
       </div>
     </div>
   );
