@@ -1,0 +1,42 @@
+export const BIODATA_TEMPLATES = [
+  {
+    id: "1",
+    name: "Template 1",
+    image: "/biodata-templates/1.jpg",
+    safe: "110px 90px 90px 90px",
+    ink: "#286d70",
+    showHeader: true,
+  },
+  {
+    id: "7",
+    name: "Template 7",
+    image: "/biodata-templates/7.jpg",
+    safe: "110px 90px 90px 90px",
+    ink: "#286d70",
+    showHeader: true,
+  },
+  {
+    id: "8",
+    name: "Template 8",
+    image: "/biodata-templates/8.jpg",
+    safe: "110px 90px 90px 90px",
+    ink: "#286d70",
+    showHeader: true,
+  },
+  {
+    id: "9",
+    name: "Template 9",
+    image: "/biodata-templates/9.jpg",
+    safe: "110px 90px 90px 90px",
+    ink: "#286d70",
+    showHeader: true,
+  },
+  {
+    id: "14",
+    name: "Template 14",
+    image: "/biodata-templates/14.jpg",
+    safe: "110px 90px 90px 90px",
+    ink: "#286d70",
+    showHeader: true,
+  },
+];

@@ -151,55 +151,148 @@ class ProfileController extends Controller
             return $this->forbidden();
         }
 
+        $q = trim((string) $request->input('q', ''));
+        $gender = $request->input('gender');
+        $regType = $request->input('reg_type');
+        $sortBy = $request->input('sort_by', 'registration_date');
+        if (! in_array($sortBy, ['registration_number', 'registration_date', 'serial_no'], true)) {
+            $sortBy = 'registration_date';
+        }
+
+        $sortOrder = strtolower((string) $request->input('sort_order', 'desc')) === 'asc' ? 'asc' : 'desc';
+
         $query = Profile::query()
-            ->with(['user', 'paymentScreenshots', 'melavaRegistrations'])
-            ->where('active', 'active');
-
-        if ($request->filled('q')) {
-            $term = trim((string) $request->input('q'));
-            $query->where(function ($sub) use ($term) {
-                $sub->where('profile_id', 'like', "%{$term}%")
-                    ->orWhere('registration_number', 'like', "%{$term}%")
-                    ->orWhere('fullName', 'like', "%{$term}%")
-                    ->orWhereHas('user', fn ($userQuery) => $userQuery->where('username', 'like', "%{$term}%"));
+            ->with([
+                'user',
+                'melavaRegistrations' => function ($registrationQuery) {
+                    $registrationQuery->where('melava_batch', 'october_2026')
+                        ->orderBy('melava_registered_at', 'desc');
+                },
+            ])
+            ->where('profiles.active', 'active')
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($sub) use ($q) {
+                    $sub->where('profiles.profile_id', 'like', "%{$q}%")
+                        ->orWhere('profiles.registration_number', 'like', "%{$q}%")
+                        ->orWhere('profiles.serial_no', 'like', "%{$q}%")
+                        ->orWhere('profiles.fullName', 'like', "%{$q}%")
+                        ->orWhere('profiles.profileVerificationStatus', 'like', "%{$q}%")
+                        ->orWhereRaw('DATE_FORMAT(profiles.created_at, "%d-%m-%Y") like ?', ["%{$q}%"])
+                        ->orWhereHas('user', fn ($userQuery) => $userQuery->where('username', 'like', "%{$q}%"));
+                });
+            })
+            ->when($gender && $gender !== 'all', fn ($query) => $query->where('profiles.groomOrBride', $gender))
+            ->when($regType && $regType !== 'all', function ($query) use ($regType) {
+                if ($regType === 'melava_existing') {
+                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                        ->whereIn('profiles.registration_type', ['melava', 'existing'])
+                        ->where(function ($sub) {
+                            $sub->where('profiles.registration_number', 'like', 'MM3%')
+                                ->orWhere('profiles.profile_id', 'like', 'MM3%');
+                        });
+                } elseif ($regType === 'melava') {
+                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                        ->where('profiles.registration_type', 'melava')
+                        ->where(function ($sub) {
+                            $sub->where('profiles.registration_number', 'like', 'MM3%')
+                                ->orWhere('profiles.profile_id', 'like', 'MM3%');
+                        });
+                } else {
+                    $query->where('profiles.registration_type', $regType);
+                }
             });
+
+        if ($sortBy === 'registration_number') {
+            $query->orderByRaw("COALESCE(NULLIF(profiles.registration_number, ''), profiles.profile_id) {$sortOrder}");
+        } elseif ($sortBy === 'serial_no') {
+            $query->orderBy('profiles.serial_no', $sortOrder);
+        } else {
+            $query->orderBy('profiles.created_at', $sortOrder);
         }
 
-        if ($request->filled('gender') && $request->input('gender') !== 'all') {
-            $query->where('groomOrBride', $request->input('gender'));
-        }
-
-        if ($request->filled('reg_type') && $request->input('reg_type') !== 'all') {
-            $query->where('registration_type', $request->input('reg_type'));
-        }
-
-        $filename = 'profiles-'.now()->format('Ymd-His').'.csv';
+        $filename = 'profiles_export-'.now()->format('Y-m-d_H-i-s').'.csv';
 
         return response()->streamDownload(function () use ($query) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, [
-                'Registration No', 'Full Name', 'Gender', 'Mobile', 'Registered On',
-                'Verification Status', 'Payment Verified', 'Registration Type',
-            ]);
+            fwrite($out, "\xEF\xBB\xBF");
+            fwrite($out, implode(',', [
+                'Serial No',
+                'Registration No',
+                'Full Name',
+                'Mobile Number',
+                'Email',
+                'DOB',
+                'Date of Registration',
+                'Gender',
+                'Registration Type',
+                'Booklet Required',
+                'Marital Status',
+                'Caste',
+                'Education',
+                'Profession',
+                'City',
+                'Mother Name',
+                'Mother Phone Number',
+                'Father Name',
+                'Father Phone Number',
+                'Source of Information',
+                'Status',
+            ])."\r\n");
 
-            $query->orderByDesc('created_at')->chunk(500, function ($profiles) use ($out) {
+            $missing = static fn ($value) => $value === null || (is_string($value) && trim($value) === '')
+                ? 'N/A'
+                : $value;
+            $formatDate = static fn ($value) => $value
+                ? Carbon::parse($value)->format('d-m-Y')
+                : 'N/A';
+
+            $query->chunk(500, function ($profiles) use ($out, $missing, $formatDate) {
                 foreach ($profiles as $profile) {
-                    $row = $this->presentProfile($profile);
+                    $latestMelavaRegistration = $profile->melavaRegistrations->first();
+                    $registeredMelavaRegistration = $profile->melavaRegistrations
+                        ->first(fn ($registration) => $registration->melava_registered_at !== null);
+                    $registrationDate = $registeredMelavaRegistration?->melava_registered_at
+                        ?: $profile->created_at;
+
+                    $registrationType = match ($profile->registration_type) {
+                        'melava' => 'Melava Registration',
+                        'existing' => 'Existing Registration',
+                        'quick' => 'Quick Registration',
+                        default => $missing($profile->registration_type),
+                    };
+
+                    $bookletRequired = $latestMelavaRegistration
+                        ? ((int) $latestMelavaRegistration->is_booklet_req === 1 ? 'Yes' : 'No')
+                        : 'N/A';
+
                     fputcsv($out, [
-                        $row['registration_number'],
-                        $row['full_name'],
-                        $row['gender'],
-                        $row['mobile'],
-                        $row['registration_date'],
-                        $row['status'],
-                        $row['payment_verified'] ? 'Yes' : 'No',
-                        $row['reg_type'],
-                    ]);
+                        $missing($profile->serial_no),
+                        $missing($profile->registration_number ?? $profile->profile_id),
+                        $missing($profile->fullName),
+                        $missing($profile->phone ?? $profile->user?->username),
+                        $missing($profile->email),
+                        $formatDate($profile->birthDate),
+                        $formatDate($registrationDate),
+                        $missing($profile->groomOrBride === null ? null : ucfirst($profile->groomOrBride)),
+                        $registrationType,
+                        $bookletRequired,
+                        $missing($profile->maritalStatus),
+                        $missing($profile->caste),
+                        $missing($profile->education),
+                        $missing($profile->profession),
+                        $missing($profile->professionalCity),
+                        $profile->mothersName ?? 'N/A',
+                        $profile->motherContactNumber ?? 'N/A',
+                        $profile->fathersName ?? 'N/A',
+                        $profile->fatherContactNumber ?? 'N/A',
+                        $registeredMelavaRegistration?->source_of_information ?? 'N/A',
+                        $missing($profile->profileVerificationStatus),
+                    ], ',', '"', '');
                 }
             });
 
             fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv']);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function show(Request $request, $id)

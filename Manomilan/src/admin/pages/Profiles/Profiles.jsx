@@ -44,12 +44,24 @@ async function deactivateProfile(id) {
   return request(`/profiles/deactivate/${id}`, { method: "PATCH" });
 }
 
+function exportFallbackName() {
+  const date = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  const timestamp = [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join("-") + `_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+
+  return `profiles_export_${timestamp}.csv`;
+}
+
 async function exportProfiles(params) {
   const clean = Object.fromEntries(
     Object.entries(params).filter(([, v]) => v !== "" && v != null),
   );
   const qs = new URLSearchParams(clean).toString();
-  await download(`/profiles/export${qs ? `?${qs}` : ""}`, "profiles.csv");
+  await download(`/profiles/export${qs ? `?${qs}` : ""}`, exportFallbackName());
 }
 
 /* ---------- Small helpers ---------- */
@@ -106,6 +118,7 @@ export default function Profiles() {
   const [photo, setPhoto] = useState(null);           // photo preview popup
   const [confirm, setConfirm] = useState(null);       // profile waiting for deactivate confirmation
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState(null);
 
   const showToast = (type, text) => {
@@ -189,7 +202,15 @@ export default function Profiles() {
   const clearFilters = () => { setSearch(""); setFilters({ q: "", gender: "", reg_type: "" }); setPage(1); };
 
   const handleExport = async () => {
-    try { await exportProfiles(filters); } catch (e) { showToast("error", e.message); }
+    setExporting(true);
+    try {
+      await exportProfiles({ ...filters, sort_by: sort.by, sort_order: sort.order });
+      showToast("success", "Profiles exported successfully.");
+    } catch (e) {
+      showToast("error", e.message);
+    } finally {
+      setExporting(false);
+    }
   };
 
   const handleDeactivate = async () => {
@@ -221,8 +242,8 @@ export default function Profiles() {
         </div>
         <div className="pf-head-actions">
           <a href={LINKS.inactive} className="pf-btn pf-btn-amber"><Archive size={16} /> Inactive List</a>
-          <button type="button" className="pf-btn pf-btn-green" onClick={handleExport}>
-            <Download size={16} /> Export
+          <button type="button" className="pf-btn pf-btn-green" onClick={handleExport} disabled={exporting}>
+            <Download size={16} /> {exporting ? "Exporting…" : "Export"}
           </button>
         </div>
       </div>
