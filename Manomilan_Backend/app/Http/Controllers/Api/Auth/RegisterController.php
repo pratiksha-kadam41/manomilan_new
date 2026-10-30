@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\ApiToken;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +41,7 @@ class RegisterController extends Controller
                 ]);
             });
 
-            $token = $user->createToken('api-token')->plainTextToken;
+            $token = ApiToken::create((int) $user->id);
 
             return response()->json([
                 'success' => true,

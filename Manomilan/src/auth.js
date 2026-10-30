@@ -79,6 +79,17 @@ export function getCachedHomeData() {
   return { user, profile };
 }
 
+export function updateCachedUserProfile(profile) {
+  const session = read();
+  if (!session?.user || !profile) return;
+
+  session.user.profile = {
+    ...(session.user.profile || {}),
+    ...profile,
+  };
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
 export function touchSession() {
   const session = read();
   if (!session) return;
@@ -173,12 +184,48 @@ export async function registerUser({ name, email, phone, password }) {
   };
 }
 
-export async function getDashboard() {
-  const body = await request("/dashboard");
-  if (!body?.success || !body?.data) {
-    throw new Error(body?.message || "Could not load dashboard data.");
+const DASHBOARD_CACHE_KEY = "candidate_dashboard_cache";
+const DASHBOARD_CACHE_TTL = 60 * 60 * 1000;
+let dashboardRequest = null;
+
+export function readDashboardCache() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(DASHBOARD_CACHE_KEY));
+    if (cached?.savedAt && Date.now() - cached.savedAt < DASHBOARD_CACHE_TTL) {
+      return cached.data || null;
+    }
+  } catch {
+    sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
   }
-  return body.data;
+  return null;
+}
+
+export function clearDashboardCache() {
+  sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+}
+
+export async function getDashboard({ force = false } = {}) {
+  if (!force) {
+    const cached = readDashboardCache();
+    if (cached) return cached;
+  }
+
+  if (!dashboardRequest) {
+    dashboardRequest = request("/dashboard").then((body) => {
+      if (!body?.success || !body?.data) {
+        throw new Error(body?.message || "Could not load dashboard data.");
+      }
+      sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({
+        savedAt: Date.now(),
+        data: body.data,
+      }));
+      return body.data;
+    }).finally(() => {
+      dashboardRequest = null;
+    });
+  }
+
+  return dashboardRequest;
 }
 
 export const getAdminDashboard = getDashboard;

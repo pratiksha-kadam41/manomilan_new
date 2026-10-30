@@ -1,6 +1,7 @@
 import {
   Bell, Heart, Home, Inbox, KeyRound, LogOut, Send, User, Users,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { accountItems, menuItems } from "../data/candidateData";
 
 const ICONS = {
@@ -20,9 +21,9 @@ export default function CandidateSidebar({ currentPath, unreadCount = 0, onLogou
     const showBadge = item.path === "/candidate/notifications" && unreadCount > 0;
 
     return (
-      <a
+      <Link
         key={item.path}
-        href={item.path}
+        to={item.path}
         title={item.label}
         className={`cnd-nav-link ${active ? "active" : ""}`}
         aria-current={active ? "page" : undefined}
@@ -32,15 +33,15 @@ export default function CandidateSidebar({ currentPath, unreadCount = 0, onLogou
         {showBadge ? (
           <span className="cnd-nav-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
         ) : null}
-      </a>
+      </Link>
     );
   };
 
   return (
     <aside className="cnd-sidebar">
-      <a className="cnd-sidebar-brand" href="/candidate" aria-label="Aaryans Manomilan candidate portal">
+      <Link className="cnd-sidebar-brand" to="/candidate" aria-label="Aaryans Manomilan candidate portal">
         <img src="/img/aaryan-manomilan-logo.png" alt="Aaryans Manomilan" />
-      </a>
+      </Link>
 
       <div className="cnd-sidebar-scroll">
         <span className="cnd-menu-label">Main menu</span>

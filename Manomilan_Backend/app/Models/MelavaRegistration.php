@@ -40,6 +40,7 @@ class MelavaRegistration extends Model
         'profile_id',
         'is_existing_website_user',
         'melava_campaign_id',
+        'melava_number',
         'melava_title',
         'registration_fee',
         'booklet_fee',

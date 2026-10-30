@@ -171,6 +171,20 @@
   background: #f3f9f9;
 }
 
+.mc-button.danger {
+  color: #a12632;
+  border: 1px solid #eabfc4;
+  background: #fff5f6;
+}
+
+.mc-form-actions,
+.mc-event-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .mc-list {
   display: grid;
 }

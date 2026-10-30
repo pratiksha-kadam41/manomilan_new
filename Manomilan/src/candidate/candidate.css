@@ -797,6 +797,36 @@ body.candidate-mode *::after {
   max-width: 660px;
 }
 
+.cnd-hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cnd-hero-refresh {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.cnd-hero-refresh:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cnd-hero-refresh:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .cnd-hero-pill {
   display: inline-flex;
   align-items: center;
@@ -1864,6 +1894,36 @@ body.candidate-mode *::after {
   grid-column: span 2;
 }
 
+.cnd-match-search-field {
+  grid-column: span 3;
+}
+
+.cnd-more-filters-button {
+  align-self: end;
+  justify-self: start;
+  height: 42px;
+}
+
+.cnd-more-filter-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--cnd-rose);
+  font-size: 10px;
+}
+
+.cnd-advanced-filter-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cnd-line);
+}
+
 .cnd-field label {
   color: var(--cnd-text);
   font-size: 10.5px;
@@ -1948,7 +2008,7 @@ body.candidate-mode *::after {
   align-items: flex-end;
   justify-content: flex-end;
   gap: 8px;
-  grid-column: span 2;
+  grid-column: 1 / -1;
 }
 
 .cnd-results-head {
@@ -3440,6 +3500,14 @@ body.candidate-mode *::after {
     grid-column: span 3;
   }
 
+  .cnd-match-search-field {
+    grid-column: span 3;
+  }
+
+  .cnd-advanced-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .cnd-filter-actions {
     grid-column: span 3;
   }
@@ -3449,6 +3517,11 @@ body.candidate-mode *::after {
   }
 
   .cnd-field-wide {
+    grid-column: span 2;
+  }
+
+  .cnd-match-search-field,
+  .cnd-advanced-filter-grid {
     grid-column: span 2;
   }
 
@@ -3846,6 +3919,15 @@ body.candidate-mode *::after {
     grid-column: span 1;
   }
 
+  .cnd-match-search-field,
+  .cnd-advanced-filter-grid {
+    grid-column: span 1;
+  }
+
+  .cnd-advanced-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
   .cnd-filter-actions .cnd-btn {
     flex: 1;
   }
@@ -4100,3 +4182,90 @@ body.candidate-mode *::after {
     transition-duration: 0.01ms !important;
   }
 }
+ .cnd-body-photo-grid {
+   display: grid;
+   grid-template-columns: repeat(3, minmax(0, 1fr));
+   gap: 16px;
+ }
+
+ .cnd-body-photo-card {
+   display: flex;
+   min-width: 0;
+   flex-direction: column;
+   align-items: center;
+   gap: 8px;
+   padding: 14px;
+   border: 1px solid var(--cnd-border);
+   border-radius: 16px;
+   background: var(--cnd-surface);
+   text-align: center;
+ }
+
+ .cnd-body-photo-card > span {
+   color: var(--cnd-muted);
+   font-size: 13px;
+ }
+
+ .cnd-body-photo-preview {
+   position: relative;
+   width: 100%;
+   aspect-ratio: 4 / 5;
+   overflow: hidden;
+   border-radius: 12px;
+   background: var(--cnd-soft);
+   display: grid;
+   place-items: center;
+   color: var(--cnd-muted);
+ }
+
+ .cnd-body-photo-preview img {
+   width: 100%;
+   height: 100%;
+   object-fit: cover;
+ }
+
+ @media (max-width: 760px) {
+   .cnd-body-photo-grid {
+     grid-template-columns: 1fr;
+     gap: 12px;
+   }
+
+   .cnd-body-photo-card {
+     display: grid;
+     grid-template-columns: 112px minmax(0, 1fr);
+     grid-template-rows: auto auto auto;
+     column-gap: 14px;
+     align-items: center;
+     padding: 12px;
+     text-align: left;
+   }
+
+   .cnd-body-photo-preview {
+     grid-row: 1 / 4;
+     height: 140px;
+     aspect-ratio: 4 / 5;
+   }
+
+   .cnd-body-photo-card strong {
+     align-self: end;
+   }
+
+   .cnd-body-photo-card > span {
+     align-self: start;
+   }
+
+   .cnd-body-photo-card .cnd-btn {
+     justify-self: start;
+   }
+ }
+
+ @media (max-width: 380px) {
+   .cnd-body-photo-card {
+     grid-template-columns: 96px minmax(0, 1fr);
+     column-gap: 12px;
+   }
+
+   .cnd-body-photo-preview {
+     height: 120px;
+   }
+ }

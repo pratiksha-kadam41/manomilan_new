@@ -70,7 +70,7 @@ export async function request(
 
   const options = { method, headers: finalHeaders };
   const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+  const timeoutId = window.setTimeout(() => controller.abort(), 30000);
   options.signal = controller.signal;
 
   if (body !== undefined && body !== null) {

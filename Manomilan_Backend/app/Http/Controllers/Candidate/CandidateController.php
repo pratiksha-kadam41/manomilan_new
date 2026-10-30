@@ -91,6 +91,8 @@ abstract class CandidateController extends Controller
 
     protected function presentOwnProfile(Profile $profile, User $user): array
     {
+        $profile->calculateCompletionPercentage();
+        $profile->refresh();
         $verification = DocumentVerification::where('profile_id', $profile->id)->first();
         $preference = $user->preference;
 
@@ -115,6 +117,9 @@ abstract class CandidateController extends Controller
             'birth_date' => $profile->birthDate,
             'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
             'photo_url' => $this->fileUrl($profile->profilePhoto),
+            'full_body_photo_url' => $this->fileUrl($profile->full_body_photo),
+            'half_body_photo_url' => $this->fileUrl($profile->half_body_photo),
+            'selfie_photo_url' => $this->fileUrl($profile->selfie_photo),
             'email' => $profile->email ?: $user->email,
             'mobile' => $user->username ?: $profile->phone,
             'city' => $this->profileCity($profile),

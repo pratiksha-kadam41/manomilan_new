@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Support\ApiToken;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Throwable;
@@ -38,8 +39,7 @@ class LoginController extends Controller
                 ], 403);
             }
 
-            $user->tokens()->where('name', 'api-token')->delete();
-            $token = $user->createToken('api-token')->plainTextToken;
+            $token = ApiToken::create((int) $user->id);
 
             return response()->json([
                 'success' => true,
@@ -61,10 +61,6 @@ class LoginController extends Controller
     {
         try {
             $user = $request->user();
-
-            if ($user && $user->currentAccessToken()) {
-                $user->currentAccessToken()->delete();
-            }
 
             return response()->json(['success' => true, 'message' => 'Logged out successfully']);
         } catch (Throwable $e) {

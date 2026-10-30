@@ -30,10 +30,11 @@ Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('thro
 Route::get('/melava-registrations/settings', [MelavaRegistrationController::class, 'settings']);
 Route::get('/melava-campaigns/active', [MelavaCampaignController::class, 'active']);
 Route::get('/melava-registrations/check', [MelavaRegistrationController::class, 'check'])->middleware('throttle:20,1');
+Route::post('/melava-registrations/draft', [MelavaRegistrationController::class, 'saveDraft'])->middleware('throttle:60,1');
 Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
 Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth.api-token')->group(function () {
     Route::get('/user', function (Request $request) {
         return response()->json(['user' => $request->user()->load('profile')]);
     });
@@ -82,6 +83,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/melava-registrations/{id}/payment-status', [MelavaRegistrationController::class, 'updatePaymentStatus']);
     Route::get('/melava-campaigns', [MelavaCampaignController::class, 'index']);
     Route::post('/melava-campaigns', [MelavaCampaignController::class, 'store']);
+    Route::put('/melava-campaigns/{id}', [MelavaCampaignController::class, 'update']);
+    Route::delete('/melava-campaigns/{id}', [MelavaCampaignController::class, 'destroy']);
     Route::put('/melava-campaigns/{id}/status', [MelavaCampaignController::class, 'updateStatus']);
 
     Route::get('/workshop-registrations', [WorkshopRegistrationController::class, 'index']);
@@ -103,6 +106,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/profile', [CandidateProfileController::class, 'update']);
         Route::post('/profile/photo', [CandidateProfileController::class, 'uploadPhoto']);
         Route::delete('/profile/photo', [CandidateProfileController::class, 'deletePhoto']);
+        Route::post('/profile/body-photos', [CandidateProfileController::class, 'uploadBodyPhotos']);
         Route::post('/profile/documents', [CandidateProfileController::class, 'uploadDocuments']);
         Route::delete('/profile/documents/{key}', [CandidateProfileController::class, 'deleteDocument']);
 
