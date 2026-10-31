@@ -105,10 +105,11 @@ export default function SystemManagement() {
     return () => window.clearTimeout(timer);
   }, [activeTab, loadAudit]);
 
-  const permissionIds = useMemo(
-    () => permissionModules.flatMap((module) =>
-      module.permissions.filter((permission) => permission.granted).map((permission) => permission.id),
-    ),
+  const permissionGrants = useMemo(
+    () => permissionModules.map((module) => ({
+      module_id: module.id,
+      actions: module.permissions.filter((permission) => permission.granted).map((permission) => permission.key),
+    })),
     [permissionModules],
   );
 
@@ -151,12 +152,12 @@ export default function SystemManagement() {
     }, "Module created.");
   };
 
-  const togglePermission = (moduleId, permissionId, checked) => {
+  const togglePermission = (moduleId, permissionKey, checked) => {
     setPermissionModules((modules) => modules.map((module) => module.id !== moduleId
       ? module
       : {
           ...module,
-          permissions: module.permissions.map((permission) => permission.id === permissionId
+          permissions: module.permissions.map((permission) => permission.key === permissionKey
             ? { ...permission, granted: checked }
             : permission),
         }));
@@ -173,7 +174,7 @@ export default function SystemManagement() {
     run(
       () => request(`/system/roles/${selectedRole}/permissions`, {
         method: "PUT",
-        body: { permissions: permissionIds },
+        body: { permissions: permissionGrants },
       }),
       "Role permissions saved.",
     );
@@ -345,7 +346,7 @@ export default function SystemManagement() {
                       <tr key={module.id}>
                         <td><strong>{module.module_name}</strong><small>{module.description}</small></td>
                         <td><code>{module.module_key}</code></td><td>{module.route || "—"}</td>
-                        <td>{module.permissions?.length || 0}</td>
+                        <td>{module.available_permissions?.length || 0}</td>
                         <td><span className={`sm-badge ${module.status ? "on" : "off"}`}>{module.status ? "Active" : "Inactive"}</span></td>
                         <td className="sm-actions">
                           <button type="button" className="sm-icon-button" title="Edit module" onClick={() => {
@@ -389,8 +390,8 @@ export default function SystemManagement() {
                         <td><strong>{module.module_name}</strong><small>{module.module_key}</small></td>
                         <td><input aria-label={`Select all permissions for ${module.module_name}`} type="checkbox" checked={module.permissions.length > 0 && module.permissions.every((permission) => permission.granted)} onChange={(event) => toggleModulePermissions(module, event.target.checked)} /></td>
                         <td className="sm-permissions">{module.permissions.map((permission) => (
-                          <label key={permission.id}>
-                            <input type="checkbox" checked={Boolean(permission.granted)} onChange={(event) => togglePermission(module.id, permission.id, event.target.checked)} />
+                          <label key={permission.key}>
+                            <input type="checkbox" checked={Boolean(permission.granted)} onChange={(event) => togglePermission(module.id, permission.key, event.target.checked)} />
                             {permission.permission_key}
                           </label>
                         ))}</td>

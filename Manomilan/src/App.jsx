@@ -168,7 +168,7 @@ export default function App() {
   const isLogin = path === "/login" || path === "/register";
   const isMelavaRegistration = path === "/melava-registration";
 
-  // Private pages need a login
+  // Only admin and candidate pages require an authenticated session.
   const needsLogin = (isAdminPath || isCandidatePath) && !session;
 
   // A candidate who types /admin is sent to their own page
