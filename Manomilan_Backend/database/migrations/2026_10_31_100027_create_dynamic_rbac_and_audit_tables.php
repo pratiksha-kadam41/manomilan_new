@@ -49,43 +49,41 @@ return new class extends Migration
 
         $this->populateModuleKeys();
 
-        Schema::table('modules', function (Blueprint $table) {
-            $table->unique('module_key');
-        });
+        $hasUniqueModuleKey = collect(Schema::getIndexes('modules'))->contains(
+            fn (array $index): bool => $index['unique'] && $index['columns'] === ['module_key']
+        );
+        if (! $hasUniqueModuleKey) {
+            Schema::table('modules', function (Blueprint $table) {
+                $table->unique('module_key');
+            });
+        }
 
-        Schema::create('module_permissions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('role_id')->constrained('roles')->cascadeOnDelete();
-            $table->foreignId('module_id')->constrained('modules')->cascadeOnDelete();
-            foreach (self::PERMISSIONS as $column) {
-                $table->boolean($column)->default(false);
-            }
-            $table->timestamps();
-            $table->unique(['role_id', 'module_id']);
-        });
+        $this->ensureModulePermissionsTable();
 
-        Schema::create('activity_logs', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('user_name_snapshot')->nullable();
-            $table->string('action', 100);
-            $table->foreignId('module_id')->nullable()->constrained('modules')->nullOnDelete();
-            $table->string('module_name_snapshot')->nullable();
-            $table->string('entity_type', 120)->nullable();
-            $table->string('entity_id', 120)->nullable();
-            $table->string('candidate_id', 120)->nullable();
-            $table->json('old_values')->nullable();
-            $table->json('new_values')->nullable();
-            $table->text('description')->nullable();
-            $table->string('ip_address', 45)->nullable();
-            $table->text('user_agent')->nullable();
-            $table->string('request_method', 12)->nullable();
-            $table->text('request_url')->nullable();
-            $table->timestamps();
-            $table->index(['created_at', 'action']);
-            $table->index(['user_id', 'created_at']);
-            $table->index(['candidate_id', 'created_at']);
-        });
+        if (! Schema::hasTable('activity_logs')) {
+            Schema::create('activity_logs', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('user_name_snapshot')->nullable();
+                $table->string('action', 100);
+                $table->foreignId('module_id')->nullable()->constrained('modules')->nullOnDelete();
+                $table->string('module_name_snapshot')->nullable();
+                $table->string('entity_type', 120)->nullable();
+                $table->string('entity_id', 120)->nullable();
+                $table->string('candidate_id', 120)->nullable();
+                $table->json('old_values')->nullable();
+                $table->json('new_values')->nullable();
+                $table->text('description')->nullable();
+                $table->string('ip_address', 45)->nullable();
+                $table->text('user_agent')->nullable();
+                $table->string('request_method', 12)->nullable();
+                $table->text('request_url')->nullable();
+                $table->timestamps();
+                $table->index(['created_at', 'action']);
+                $table->index(['user_id', 'created_at']);
+                $table->index(['candidate_id', 'created_at']);
+            });
+        }
 
         $this->seedRoleModulePermissions();
     }
@@ -111,6 +109,80 @@ return new class extends Migration
                 $table->dropColumn('is_active');
             });
         }
+    }
+
+    private function ensureModulePermissionsTable(): void
+    {
+        if (! Schema::hasTable('module_permissions')) {
+            $this->createModulePermissionsTable();
+
+            return;
+        }
+
+        if (Schema::hasColumn('module_permissions', 'role_id')
+            && Schema::hasColumn('module_permissions', 'can_view')) {
+            return;
+        }
+
+        if (! Schema::hasColumn('module_permissions', 'permission_key')
+            || ! Schema::hasColumn('module_permissions', 'module_id')) {
+            throw new RuntimeException('The existing module_permissions table has an unsupported schema.');
+        }
+
+        $legacyGrants = collect();
+        if (Schema::hasTable('role_module_permissions')) {
+            $legacyGrants = DB::table('role_module_permissions')
+                ->join('module_permissions', 'module_permissions.id', '=', 'role_module_permissions.module_permission_id')
+                ->get([
+                    'role_module_permissions.role_id',
+                    'module_permissions.module_id',
+                    'module_permissions.permission_key',
+                ]);
+            Schema::drop('role_module_permissions');
+        }
+
+        Schema::drop('module_permissions');
+        $this->createModulePermissionsTable();
+
+        $grantsByRoleAndModule = [];
+        foreach ($legacyGrants as $grant) {
+            $grantsByRoleAndModule[$grant->role_id][$grant->module_id][$grant->permission_key] = true;
+        }
+
+        $now = now();
+        $rows = [];
+        foreach (DB::table('roles')->get(['id']) as $role) {
+            foreach (DB::table('modules')->get(['id']) as $module) {
+                $row = [
+                    'role_id' => $role->id,
+                    'module_id' => $module->id,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+                foreach (self::PERMISSIONS as $action => $column) {
+                    $row[$column] = isset($grantsByRoleAndModule[$role->id][$module->id][$action]);
+                }
+                $rows[] = $row;
+            }
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('module_permissions')->insert($chunk);
+        }
+    }
+
+    private function createModulePermissionsTable(): void
+    {
+        Schema::create('module_permissions', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('role_id')->constrained('roles')->cascadeOnDelete();
+            $table->foreignId('module_id')->constrained('modules')->cascadeOnDelete();
+            foreach (self::PERMISSIONS as $column) {
+                $table->boolean($column)->default(false);
+            }
+            $table->timestamps();
+            $table->unique(['role_id', 'module_id']);
+        });
     }
 
     private function populateModuleKeys(): void
@@ -260,8 +332,9 @@ return new class extends Migration
             }
         }
 
+        $updateColumns = [...array_values(self::PERMISSIONS), 'updated_at'];
         foreach (array_chunk($rows, 500) as $chunk) {
-            DB::table('module_permissions')->insert($chunk);
+            DB::table('module_permissions')->upsert($chunk, ['role_id', 'module_id'], $updateColumns);
         }
     }
 };
