@@ -15,6 +15,9 @@ class SuperAdminSeeder extends Seeder
     public function run(): void
     {
         $email = trim((string) env('SUPER_ADMIN_EMAIL', 'super'));
+        $password = (string) env('SUPER_ADMIN_PASSWORD', 'password');
+
+        $email = trim((string) env('SUPER_ADMIN_EMAIL', 'super'));
 $password = (string) env('SUPER_ADMIN_PASSWORD', 'password');
         if (($email === '') !== ($password === '')) {
             throw new RuntimeException('Both SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD must be configured to seed a Super Admin login.');

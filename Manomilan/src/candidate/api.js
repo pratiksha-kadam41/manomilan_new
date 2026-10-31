@@ -98,7 +98,9 @@ export const getDashboard = async ({ force = false } = {}) => {
 
 export const createCandidateProfile = async (payload) => {
   invalidateCandidateProfileCache();
-  return data(await request("/candidate/profile", { method: "POST", body: payload }));
+  const result = data(await request("/candidate/profile", { method: "POST", body: payload }));
+  window.dispatchEvent(new CustomEvent("candidate:profile-created", { detail: result }));
+  return result;
 };
 
 export const updateCandidateProfile = async (payload) => {
