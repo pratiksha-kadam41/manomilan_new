@@ -242,15 +242,15 @@ class ProfileController extends Controller
         } elseif ($sortBy === 'serial_no') {
             $query->orderBy('profiles.serial_no', $sortOrder);
         } else {
-            $query->orderBy('profiles.created_at', $sortOrder);
+            $query->orderByRaw("COALESCE((SELECT MAX(mr.melava_registered_at) FROM melava_registrations AS mr WHERE mr.profile_id = profiles.id AND mr.melava_batch = 'october_2026'), profiles.created_at) IS NULL ASC")
+                ->orderByRaw("COALESCE((SELECT MAX(mr.melava_registered_at) FROM melava_registrations AS mr WHERE mr.profile_id = profiles.id AND mr.melava_batch = 'october_2026'), profiles.created_at) {$sortOrder}");
         }
 
-        $filename = 'profiles_export-'.now()->format('Y-m-d_H-i-s').'.csv';
+        $filename = 'profiles_export_'.now()->format('Y-m-d_H-i-s').'.csv';
 
         return response()->streamDownload(function () use ($query) {
             $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fwrite($out, implode(',', [
+            fputcsv($out, [
                 'Serial No',
                 'Registration No',
                 'Full Name',
@@ -272,7 +272,7 @@ class ProfileController extends Controller
                 'Father Phone Number',
                 'Source of Information',
                 'Status',
-            ])."\r\n");
+            ]);
 
             $missing = static fn ($value) => $value === null || (is_string($value) && trim($value) === '')
                 ? 'N/A'
@@ -322,12 +322,12 @@ class ProfileController extends Controller
                         $profile->fatherContactNumber ?? 'N/A',
                         $registeredMelavaRegistration?->source_of_information ?? 'N/A',
                         $missing($profile->profileVerificationStatus),
-                    ], ',', '"', '');
+                    ]);
                 }
             });
 
             fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, $filename, ['Content-Type' => 'text/csv']);
     }
 
     public function show(Request $request, $id)
