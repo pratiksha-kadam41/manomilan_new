@@ -4,6 +4,7 @@ namespace App;
 
 use App\Models\ModulePermission;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Module extends Model
 {
@@ -45,5 +46,11 @@ class Module extends Model
     public function permissions()
     {
         return $this->hasMany(ModulePermission::class, 'module_id');
+    }
+
+    public function isCandidatePortalModule(): bool
+    {
+        return collect($this->frontend_routes ?: [])
+            ->contains(fn ($route) => is_string($route) && Str::startsWith($route, '/candidate'));
     }
 }

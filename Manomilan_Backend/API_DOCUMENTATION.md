@@ -16,7 +16,7 @@ Base URL: http://localhost:8000/api
 - PUT /system/roles/{role} - Edit or activate/deactivate a role
 - DELETE /system/roles/{role} - Delete a role with no assigned users (protected roles cannot be deleted)
 - GET /system/roles/{role}/permissions - Read a role's module permission matrix
-- PUT /system/roles/{role}/permissions - Replace a role's grants transactionally
+- PUT /system/roles/{role}/permissions - Replace a role's grants transactionally; Candidate roles are limited to candidate portal modules
 - POST /system/modules - Create a module with descriptive name and route metadata
 - PUT /system/modules/{module} - Edit or activate/deactivate a module
 - DELETE /system/modules/{module} - Delete an unused module
@@ -32,6 +32,12 @@ php artisan migrate --path=database/migrations/2026_10_31_000001_separate_dashbo
 ```
 
 Existing roles are enabled by default. Super Admin receives all module permissions; Candidate receives scoped self-service grants. Other roles start with no grants and must be configured by Super Admin. API authorization is deny-by-default for protected authenticated routes.
+
+Candidate portal uploads are stored in the flat public-storage directories `candidate_images/` and `candidate_documents/`; uploads are not split into per-candidate directories. Existing database media paths are not rewritten when files are consolidated: the candidate API resolves their stored filenames in the new flat directories.
+
+Module access uses three RBAC tables: `roles`, `modules`, and `module_permissions`. `module_permissions` stores one row per role/module with boolean action columns such as `can_view`, `can_edit`, and `can_approve`; `users.role_id` connects each user to a role. The initial RBAC migration creates this final schema directly.
+
+After migrations, run `php artisan db:seed` to create the Super Admin user (`username: super`, default local password: `password`, role ID: 1), grant that role all module actions, and seed the Candidate role with candidate-portal-only access. The Candidate seeder also assigns the Candidate role to existing `user_type=21` accounts that do not yet have a role. The Candidate permission matrix shows Dashboard, Profile, Matches, Interests, Notifications, and Change Password routes; admin modules are excluded and cannot be granted through the role-permission API. The Super Admin account is marked to require a password change on first login. In production, set `SUPER_ADMIN_PASSWORD` to a secure secret before seeding; the default password is not used in production. Optionally set `SUPER_ADMIN_EMAIL` (default: `super@manomilan.local`).
 
 ## Profiles
 - GET /profiles (auth) - List profiles

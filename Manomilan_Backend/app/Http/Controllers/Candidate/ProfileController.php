@@ -250,7 +250,7 @@ class ProfileController extends CandidateController
         $newPath = null;
 
         try {
-            $newPath = $request->file('photo')->store('candidate/profile_photos/'.$profile->id, 'public');
+            $newPath = $request->file('photo')->store('candidate_images', 'public');
 
             DB::transaction(function () use ($profile, $newPath) {
                 $locked = Profile::lockForUpdate()->find($profile->id);
@@ -347,7 +347,7 @@ class ProfileController extends CandidateController
             foreach ($photoFields as $field) {
                 if ($request->hasFile($field)) {
                     $stored[$field] = $request->file($field)->store(
-                        'candidate/body_photos/'.$profile->id.'/'.$field,
+                        'candidate_images',
                         'public'
                     );
                 }
@@ -402,7 +402,7 @@ class ProfileController extends CandidateController
             foreach (self::DOCUMENT_KEYS as $key) {
                 if ($request->hasFile($key)) {
                     $stored[$key] = $request->file($key)->store(
-                        'candidate/documents/'.$profile->id,
+                        'candidate_documents',
                         'public'
                     );
                 }
@@ -537,14 +537,19 @@ class ProfileController extends CandidateController
 
         $path = ltrim(trim($path), '/');
 
+        $path = preg_replace('#^storage/#', '', $path);
         if (str_starts_with($path, 'candidate/')) {
-            Storage::disk('public')->delete($path);
+            $legacyPath = substr($path, strlen('candidate/'));
+            $directory = str_starts_with($legacyPath, 'documents/')
+                ? 'candidate_documents'
+                : 'candidate_images';
+            Storage::disk('public')->delete($directory.'/'.basename($legacyPath));
 
             return;
         }
 
-        if (str_starts_with($path, 'storage/candidate/')) {
-            Storage::disk('public')->delete(substr($path, strlen('storage/')));
+        if (str_starts_with($path, 'candidate_images/') || str_starts_with($path, 'candidate_documents/')) {
+            Storage::disk('public')->delete($path);
 
             return;
         }
