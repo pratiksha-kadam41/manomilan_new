@@ -8,6 +8,30 @@ Base URL: http://localhost:8000/api
 - POST /logout (auth) - Logout
 - PUT /change-password (auth) - Change password
 - GET /user (auth) - Get authenticated user
+- GET /system/my-permissions (auth) - Load the current role's database-backed module permissions
+
+## System Management (Super Admin)
+- GET /system - Roles, modules, and system statistics
+- POST /system/roles - Create a role
+- PUT /system/roles/{role} - Edit or activate/deactivate a role
+- DELETE /system/roles/{role} - Delete a role with no assigned users (protected roles cannot be deleted)
+- GET /system/roles/{role}/permissions - Read a role's module permission matrix
+- PUT /system/roles/{role}/permissions - Replace a role's grants transactionally
+- POST /system/modules - Create a module with descriptive name and route metadata
+- PUT /system/modules/{module} - Edit or activate/deactivate a module
+- DELETE /system/modules/{module} - Delete an unused module
+- GET /system/users - Search and list user role assignments
+- PATCH /system/users/{user}/role - Assign a role to another user
+- GET /system/audit-logs - Paginated, filterable activity log
+- GET /system/audit-logs/export - Export filtered audit logs as CSV
+
+Apply the RBAC schema with:
+```sh
+php artisan migrate --path=database/migrations/2026_10_31_000000_create_dynamic_rbac_and_audit_tables.php
+php artisan migrate --path=database/migrations/2026_10_31_000001_separate_dashboard_and_reports_permissions.php
+```
+
+Existing roles are enabled by default. Super Admin receives all module permissions; Candidate receives scoped self-service grants. Other roles start with no grants and must be configured by Super Admin. API authorization is deny-by-default for protected authenticated routes.
 
 ## Profiles
 - GET /profiles (auth) - List profiles

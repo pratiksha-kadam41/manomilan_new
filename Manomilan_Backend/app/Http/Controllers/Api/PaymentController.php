@@ -327,7 +327,7 @@ class PaymentController extends Controller
 
     private function isAdmin($user): bool
     {
-        return $user && ((int) $user->role_id === 1 || (string) $user->user_type === '00');
+        return $user && $user->isAdmin();
     }
 
     private function forbidden()

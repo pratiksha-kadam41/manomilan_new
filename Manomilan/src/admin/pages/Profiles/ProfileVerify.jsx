@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
 import { request } from "../../../api";
+import { useAdminPermission } from "../../../permission-context";
 import "./verify.css";
 
 /* =====================================================================
@@ -99,6 +100,7 @@ function Photo({ profile }) {
    3. THE PAGE
    ==================================================================== */
 export default function ProfileVerify({ params }) {
+  const canApproveProfile = useAdminPermission("approve", "/admin/verified-profiles");
   const id = params?.id;
   const idOk = isValidId(id);
 
@@ -306,9 +308,11 @@ export default function ProfileVerify({ params }) {
           {/* ---------- Buttons (always visible) ---------- */}
           <div className="pv-foot">
             <a href={LINKS.back} className="pv-btn pv-btn-ghost"><ArrowLeft size={16} /> Back</a>
-            <button type="submit" className="pv-btn pv-btn-green" disabled={saving || loading || !!error || !dirty}>
-              {saving ? <><Loader2 size={16} className="pv-spin" /> Saving…</> : <><Save size={16} /> Save Verification</>}
-            </button>
+            {canApproveProfile ? (
+              <button type="submit" className="pv-btn pv-btn-green" disabled={saving || loading || !!error || !dirty}>
+                {saving ? <><Loader2 size={16} className="pv-spin" /> Saving…</> : <><Save size={16} /> Save Verification</>}
+              </button>
+            ) : null}
           </div>
         </form>
 

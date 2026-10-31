@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import { useAdminPermission } from "../../permission-context";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
 import { request } from "../../api";
 import "./melavaPayments.css";
@@ -33,6 +34,7 @@ const formatDate = (value) => {
 };
 
 export default function MelavaPayments() {
+  const canApprovePayments = useAdminPermission("approve", "/admin/melava");
   const [registrations, setRegistrations] = useState([]);
   const [stats, setStats] = useState({ total: 0, groom: 0, bride: 0, booklet: 0 });
   const [search, setSearch] = useState("");
@@ -337,9 +339,11 @@ export default function MelavaPayments() {
                         >
                           <FileText size={15} /> BioData
                         </button>
-                        <button type="button" className="mp-btn mp-btn-payment" onClick={() => openPayment(row)}>
-                          <Wallet size={15} /> Payment
-                        </button>
+                        {canApprovePayments ? (
+                          <button type="button" className="mp-btn mp-btn-payment" onClick={() => openPayment(row)}>
+                            <Wallet size={15} /> Payment
+                          </button>
+                        ) : null}
                         <Link className="mp-btn mp-btn-edit" to={`/melava-registration?admin_edit=${row.id}`}>Edit</Link>
                       </div>
                     </td>
@@ -368,7 +372,7 @@ export default function MelavaPayments() {
         ) : null}
       </div>
 
-      {selectedRegistration ? (
+      {selectedRegistration && canApprovePayments ? (
         <div className="mp-modal" role="presentation" onMouseDown={(event) => {
           if (event.target === event.currentTarget) closePayment();
         }}>

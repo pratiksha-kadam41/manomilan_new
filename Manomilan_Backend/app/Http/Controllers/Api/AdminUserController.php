@@ -26,12 +26,9 @@ class AdminUserController extends Controller
 
         $term = trim((string) ($filters['q'] ?? ''));
         $eligibleUsers = User::query()
-            ->where(function ($query) {
-                $query->whereNull('user_type')->orWhere('user_type', '!=', '00');
-            })
-            ->where(function ($query) {
-                $query->whereNull('role_id')->orWhere('role_id', '!=', 1);
-            });
+            ->whereDoesntHave('role', fn ($query) => $query
+                ->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])
+                ->orWhere('user_type', '00'));
         $stats = (clone $eligibleUsers)
             ->selectRaw("
                 COUNT(*) as total,
@@ -92,12 +89,9 @@ class AdminUserController extends Controller
 
         $user = User::query()
             ->whereKey($id)
-            ->where(function ($query) {
-                $query->whereNull('user_type')->orWhere('user_type', '!=', '00');
-            })
-            ->where(function ($query) {
-                $query->whereNull('role_id')->orWhere('role_id', '!=', 1);
-            })
+            ->whereDoesntHave('role', fn ($query) => $query
+                ->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])
+                ->orWhere('user_type', '00'))
             ->first();
 
         if (! $user) {
@@ -136,6 +130,6 @@ class AdminUserController extends Controller
 
     private function isSuperAdmin(Request $request): bool
     {
-        return $request->user() && (string) $request->user()->user_type === '00';
+        return $request->user()?->isSuperAdmin() ?? false;
     }
 }

@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\PreferenceController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReceiptController;
+use App\Http\Controllers\Api\SystemManagementController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\WorkshopRegistrationController;
 use App\Http\Controllers\Candidate\DashboardController as CandidateDashboardController;
@@ -35,14 +36,32 @@ Route::post('/melava-registrations/draft', [MelavaRegistrationController::class,
 Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
 Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
 
-Route::middleware('auth.api-token')->group(function () {
+Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function () {
     Route::get('/user', function (Request $request) {
         return response()->json(['user' => $request->user()->load('profile')]);
     });
     Route::post('/logout', [LoginController::class, 'logout']);
     Route::put('/change-password', [ChangePasswordController::class, 'changePassword']);
 
+    Route::get('/system/my-permissions', [SystemManagementController::class, 'myPermissions']);
+    Route::prefix('system')->middleware('superadmin')->group(function () {
+        Route::get('/', [SystemManagementController::class, 'index']);
+        Route::get('/roles/{role}/permissions', [SystemManagementController::class, 'showRolePermissions'])->whereNumber('role');
+        Route::put('/roles/{role}/permissions', [SystemManagementController::class, 'updateRolePermissions'])->whereNumber('role');
+        Route::post('/roles', [SystemManagementController::class, 'storeRole']);
+        Route::put('/roles/{role}', [SystemManagementController::class, 'updateRole'])->whereNumber('role');
+        Route::delete('/roles/{role}', [SystemManagementController::class, 'deleteRole'])->whereNumber('role');
+        Route::post('/modules', [SystemManagementController::class, 'storeModule']);
+        Route::put('/modules/{module}', [SystemManagementController::class, 'updateModule'])->whereNumber('module');
+        Route::delete('/modules/{module}', [SystemManagementController::class, 'deleteModule'])->whereNumber('module');
+        Route::get('/users', [SystemManagementController::class, 'users']);
+        Route::patch('/users/{user}/role', [SystemManagementController::class, 'assignUserRole'])->whereNumber('user');
+        Route::get('/audit-logs/export', [SystemManagementController::class, 'exportAuditLogs']);
+        Route::get('/audit-logs', [SystemManagementController::class, 'auditLogs']);
+    });
+
     Route::get('/dashboard', [HomeController::class, 'dashboard']);
+    Route::get('/reports', [HomeController::class, 'dashboard']);
     Route::get('/home-data', [HomeController::class, 'homeData']);
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword'])->whereNumber('id');

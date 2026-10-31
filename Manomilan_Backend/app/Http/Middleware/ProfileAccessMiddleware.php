@@ -23,7 +23,7 @@ class ProfileAccessMiddleware
         $user = Auth::user();
 
         // Super Admin gets access to any profile
-        if ($user->role_id == 1) {
+        if ($user->isSuperAdmin()) {
             return $next($request);
         }
 

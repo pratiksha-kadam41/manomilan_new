@@ -13,9 +13,9 @@ localStorage.removeItem("adminToken");
 export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 
 const roleForUser = (user) =>
-  Number(user?.role_id) === 1 || String(user?.user_type) === "00"
-    ? "admin"
-    : "candidate";
+  String(user?.portal || user?.role?.user_type || user?.user_type) === "21"
+    ? "candidate"
+    : "admin";
 
 export const homeForRole = (role) =>
   isAdminRole(role) ? "/admin" : "/candidate";
@@ -212,7 +212,7 @@ export function clearDashboardCache() {
   sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
 
-export async function getDashboard({ force = false, period = "", from = "", to = "" } = {}) {
+async function loadDashboard(endpoint, { force = false, period = "", from = "", to = "" } = {}) {
   if (!force) {
     const cached = readDashboardCache();
     if (cached) return cached;
@@ -224,7 +224,7 @@ export async function getDashboard({ force = false, period = "", from = "", to =
   if (to) query.set("to", to);
   const queryString = query.toString();
 
-  dashboardRequest = request(`/dashboard${queryString ? `?${queryString}` : ""}`).then((body) => {
+  dashboardRequest = request(`${endpoint}${queryString ? `?${queryString}` : ""}`).then((body) => {
       if (!body?.success || !body?.data) {
         throw new Error(body?.message || "Could not load dashboard data.");
       }
@@ -240,7 +240,8 @@ export async function getDashboard({ force = false, period = "", from = "", to =
   return dashboardRequest;
 }
 
-export const getAdminDashboard = getDashboard;
+export const getDashboard = (options = {}) => loadDashboard("/dashboard", options);
+export const getAdminDashboard = (options = {}) => loadDashboard("/reports", options);
 
 export async function getHomeData() {
   const body = await request("/home-data");

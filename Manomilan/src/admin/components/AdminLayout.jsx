@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Menu, ChevronDown, KeyRound, LogOut } from "lucide-react";
-import { clearSession } from "../../auth";
+import { clearSession, getSession } from "../../auth";
 import Sidebar from "./Sidebar";
 import "../admin.css";
 
 export default function AdminLayout({ currentPath, contentClassName = "", children }) {
+  const session = getSession();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -84,10 +85,10 @@ export default function AdminLayout({ currentPath, contentClassName = "", childr
               className={`adm-user ${menuOpen ? "open" : ""}`}
               onClick={() => setMenuOpen(!menuOpen)}
             >
-              <div className="adm-avatar">S</div>
+              <div className="adm-avatar">{(session?.user?.name || "U").slice(0, 1).toUpperCase()}</div>
               <div className="adm-user-text">
-                <strong>Super admin</strong>
-                <small>super</small>
+                <strong>{session?.user?.name || "User"}</strong>
+                <small>{session?.user?.role?.name || "Staff"}</small>
               </div>
               <ChevronDown size={18} className="adm-chevron" />
             </button>

@@ -57,6 +57,46 @@ class User extends Authenticatable
         return $this->belongsTo(\App\Profile::class, 'profile_id');
     }
 
+    public function role()
+    {
+        return $this->belongsTo(\App\Role::class, 'role_id');
+    }
+
+    public function hasModulePermission(string $moduleKey, string $permission): bool
+    {
+        if ($this->isSuperAdmin()) {
+            return true;
+        }
+
+        return $this->role()
+            ->where('is_active', true)
+            ->whereHas('modulePermissions', function ($query) use ($moduleKey, $permission) {
+                $query->where(function ($permissionQuery) use ($permission) {
+                    $permissionQuery->where('permission_key', $permission)
+                        ->orWhere('permission_key', 'manage');
+                })
+                    ->whereHas('module', function ($moduleQuery) use ($moduleKey) {
+                        $moduleQuery->where('module_key', $moduleKey)
+                            ->where('status', true);
+                    });
+            })
+            ->exists();
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role?->is_active === true
+            && preg_replace('/[^a-z]/', '', strtolower((string) $this->role?->name)) === 'superadmin'
+            && (string) $this->role?->user_type === '00';
+    }
+
+    public function portal(): string
+    {
+        return (string) ($this->role?->user_type ?? $this->user_type) === '21'
+            ? 'candidate'
+            : 'admin';
+    }
+
     public function preference()
     {
         return $this->hasOne(\App\Preference::class, 'user_id');
@@ -74,6 +114,6 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return (int) $this->role_id === 1 || (string) $this->user_type === '00';
+        return $this->portal() === 'admin';
     }
 }

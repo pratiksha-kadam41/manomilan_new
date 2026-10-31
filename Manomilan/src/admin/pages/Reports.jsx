@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, FileText, RefreshCw } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { getAdminDashboard } from "../../auth";
+import { PermissionGate } from "../../permission-context";
 import "./reports.css";
 
 const PERIODS = [
@@ -110,10 +111,12 @@ export default function Reports() {
               <RefreshCw size={16} className={loading ? "ar-spin" : ""} />
               Refresh
             </button>
-            <button type="button" className="ar-button primary" onClick={() => exportReport(data, period, from, to)} disabled={!data || loading}>
-              <Download size={16} />
-              Export CSV
-            </button>
+            <PermissionGate permission="export" currentPath="/admin/report">
+              <button type="button" className="ar-button primary" onClick={() => exportReport(data, period, from, to)} disabled={!data || loading}>
+                <Download size={16} />
+                Export CSV
+              </button>
+            </PermissionGate>
           </div>
         </header>
 

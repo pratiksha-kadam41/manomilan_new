@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Api\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Support\ApiToken;
+use App\Support\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Throwable;
 
 class LoginController extends Controller
 {
+    public function __construct(private readonly AuditLogger $auditLogger)
+    {
+    }
+
     public function login(Request $request)
     {
         $credentials = $request->validate([
@@ -39,7 +44,17 @@ class LoginController extends Controller
                 ], 403);
             }
 
+            $user->load('role');
+            if (! $user->role || $user->role->is_active === false) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your assigned role is inactive. Please contact the administrator.',
+                ], 403);
+            }
+
             $token = ApiToken::create((int) $user->id);
+            $user->setAttribute('portal', $user->portal());
+            $this->auditLogger->log($user, 'auth.login', 'authentication_security', 'User', $user->id, $user->profile_id, [], []);
 
             return response()->json([
                 'success' => true,

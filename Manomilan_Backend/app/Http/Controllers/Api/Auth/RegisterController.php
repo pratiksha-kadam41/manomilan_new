@@ -29,12 +29,19 @@ class RegisterController extends Controller
 
         try {
             $user = DB::transaction(function () use ($data) {
+                $candidateRoleId = DB::table('roles')
+                    ->where('user_type', '21')
+                    ->value('id');
+                if (! $candidateRoleId) {
+                    throw new \RuntimeException('Candidate role is not configured.');
+                }
+
                 return User::create([
                     'name' => $data['name'],
                     'email' => $data['email'],
                     'username' => $data['phone'],
                     'user_type' => '21',
-                    'role_id' => 3,
+                    'role_id' => $candidateRoleId,
                     'password' => $data['password'],
                     'is_password_changed' => 1,
                     'status' => 'active',
@@ -42,6 +49,8 @@ class RegisterController extends Controller
             });
 
             $token = ApiToken::create((int) $user->id);
+            $user->load('role');
+            $user->setAttribute('portal', $user->portal());
 
             return response()->json([
                 'success' => true,

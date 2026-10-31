@@ -757,6 +757,13 @@ class MelavaRegistrationController extends Controller
                 $paymentScreenshot = $this->storeUpload($request->file('payment_screenshot'), 'payment_screenshots');
 
                 if (! $existingUser) {
+                    $candidateRoleId = DB::table('roles')
+                        ->where('user_type', '21')
+                        ->value('id');
+                    if (! $candidateRoleId) {
+                        throw new \RuntimeException('Candidate role is not configured.');
+                    }
+
                     $email = $data['email'] ?? null;
                     if (! $email) {
                         $email = $mobile.'@melava.com';
@@ -772,8 +779,8 @@ class MelavaRegistrationController extends Controller
                         'name' => $data['fullName'],
                         'email' => $email,
                         'password' => Hash::make('manomilana'),
-                        'user_type' => 21,
-                        'role_id' => 3,
+                        'user_type' => '21',
+                        'role_id' => $candidateRoleId,
                         'status' => 'active',
                         'is_password_changed' => 0,
                     ]);
@@ -1541,7 +1548,7 @@ class MelavaRegistrationController extends Controller
 
     private function isAdmin($user): bool
     {
-        return $user && ((int) $user->role_id === 1 || (string) $user->user_type === '00');
+        return $user && $user->isAdmin();
     }
 
     private function forbidden()

@@ -8,6 +8,7 @@ import {
 import AdminLayout from "../../components/AdminLayout";
 import { request, download } from "../../../api";
 import { touchSession } from "../../../auth";
+import { PermissionGate, useAdminPermission } from "../../../permission-context";
 import "./profiles.css";
 
 const LINKS = {
@@ -116,6 +117,8 @@ export default function Profiles() {
   const { pathname } = useLocation();
   const currentPath = pathname.replace(/\/+$/, "") || "/";
   const view = PROFILE_VIEWS[currentPath] || PROFILE_VIEWS["/admin/profiles"];
+  const canEditProfiles = useAdminPermission("edit", currentPath);
+  const canDeactivateProfiles = useAdminPermission("edit", "/admin/verified-profiles");
   const verificationStatus =
     currentPath === "/admin/verified-profiles"
       ? "verified"
@@ -287,9 +290,11 @@ export default function Profiles() {
         </div>
         <div className="pf-head-actions">
           <a href={LINKS.inactive} className="pf-btn pf-btn-amber"><Archive size={16} /> Inactive List</a>
-          <button type="button" className="pf-btn pf-btn-green" onClick={handleExport} disabled={exporting}>
-            <Download size={16} /> {exporting ? "Exporting…" : "Export"}
-          </button>
+          <PermissionGate permission="export" currentPath={currentPath}>
+            <button type="button" className="pf-btn pf-btn-green" onClick={handleExport} disabled={exporting}>
+              <Download size={16} /> {exporting ? "Exporting…" : "Export"}
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -375,7 +380,7 @@ export default function Profiles() {
                       </td>
                       <td>
                         <div className="pf-actions">
-                          <a href={LINKS.edit(p.id)} className="pf-act edit" title="Edit" aria-label="Edit"><Pencil size={15} /><span className="pf-lbl">Edit</span></a>
+                          {canEditProfiles ? <a href={LINKS.edit(p.id)} className="pf-act edit" title="Edit" aria-label="Edit"><Pencil size={15} /><span className="pf-lbl">Edit</span></a> : null}
 
                           <a href={LINKS.payment(p.id)} className="pf-act pay" title="Payment" aria-label="Payment">
                             <CreditCard size={15} /><span className="pf-lbl">Payment</span>
@@ -399,9 +404,9 @@ export default function Profiles() {
                             </button>
                           )}
 
-                          <button type="button" className="pf-act danger" onClick={() => setConfirm(p)} title="Deactivate" aria-label="Deactivate">
+                          {canDeactivateProfiles ? <button type="button" className="pf-act danger" onClick={() => setConfirm(p)} title="Deactivate" aria-label="Deactivate">
                             <UserX size={15} /><span className="pf-lbl">Deactivate</span>
-                          </button>
+                          </button> : null}
                         </div>
                       </td>
                     </tr>
@@ -459,7 +464,7 @@ export default function Profiles() {
       )}
 
       {/* ---------- Deactivate confirmation ---------- */}
-      {confirm && (
+      {confirm && canDeactivateProfiles && (
         <div className="pf-modal" onClick={() => !busy && setConfirm(null)}>
           <div className="pf-dialog" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <div className="pf-dialog-icon"><AlertTriangle size={26} /></div>

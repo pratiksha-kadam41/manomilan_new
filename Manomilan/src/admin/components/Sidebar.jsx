@@ -1,12 +1,26 @@
 import {
-  LayoutDashboard, Users, Globe, BadgeCheck, ShieldAlert,
-  CalendarHeart, GraduationCap, UserPlus, KeyRound, FileText, LogOut,
+  BadgeCheck,
+  CalendarHeart,
   CalendarPlus,
+  FileText,
+  Globe,
+  GraduationCap,
+  KeyRound,
+  LayoutDashboard,
+  LogOut,
+  Settings,
+  ShieldAlert,
+  UserPlus,
+  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-
-import { clearSession } from "../../auth";
+import { clearSession, getSession } from "../../auth";
 import { menuItems } from "../data/adminData";
+
+const SYSTEM_MANAGEMENT = {
+  label: "System Management",
+  path: "/admin/system-management",
+};
 
 const ICONS = {
   "/admin": LayoutDashboard,
@@ -20,6 +34,7 @@ const ICONS = {
   "/admin/requests": UserPlus,
   "/admin/reset-passwords": KeyRound,
   "/admin/report": FileText,
+  "/admin/system-management": Settings,
 };
 
 const ICON_COLORS = {
@@ -34,10 +49,18 @@ const ICON_COLORS = {
   "/admin/requests": "#0ea5e9",
   "/admin/reset-passwords": "#f59e0b",
   "/admin/report": "#6366f1",
+  "/admin/system-management": "#0f766e",
+};
+
+const isSuperAdmin = () => {
+  const role = getSession()?.user?.role;
+  const normalizedName = String(role?.name || "").toLowerCase().replace(/[^a-z]/g, "");
+  return normalizedName === "superadmin" && String(role?.user_type) === "00";
 };
 
 export default function Sidebar({ currentPath, onNavigate }) {
-  const activePath = menuItems.reduce((active, item) => {
+  const items = isSuperAdmin() ? [...menuItems, SYSTEM_MANAGEMENT] : menuItems;
+  const activePath = items.reduce((active, item) => {
     const matches =
       currentPath === item.path ||
       (item.path !== "/admin" && currentPath.startsWith(`${item.path}/`));
@@ -53,7 +76,7 @@ export default function Sidebar({ currentPath, onNavigate }) {
       <div className="adm-menu-label">MENU</div>
 
       <nav className="adm-nav">
-        {menuItems.map((item) => {
+        {items.map((item) => {
           const Icon = ICONS[item.path] || LayoutDashboard;
           return (
             <Link
@@ -73,18 +96,18 @@ export default function Sidebar({ currentPath, onNavigate }) {
       </nav>
 
       <a
-  href="/"
-  className="adm-link adm-logout"
-  title="Logout"
-  onClick={(e) => {
-    e.preventDefault();
-    clearSession();
-    window.location.replace("/");
-  }}
->
-  <LogOut size={20} />
-  <span className="adm-link-text">Logout</span>
-</a>
+        href="/"
+        className="adm-link adm-logout"
+        title="Logout"
+        onClick={(event) => {
+          event.preventDefault();
+          clearSession();
+          window.location.replace("/");
+        }}
+      >
+        <LogOut size={20} />
+        <span className="adm-link-text">Logout</span>
+      </a>
     </aside>
   );
 }

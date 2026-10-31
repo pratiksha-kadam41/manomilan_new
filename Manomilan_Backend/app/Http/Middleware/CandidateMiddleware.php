@@ -13,8 +13,7 @@ class CandidateMiddleware
             return redirect('/login');
         }
 
-        // role_id = 3 => Candidate
-        if (Auth::user()->role_id != 3) {
+        if (Auth::user()->portal() !== 'candidate') {
             abort(403, 'Unauthorized Access');
         }
 

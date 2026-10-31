@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100" role="img" aria-labelledby="title description">
+  <title id="title">Manomilan RBAC flow</title>
+  <desc id="description">A flowchart explaining login, role-based frontend access, backend module permission checks, database tables, and how to add a module.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#123b55"/>
+      <stop offset="1" stop-color="#167a78"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#18324a" flood-opacity=".10"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#668198"/>
+    </marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #17324b; }
+      .title { font-size: 34px; font-weight: 700; fill: #fff; }
+      .subtitle { font-size: 16px; fill: #d7efed; }
+      .section { font-size: 19px; font-weight: 700; }
+      .heading { font-size: 16px; font-weight: 700; }
+      .body { font-size: 14px; }
+      .small { font-size: 12px; }
+      .mono { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+      .line { fill: none; stroke: #668198; stroke-width: 2.2; marker-end: url(#arrow); }
+      .card { fill: #fff; stroke: #dce7ef; stroke-width: 1.2; }
+      .pill { font-size: 12px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1100" fill="#f3f7fa"/>
+  <rect width="1600" height="122" fill="url(#header)"/>
+  <text x="64" y="58" class="title">Manomilan RBAC — Access ka flow</text>
+  <text x="66" y="88" class="subtitle">Role-Based Access Control: user ka role decide karta hai ki kaunsa module aur action allowed hai.</text>
+
+  <!-- Authentication and role decision -->
+  <text x="64" y="164" class="section">1. Login ke baad role check</text>
+  <g filter="url(#shadow)">
+    <rect x="64" y="184" width="230" height="82" rx="14" class="card"/>
+    <rect x="352" y="184" width="290" height="82" rx="14" fill="#eaf3ff" stroke="#bfd8f1"/>
+    <rect x="710" y="174" width="290" height="102" rx="14" fill="#eaf8f3" stroke="#bce5d2"/>
+    <rect x="1070" y="174" width="230" height="102" rx="14" fill="#fff7e8" stroke="#f0d7a3"/>
+    <rect x="1360" y="184" width="180" height="82" rx="14" fill="#eef2ff" stroke="#ccd4fb"/>
+  </g>
+  <text x="179" y="218" text-anchor="middle" class="heading">User login</text>
+  <text x="179" y="242" text-anchor="middle" class="body">username + password</text>
+  <text x="497" y="218" text-anchor="middle" class="heading">Backend verifies user</text>
+  <text x="497" y="242" text-anchor="middle" class="body">users.role_id → roles.id</text>
+  <text x="855" y="211" text-anchor="middle" class="heading">Role active hai?</text>
+  <text x="855" y="238" text-anchor="middle" class="body">No: login block</text>
+  <text x="855" y="258" text-anchor="middle" class="body">Yes: role identity check</text>
+  <text x="1185" y="210" text-anchor="middle" class="heading">Super Admin?</text>
+  <text x="1185" y="237" text-anchor="middle" class="body">Yes: full access</text>
+  <text x="1185" y="257" text-anchor="middle" class="small">active role identity se</text>
+  <text x="1450" y="218" text-anchor="middle" class="heading">Admin UI</text>
+  <text x="1450" y="242" text-anchor="middle" class="body">dashboard + menu</text>
+  <path d="M294 225H346" class="line"/>
+  <path d="M642 225H704" class="line"/>
+  <path d="M1000 225H1064" class="line"/>
+  <path d="M1300 225H1354" class="line"/>
+  <text x="1032" y="211" class="small">Yes</text>
+  <text x="1324" y="211" class="small">Yes</text>
+  <path d="M855 276V303H1125" class="line"/>
+  <text x="877" y="299" class="small">No / staff role</text>
+
+  <!-- Module and permission mapping -->
+  <text x="64" y="344" class="section">2. Har protected API request par permission check</text>
+  <g filter="url(#shadow)">
+    <rect x="64" y="366" width="260" height="92" rx="14" fill="#eaf3ff" stroke="#bfd8f1"/>
+    <rect x="388" y="366" width="310" height="92" rx="14" class="card"/>
+    <rect x="762" y="366" width="338" height="92" rx="14" fill="#fff7e8" stroke="#f0d7a3"/>
+    <rect x="1164" y="366" width="190" height="92" rx="14" fill="#eaf8f3" stroke="#bce5d2"/>
+    <rect x="1400" y="366" width="140" height="92" rx="14" fill="#fff0f0" stroke="#efc4c4"/>
+  </g>
+  <text x="194" y="401" text-anchor="middle" class="heading">User opens a module</text>
+  <text x="194" y="428" text-anchor="middle" class="body">e.g. Profiles / Reports</text>
+  <text x="543" y="400" text-anchor="middle" class="heading">API permission middleware</text>
+  <text x="543" y="427" text-anchor="middle" class="mono">EnforceApiModulePermissions.php</text>
+  <text x="931" y="400" text-anchor="middle" class="heading">Match endpoint → module</text>
+  <text x="931" y="427" text-anchor="middle" class="body">modules.api_prefixes + HTTP action</text>
+  <text x="1259" y="400" text-anchor="middle" class="heading">Grant mila?</text>
+  <text x="1259" y="427" text-anchor="middle" class="body">Yes → allow API</text>
+  <text x="1470" y="402" text-anchor="middle" class="heading">No grant</text>
+  <text x="1470" y="427" text-anchor="middle" class="body">403 denied</text>
+  <path d="M324 412H382" class="line"/>
+  <path d="M698 412H756" class="line"/>
+  <path d="M1100 412H1158" class="line"/>
+  <path d="M1354 412H1394" class="line"/>
+  <path d="M1259 458V485H930" class="line"/>
+  <rect x="765" y="480" width="330" height="40" rx="20" fill="#eaf8f3" stroke="#bce5d2"/>
+  <text x="930" y="506" text-anchor="middle" class="body" font-weight="700">API/controller returns requested data</text>
+  <text x="1380" y="478" text-anchor="end" class="small">Role grants na hon to default deny</text>
+
+  <!-- Database -->
+  <text x="64" y="560" class="section">3. RBAC ki database tables (MySQL: manomilan)</text>
+  <g filter="url(#shadow)">
+    <rect x="64" y="582" width="260" height="108" rx="12" class="card"/>
+    <rect x="352" y="582" width="260" height="108" rx="12" class="card"/>
+    <rect x="640" y="582" width="280" height="108" rx="12" class="card"/>
+    <rect x="948" y="582" width="280" height="108" rx="12" class="card"/>
+    <rect x="1256" y="582" width="284" height="108" rx="12" class="card"/>
+  </g>
+  <text x="84" y="612" class="heading">users</text>
+  <text x="84" y="638" class="mono">role_id → roles.id</text>
+  <text x="84" y="662" class="small">Kis user kaunse role mein?</text>
+  <text x="372" y="612" class="heading">roles</text>
+  <text x="372" y="638" class="body">Role name, type, active</text>
+  <text x="372" y="662" class="small">e.g. Super Admin, Candidate</text>
+  <text x="660" y="612" class="heading">modules</text>
+  <text x="660" y="638" class="body">Module name/key + routes</text>
+  <text x="660" y="662" class="small">API prefixes map endpoint ko</text>
+  <text x="968" y="612" class="heading">module_permissions</text>
+  <text x="968" y="638" class="body">view / create / edit / delete</text>
+  <text x="968" y="662" class="small">approve / export / manage etc.</text>
+  <text x="1276" y="612" class="heading">role_module_permissions</text>
+  <text x="1276" y="638" class="body">role_id + permission_id</text>
+  <text x="1276" y="662" class="small">Role ko kaunsa grant diya hai</text>
+  <path d="M324 636H346" class="line"/>
+  <path d="M612 636H634" class="line"/>
+  <path d="M920 636H942" class="line"/>
+  <path d="M1228 636H1250" class="line"/>
+  <rect x="64" y="710" width="1476" height="50" rx="12" fill="#edf1f5" stroke="#d7e0e7"/>
+  <text x="86" y="741" class="heading">activity_logs</text>
+  <text x="235" y="741" class="body">Login, permission denied, aur recorded changes ka audit trail.</text>
+  <rect x="1110" y="722" width="380" height="26" rx="13" fill="#fff" stroke="#d7e0e7"/>
+  <text x="1300" y="740" text-anchor="middle" class="mono">.env → DB_CONNECTION=mysql · DB_DATABASE=manomilan</text>
+
+  <!-- Adding a module -->
+  <text x="64" y="808" class="section">4. Naya module add karne ka flow</text>
+  <g filter="url(#shadow)">
+    <rect x="64" y="830" width="250" height="110" rx="14" fill="#eaf3ff" stroke="#bfd8f1"/>
+    <rect x="350" y="830" width="250" height="110" rx="14" fill="#eaf8f3" stroke="#bce5d2"/>
+    <rect x="636" y="830" width="250" height="110" rx="14" fill="#f3efff" stroke="#d8cafa"/>
+    <rect x="922" y="830" width="280" height="110" rx="14" fill="#fff7e8" stroke="#f0d7a3"/>
+    <rect x="1238" y="830" width="302" height="110" rx="14" fill="#eaf8f3" stroke="#bce5d2"/>
+  </g>
+  <text x="189" y="865" text-anchor="middle" class="heading">1. Build page + APIs</text>
+  <text x="189" y="892" text-anchor="middle" class="mono">App.jsx · api.php · Controller</text>
+  <text x="189" y="916" text-anchor="middle" class="small">Backend route ko auth se protect karo</text>
+  <text x="475" y="865" text-anchor="middle" class="heading">2. Add frontend route</text>
+  <text x="475" y="892" text-anchor="middle" class="mono">App.jsx + adminData.js</text>
+  <text x="475" y="916" text-anchor="middle" class="small">Sidebar mein purane style ka link</text>
+  <text x="761" y="865" text-anchor="middle" class="heading">3. Create module record</text>
+  <text x="761" y="892" text-anchor="middle" class="body">System Management → Modules</text>
+  <text x="761" y="916" text-anchor="middle" class="small">Name, route, API prefixes set karo</text>
+  <text x="1062" y="865" text-anchor="middle" class="heading">4. Map API prefixes</text>
+  <text x="1062" y="892" text-anchor="middle" class="mono">/your-api-path → module key</text>
+  <text x="1062" y="916" text-anchor="middle" class="small">Middleware isi se module pehchanta</text>
+  <text x="1389" y="865" text-anchor="middle" class="heading">5. Assign grants</text>
+  <text x="1389" y="892" text-anchor="middle" class="body">System Management → Permissions</text>
+  <text x="1389" y="916" text-anchor="middle" class="small">Relevant roles ko actions do</text>
+  <path d="M314 885H344" class="line"/>
+  <path d="M600 885H630" class="line"/>
+  <path d="M886 885H916" class="line"/>
+  <path d="M1202 885H1232" class="line"/>
+  <rect x="64" y="972" width="1476" height="66" rx="14" fill="#123b55"/>
+  <text x="90" y="1001" font-size="15" font-weight="700" fill="#fff">Yaad rakho:</text>
+  <text x="190" y="1001" font-size="14" fill="#e5f2f4">Database mein module banana page ya sidebar link automatically nahi banata.</text>
+  <text x="190" y="1024" font-size="14" fill="#e5f2f4">Frontend route/menu + backend API mapping + role grants — teeno complete hone chahiye.</text>
+</svg>

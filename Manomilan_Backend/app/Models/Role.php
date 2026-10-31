@@ -2,14 +2,38 @@
 
 namespace App;
 
+use App\Models\ModulePermission;
 use Illuminate\Database\Eloquent\Model;
 
 class Role extends Model
 {
-    protected $fillable = ['name', 'user_type'];
+    protected $table = 'roles';
+
+    protected $fillable = ['name', 'user_type', 'is_active'];
+
+    protected function casts(): array
+    {
+        return ['is_active' => 'boolean'];
+    }
 
     public function users()
     {
         return $this->hasMany(\App\Models\User::class);
+    }
+
+    public function isProtectedSystemRole(): bool
+    {
+        return preg_replace('/[^a-z]/', '', strtolower((string) $this->name)) === 'superadmin'
+            || (string) $this->user_type === '00';
+    }
+
+    public function modulePermissions()
+    {
+        return $this->belongsToMany(
+            ModulePermission::class,
+            'role_module_permissions',
+            'role_id',
+            'module_permission_id'
+        )->withTimestamps();
     }
 }

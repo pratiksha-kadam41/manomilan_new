@@ -13,8 +13,7 @@ class SuperAdminMiddleware
             return redirect('/login');
         }
 
-        // role_id = 1 => Super Admin
-        if (Auth::user()->role_id != 1) {
+        if (! Auth::user()->isSuperAdmin()) {
             abort(403, 'Unauthorized Access');
         }
 
