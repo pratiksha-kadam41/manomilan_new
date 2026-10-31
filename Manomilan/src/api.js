@@ -1,6 +1,21 @@
-const API_URL = (
-  import.meta.env.VITE_API_URL || "/api"
-).replace(/\/+$/, "");
+const configuredApiUrl = import.meta.env.VITE_API_URL || "/api";
+const API_URL = (() => {
+  if (!/^https?:\/\//i.test(configuredApiUrl)) {
+    return configuredApiUrl.replace(/\/+$/, "");
+  }
+
+  const url = new URL(configuredApiUrl);
+  const loopbackHosts = new Set(["localhost", "127.0.0.1", "::1"]);
+  if (
+    typeof window !== "undefined" &&
+    loopbackHosts.has(url.hostname) &&
+    !loopbackHosts.has(window.location.hostname)
+  ) {
+    url.hostname = window.location.hostname;
+  }
+
+  return url.toString().replace(/\/+$/, "");
+})();
 
 const SESSION_KEY = "auth";
 

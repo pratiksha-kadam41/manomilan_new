@@ -12,7 +12,9 @@ return [
 
     'allowed_origins' => $origins ?: ['*'],
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => [
+        '#^https?://(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2[0-9]|3[01])(?:\.\d{1,3}){2}):(?:3000|5173)$#',
+    ],
 
     'allowed_headers' => ['*'],
 
