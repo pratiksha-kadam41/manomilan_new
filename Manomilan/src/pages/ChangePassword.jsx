@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { KeyRound, Loader2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, KeyRound, Loader2, ShieldCheck } from "lucide-react";
 import AdminLayout from "../admin/components/AdminLayout";
 import CandidateLayout from "../candidate/components/CandidateLayout";
 import { request } from "../api";
@@ -18,6 +18,11 @@ export default function ChangePassword() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [visiblePasswords, setVisiblePasswords] = useState({});
+
+  const togglePasswordVisibility = (field) => {
+    setVisiblePasswords((current) => ({ ...current, [field]: !current[field] }));
+  };
 
   const update = (field) => (event) => {
     setValues((prev) => ({ ...prev, [field]: event.target.value }));
@@ -82,36 +87,69 @@ export default function ChangePassword() {
             {session?.user?.is_password_changed !== false ? (
               <label>
                 Current password
-                <input
-                  type="password"
-                  value={values.current_password}
-                  onChange={update("current_password")}
-                  autoComplete="current-password"
-                  required
-                />
+                <span className="cp-password-control">
+                  <input
+                    type={visiblePasswords.current_password ? "text" : "password"}
+                    value={values.current_password}
+                    onChange={update("current_password")}
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="cp-password-toggle"
+                    onClick={() => togglePasswordVisibility("current_password")}
+                    aria-label={`${visiblePasswords.current_password ? "Hide" : "Show"} current password`}
+                    aria-pressed={Boolean(visiblePasswords.current_password)}
+                  >
+                    {visiblePasswords.current_password ? <EyeOff size={19} /> : <Eye size={19} />}
+                  </button>
+                </span>
               </label>
             ) : null}
             <label>
               New password
-              <input
-                type="password"
-                value={values.new_password}
-                onChange={update("new_password")}
-                autoComplete="new-password"
-                minLength={6}
-                required
-              />
+              <span className="cp-password-control">
+                <input
+                  type={visiblePasswords.new_password ? "text" : "password"}
+                  value={values.new_password}
+                  onChange={update("new_password")}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="cp-password-toggle"
+                  onClick={() => togglePasswordVisibility("new_password")}
+                  aria-label={`${visiblePasswords.new_password ? "Hide" : "Show"} new password`}
+                  aria-pressed={Boolean(visiblePasswords.new_password)}
+                >
+                  {visiblePasswords.new_password ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </span>
             </label>
             <label>
               Confirm new password
-              <input
-                type="password"
-                value={values.new_password_confirmation}
-                onChange={update("new_password_confirmation")}
-                autoComplete="new-password"
-                minLength={6}
-                required
-              />
+              <span className="cp-password-control">
+                <input
+                  type={visiblePasswords.new_password_confirmation ? "text" : "password"}
+                  value={values.new_password_confirmation}
+                  onChange={update("new_password_confirmation")}
+                  autoComplete="new-password"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="cp-password-toggle"
+                  onClick={() => togglePasswordVisibility("new_password_confirmation")}
+                  aria-label={`${visiblePasswords.new_password_confirmation ? "Hide" : "Show"} password confirmation`}
+                  aria-pressed={Boolean(visiblePasswords.new_password_confirmation)}
+                >
+                  {visiblePasswords.new_password_confirmation ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </span>
             </label>
 
             <button type="submit" className="cp-submit" disabled={saving}>
