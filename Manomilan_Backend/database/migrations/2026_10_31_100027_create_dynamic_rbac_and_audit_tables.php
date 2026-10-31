@@ -21,24 +21,31 @@ return new class extends Migration
 
     public function up(): void
     {
-        if (! Schema::hasTable('roles')) {
-            Schema::create('roles', function (Blueprint $table) {
-                $table->id();
-                $table->string('name')->unique();
-                $table->string('user_type')->unique();
-                $table->timestamps();
-            });
+        foreach (['roles', 'modules', 'users', 'applications'] as $table) {
+            if (! Schema::hasTable($table)) {
+                throw new RuntimeException("The {$table} table must exist before dynamic RBAC can be installed.");
+            }
         }
 
         if (! Schema::hasColumn('modules', 'module_key')) {
             Schema::table('modules', function (Blueprint $table) {
                 $table->string('module_key', 120)->nullable();
-                $table->string('route', 255)->nullable();
-                $table->text('frontend_routes')->nullable();
-                $table->string('icon', 100)->nullable();
-                $table->unsignedInteger('sort_order')->default(0);
-                $table->text('api_prefixes')->nullable();
             });
+        }
+        if (! Schema::hasColumn('modules', 'route')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->string('route', 255)->nullable());
+        }
+        if (! Schema::hasColumn('modules', 'frontend_routes')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->text('frontend_routes')->nullable());
+        }
+        if (! Schema::hasColumn('modules', 'icon')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->string('icon', 100)->nullable());
+        }
+        if (! Schema::hasColumn('modules', 'sort_order')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->unsignedInteger('sort_order')->default(0));
+        }
+        if (! Schema::hasColumn('modules', 'api_prefixes')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->text('api_prefixes')->nullable());
         }
 
         if (! Schema::hasColumn('roles', 'is_active')) {
@@ -49,10 +56,7 @@ return new class extends Migration
 
         $this->populateModuleKeys();
 
-        $hasUniqueModuleKey = collect(Schema::getIndexes('modules'))->contains(
-            fn (array $index): bool => $index['unique'] && $index['columns'] === ['module_key']
-        );
-        if (! $hasUniqueModuleKey) {
+        if (! Schema::hasIndex('modules', 'modules_module_key_unique')) {
             Schema::table('modules', function (Blueprint $table) {
                 $table->unique('module_key');
             });
@@ -190,12 +194,16 @@ return new class extends Migration
         $modules = DB::table('modules')->orderBy('id')->get(['id', 'module_name']);
         $usedKeys = [];
 
+        DB::table('modules')->update(['module_key' => null]);
+
         foreach ($modules as $module) {
             $base = Str::limit(Str::slug($module->module_name, '_'), 110, '');
             $base = $base !== '' ? $base : 'module';
             $key = $base;
-            if (isset($usedKeys[$key])) {
-                $key = Str::limit($base, 105, '') . '_' . $module->id;
+            $suffix = 1;
+            while (isset($usedKeys[$key])) {
+                $key = Str::limit($base, 105, '') . '_' . $module->id . ($suffix === 1 ? '' : '_'.$suffix);
+                $suffix++;
             }
             $usedKeys[$key] = true;
 
@@ -279,7 +287,17 @@ return new class extends Migration
                 ]);
         }
 
-        $applicationId = DB::table('applications')->orderBy('id')->value('id');
+        $applicationId = DB::table('applications')->where('app_code', 'Manomilan')->value('id');
+        if (! $applicationId) {
+            $applicationId = DB::table('applications')->insertGetId([
+                'app_code' => 'Manomilan',
+                'app_name' => 'ManoMilan',
+                'description' => 'ManoMilan application',
+                'status' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
         if ($applicationId && ! DB::table('modules')->where('module_key', 'admin_dashboard')->exists()) {
             DB::table('modules')->insert([
                 'application_id' => $applicationId,

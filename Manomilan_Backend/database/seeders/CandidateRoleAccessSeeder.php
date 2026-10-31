@@ -46,6 +46,23 @@ class CandidateRoleAccessSeeder extends Seeder
             'api_prefixes' => ['/profiles'],
             'actions' => ['view'],
         ],
+        'payments_verification' => [
+            'route' => null,
+            'frontend_routes' => [],
+            'api_prefixes' => [
+                '/payments',
+                '/profiles/{id}/payment-screenshots',
+                '/profiles/{id}/payment-screenshot',
+                '/profiles/{id}/receipt',
+            ],
+            'actions' => ['view', 'create'],
+        ],
+        'software_ticket_module' => [
+            'route' => null,
+            'frontend_routes' => [],
+            'api_prefixes' => ['/tickets'],
+            'actions' => ['view', 'create', 'edit'],
+        ],
     ];
 
     public function run(): void

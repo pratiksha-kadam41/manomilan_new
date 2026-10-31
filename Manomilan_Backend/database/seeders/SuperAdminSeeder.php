@@ -14,64 +14,32 @@ class SuperAdminSeeder extends Seeder
 {
     public function run(): void
     {
-        $password = env('SUPER_ADMIN_PASSWORD');
-        if (! $password) {
-            if (app()->isProduction()) {
-                throw new RuntimeException('Set SUPER_ADMIN_PASSWORD before seeding the production Super Admin.');
-            }
+        $email = trim((string) env('SUPER_ADMIN_EMAIL', ''));
+        $password = (string) env('SUPER_ADMIN_PASSWORD', '');
 
-            $password = 'password';
+        if (($email === '') !== ($password === '')) {
+            throw new RuntimeException('Both SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD must be configured to seed a Super Admin login.');
         }
 
-        DB::transaction(function () use ($password) {
-            $role = Role::query()->find(1);
-            if ($role) {
-                $normalizedName = preg_replace('/[^a-z]/', '', strtolower((string) $role->name));
-                if ($normalizedName !== 'superadmin' || (string) $role->user_type !== '00') {
-                    throw new RuntimeException('Role ID 1 is not the Super Admin role; refusing to change another role.');
+        DB::transaction(function () use ($email, $password): void {
+            $role = Role::query()->where('user_type', '00')->first();
+            if (! $role) {
+                if (Role::query()->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])->exists()) {
+                    throw new RuntimeException('A Super Admin role exists with a different user_type; refusing to alter it.');
                 }
 
-                if (! $role->is_active) {
-                    $role->is_active = true;
-                    $role->save();
-                }
-            } else {
-                if (Role::query()->where('user_type', '00')->orWhere('name', 'superadmin')->exists()) {
-                    throw new RuntimeException('A Super Admin role already exists with an ID other than 1.');
-                }
-
-                DB::table('roles')->insert([
-                    'id' => 1,
-                    'name' => 'superadmin',
+                $role = Role::query()->create([
+                    'name' => 'Super Admin',
                     'user_type' => '00',
                     'is_active' => true,
-                    'created_at' => now(),
-                    'updated_at' => now(),
                 ]);
-                $role = Role::query()->findOrFail(1);
+            } elseif (preg_replace('/[^a-z]/', '', strtolower((string) $role->name)) !== 'superadmin') {
+                throw new RuntimeException('The role for user_type 00 is not Super Admin; refusing to alter it.');
             }
 
-            $email = env('SUPER_ADMIN_EMAIL', 'super@manomilan.local');
-            $existingUser = User::query()->where('username', 'super')->first();
-            if ($existingUser) {
-                if ((int) $existingUser->role_id !== 1) {
-                    throw new RuntimeException('Username "super" already belongs to a user outside role ID 1.');
-                }
-            } else {
-                if (User::query()->where('email', $email)->exists()) {
-                    throw new RuntimeException('SUPER_ADMIN_EMAIL is already assigned to another user.');
-                }
-
-                User::create([
-                    'name' => 'Super Admin',
-                    'email' => $email,
-                    'username' => 'super',
-                    'password' => $password,
-                    'status' => 'active',
-                    'is_password_changed' => false,
-                    'user_type' => '00',
-                    'role_id' => 1,
-                ]);
+            if (! $role->is_active) {
+                $role->is_active = true;
+                $role->save();
             }
 
             $allActions = array_fill_keys(array_values(ModulePermission::ACTIONS), true);
@@ -80,6 +48,50 @@ class SuperAdminSeeder extends Seeder
                     ['role_id' => $role->id, 'module_id' => $moduleId],
                     $allActions
                 );
+            }
+
+            if ($email === '' && $password === '') {
+                $this->command?->warn(
+                    'Super Admin role and permissions are seeded. Set SUPER_ADMIN_EMAIL and SUPER_ADMIN_PASSWORD to seed a Super Admin login.'
+                );
+
+                return;
+            }
+
+            $username = trim((string) env('SUPER_ADMIN_USERNAME', 'superadmin'));
+            if ($username === '') {
+                throw new RuntimeException('SUPER_ADMIN_USERNAME cannot be empty.');
+            }
+
+            $user = User::query()->where('email', $email)->first();
+            $usernameUser = User::query()->where('username', $username)->first();
+            if ($user && ! $user->isSuperAdmin()) {
+                throw new RuntimeException('The configured SUPER_ADMIN_EMAIL belongs to a non-Super Admin account; refusing to change its role.');
+            }
+            if ($usernameUser && ! $usernameUser->isSuperAdmin()) {
+                throw new RuntimeException('The configured Super Admin username belongs to a non-Super Admin account; refusing to change its role.');
+            }
+            if ($user && $user->username !== $username) {
+                throw new RuntimeException('The configured Super Admin email and username do not identify the same account.');
+            }
+            if ($usernameUser && $usernameUser->email !== $email) {
+                throw new RuntimeException('The configured Super Admin username and email do not identify the same account.');
+            }
+            if ($user && $usernameUser && $user->isNot($usernameUser)) {
+                throw new RuntimeException('The configured Super Admin email and username belong to different accounts.');
+            }
+
+            if (! $user && ! $usernameUser) {
+                User::query()->create([
+                    'name' => trim((string) env('SUPER_ADMIN_NAME', 'Super Admin')),
+                    'email' => $email,
+                    'username' => $username,
+                    'password' => $password,
+                    'status' => 'active',
+                    'user_type' => '00',
+                    'role_id' => $role->id,
+                    'is_password_changed' => false,
+                ]);
             }
         });
     }
