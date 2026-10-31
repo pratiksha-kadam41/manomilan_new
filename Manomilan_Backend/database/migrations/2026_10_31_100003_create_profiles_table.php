@@ -1,0 +1,155 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('profiles', function (Blueprint $table) {
+            $table->id();
+            $table->string('registration_number')->nullable();
+            $table->string('profile_id');
+            $table->string('serial_no', 50)->nullable();
+            $table->string('groomOrBride', 50);
+            $table->string('fullName');
+            $table->string('email')->nullable();
+            $table->string('source_of_information', 191)->nullable();
+            $table->string('phone')->nullable();
+            $table->string('registration_type', 191)->nullable();
+            $table->string('profilePhoto')->nullable();
+            $table->string('caste', 191)->nullable();
+            $table->string('subCaste', 191)->nullable();
+            $table->string('maritalStatus', 50)->nullable();
+            $table->date('birthDate');
+            $table->string('height', 50)->nullable();
+            $table->string('weight', 50)->nullable();
+            $table->string('havingSpecsLenses', 10)->nullable();
+            $table->string('bloodGroup', 10)->nullable();
+            $table->string('motherTongue', 191)->nullable();
+            $table->string('language', 191)->nullable();
+            $table->text('specialCases')->nullable();
+            $table->text('knowAboutMyself')->nullable();
+            $table->string('education', 191)->nullable();
+            $table->text('degreeDiplomaName1')->nullable();
+            $table->text('degreeDiplomaName2')->nullable();
+            $table->text('specialisation1')->nullable();
+            $table->text('specialisation2')->nullable();
+            $table->text('universityBoardCollege')->nullable();
+            $table->text('additionalEducation1')->nullable();
+            $table->text('additionalEducation2')->nullable();
+            $table->text('cityOfEducation')->nullable();
+            $table->text('profession')->nullable();
+            $table->text('fieldOfWorking')->nullable();
+            $table->text('organisationWorkingIn')->nullable();
+            $table->text('professionalCity')->nullable();
+            $table->text('designation')->nullable();
+            $table->string('lengthOfEmployment')->nullable();
+            $table->string('monthlyIncome')->nullable();
+            $table->string('annualIncome')->nullable();
+            $table->string('income_currency', 10)->default('INR');
+            $table->decimal('original_monthly_income', 15,2)->nullable();
+            $table->decimal('original_annual_income', 15,2)->nullable();
+            $table->text('hobbies')->nullable();
+            $table->text('extraCurricularActivities')->nullable();
+            $table->text('achievements')->nullable();
+            $table->text('sportsAndFitnessLikings')->nullable();
+            $table->text('cookingSkills')->nullable();
+            $table->string('diet')->nullable();
+            $table->string('smoking', 10)->nullable();
+            $table->string('smokingFrequency')->nullable();
+            $table->string('drinking', 10)->nullable();
+            $table->string('drinkingFrequency')->nullable();
+            $table->string('partying')->nullable();
+            $table->text('activeOnSocialSites')->nullable();
+            $table->string('instagram')->nullable();
+            $table->string('facebook')->nullable();
+            $table->text('personalMedicalHistory')->nullable();
+            $table->text('currentMedicalProblems')->nullable();
+            $table->text('medications')->nullable();
+            $table->string('religion', 191)->nullable();
+            $table->string('horoscopeCaste', 191)->nullable();
+            $table->string('horoscopeSubCaste', 191)->nullable();
+            $table->date('horoscopeDob')->nullable();
+            $table->text('placeOfBirth')->nullable();
+            $table->time('timeOfBirth')->nullable();
+            $table->string('rashi', 191)->nullable();
+            $table->string('nakshatra', 191)->nullable();
+            $table->string('charan', 191)->nullable();
+            $table->string('gan', 191)->nullable();
+            $table->string('gotra', 191)->nullable();
+            $table->string('nadi', 191)->nullable();
+            $table->string('matchPatrika')->nullable();
+            $table->string('kundali')->nullable();
+            $table->string('homeStatus', 50)->nullable();
+            $table->text('ownedRealEstate')->nullable();
+            $table->string('hasVehicle', 10)->nullable();
+            $table->string('vehicleType')->nullable();
+            $table->text('otherInvestments')->nullable();
+            $table->string('fathersName')->nullable();
+            $table->string('fatherAlive', 10)->nullable();
+            $table->string('mothersName')->nullable();
+            $table->string('motherAlive', 10)->nullable();
+            $table->text('fathersNativePlace')->nullable();
+            $table->text('fathersOccupation')->nullable();
+            $table->string('fatherContactNumber')->nullable();
+            $table->text('mothersNativePlace')->nullable();
+            $table->text('mothersOccupation')->nullable();
+            $table->string('motherContactNumber')->nullable();
+            $table->integer('noOfBrothers')->nullable();
+            $table->integer('brothersMarried')->nullable();
+            $table->integer('noOfSisters')->nullable();
+            $table->integer('sistersMarried')->nullable();
+            $table->string('parentsIntercasteMarriage', 10)->nullable();
+            $table->text('parentsDifferentCaste')->nullable();
+            $table->string('familyValues')->nullable();
+            $table->string('familyFinancialStatus')->nullable();
+            $table->string('familyAnnualIncome')->nullable();
+            $table->string('profileCreatorName')->nullable();
+            $table->string('profileCreatorRelation')->nullable();
+            $table->string('referenceName')->nullable();
+            $table->string('referenceRelation')->nullable();
+            $table->text('referenceAddress')->nullable();
+            $table->string('referenceContactNumber')->nullable();
+            $table->string('referenceEmail')->nullable();
+            $table->string('identificationProof', 191)->nullable();
+            $table->string('birthDateProof', 191)->nullable();
+            $table->string('addressProof', 191)->nullable();
+            $table->string('educationProof', 191)->nullable();
+            $table->string('professionProof', 191)->nullable();
+            $table->string('incomeProof', 191)->nullable();
+            $table->string('casteCertificate', 191)->nullable();
+            $table->string('medicalFitnessCertificate', 191)->nullable();
+            $table->json('additional_photos')->nullable();
+            $table->enum('profileVerificationStatus', ['Pending', 'Completed'])->default('Pending');
+            $table->integer('profile_completion')->default(0);
+            $table->enum('active', ['active', 'deactive'])->default('active');
+            $table->timestamp('created_at')->nullable()->useCurrent();
+            $table->timestamp('updated_at')->nullable()->useCurrent()->useCurrentOnUpdate();
+            $table->string('branch')->nullable();
+            $table->string('location')->nullable();
+            $table->date('meeting_date')->nullable();
+            $table->string('day')->nullable();
+            $table->string('meeting_time')->nullable();
+            $table->text('remarks')->nullable();
+            $table->string('spoke_to')->nullable();
+            $table->text('address')->nullable();
+            $table->text('permanent_address')->nullable();
+            $table->string('birthTime_ampm')->nullable();
+            $table->string('melava_batch', 20)->nullable();
+            $table->string('full_body_photo')->nullable();
+            $table->string('half_body_photo')->nullable();
+            $table->string('selfie_photo')->nullable();
+
+            $table->unique('profile_id', 'profiles_profile_id_unique');
+            $table->unique('serial_no', 'serial_no');
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('profiles');
+    }
+};
