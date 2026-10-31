@@ -130,10 +130,14 @@ export default function App() {
   const loggedIn = !!session;
   const sessionToken = session?.token;
   const sessionRole = session?.role;
+  const candidateProfileCheckEnabled =
+    sessionRole === "candidate" &&
+    path !== "/candidate/change-password" &&
+    session?.user?.is_password_changed !== false;
   const isSuperAdmin = isSuperAdminSession(session?.user);
 
   useEffect(() => {
-    if (!sessionToken || sessionRole !== "candidate") {
+    if (!sessionToken || !candidateProfileCheckEnabled) {
       return undefined;
     }
 
@@ -186,7 +190,7 @@ export default function App() {
       active = false;
       window.removeEventListener("candidate:profile-updated", handleProfileUpdated);
     };
-  }, [sessionToken, sessionRole]);
+  }, [sessionToken, candidateProfileCheckEnabled]);
 
   useEffect(() => {
     if (!sessionToken || sessionRole !== "admin" || isSuperAdmin) return undefined;
@@ -278,11 +282,11 @@ export default function App() {
     ? candidateProfileState.status
     : "checking";
   const needsCandidateProfile =
-    sessionRole === "candidate" &&
+    candidateProfileCheckEnabled &&
     candidateProfileStatus === "required" &&
     path !== "/candidate/profile";
   const checkingCandidateProfile =
-    sessionRole === "candidate" &&
+    candidateProfileCheckEnabled &&
     (candidateProfileStatus === "checking" || candidateProfileStatus === "idle");
 
   useEffect(() => {
@@ -316,7 +320,7 @@ export default function App() {
   if (checkingCandidateProfile) {
     return <main className="app-loading" role="status">Checking your candidate profile…</main>;
   }
-  if (candidateProfileStatus === "error" && sessionRole === "candidate") {
+  if (candidateProfileCheckEnabled && candidateProfileStatus === "error") {
     return (
       <main className="app-access-error" role="alert">
         <h1>Unable to verify your profile</h1>
