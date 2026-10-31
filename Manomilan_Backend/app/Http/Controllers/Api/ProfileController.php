@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\DocumentVerification;
 use App\Http\Controllers\Controller;
+use App\MelavaRegistration;
 use App\Profile;
 use App\Support\NriProfileScope;
 use Carbon\Carbon;
@@ -363,6 +364,58 @@ class ProfileController extends Controller
                 ];
             }
 
+            $photos = [];
+            $addPhoto = function (string $label, $path) use (&$photos): void {
+                if (! is_string($path) || trim($path) === '') {
+                    return;
+                }
+
+                $url = $this->fileUrl($path);
+                if ($url === '' || in_array($url, array_column($photos, 'url'), true)) {
+                    return;
+                }
+
+                $photos[] = [
+                    'id' => 'photo-'.count($photos),
+                    'label' => $label,
+                    'url' => $url,
+                ];
+            };
+
+            foreach ([
+                'Profile Photo' => $profile->profilePhoto,
+                'Full Body Photo' => $profile->full_body_photo,
+                'Half Body Photo' => $profile->half_body_photo,
+                'Selfie Photo' => $profile->selfie_photo,
+            ] as $label => $path) {
+                $addPhoto($label, $path);
+            }
+
+            $additionalPhotos = $profile->additional_photos;
+            if (is_string($additionalPhotos)) {
+                $additionalPhotos = json_decode($additionalPhotos, true) ?: [];
+            }
+            foreach (array_values(is_array($additionalPhotos) ? $additionalPhotos : []) as $index => $path) {
+                $addPhoto('Additional Photo '.($index + 1), $path);
+            }
+
+            if (Schema::hasTable('melava_registrations')) {
+                $candidatePhotos = MelavaRegistration::query()
+                    ->where('profile_id', $profile->id)
+                    ->get(['candidate_photos']);
+
+                foreach ($candidatePhotos as $registration) {
+                    $paths = $registration->candidate_photos;
+                    if (is_string($paths)) {
+                        $paths = json_decode($paths, true) ?: [];
+                    }
+
+                    foreach (array_values(is_array($paths) ? $paths : []) as $index => $path) {
+                        $addPhoto('Candidate Photo '.($index + 1), $path);
+                    }
+                }
+            }
+
             $data = [
                 'id' => $profile->id,
                 'registration_no' => $profile->registration_number ?: $profile->profile_id,
@@ -372,6 +425,7 @@ class ProfileController extends Controller
                 'full_name' => $profile->fullName,
                 'profile_photo' => $profile->profilePhoto,
                 'photo' => $profile->profilePhoto,
+                'photos' => $photos,
                 'mobile' => $profile->user?->username ?? $profile->phone,
                 'email' => $profile->email ?? $profile->user?->email,
                 'gender' => $profile->groomOrBride,

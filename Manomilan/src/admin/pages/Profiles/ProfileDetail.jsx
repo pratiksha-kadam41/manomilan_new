@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   FaArrowLeft, FaBirthdayCake, FaBriefcase, FaCalendarAlt, FaCommentDots, FaDownload,
   FaEdit, FaFileAlt, FaGraduationCap, FaHeartbeat, FaHome, FaIdCard, FaInfoCircle,
-  FaListUl, FaMapMarkerAlt, FaPhoneAlt, FaRedo, FaRulerVertical, FaStar, FaTrash,
+  FaImages, FaListUl, FaMapMarkerAlt, FaPhoneAlt, FaRedo, FaRulerVertical, FaStar, FaTrash,
   FaUserTie, FaUsers, FaVenusMars, FaWeight, FaAddressBook,
 } from "react-icons/fa";
 import "./ProfileDetail.css";
@@ -110,6 +110,14 @@ function normalizeProfile(p) {
   return {
     ...p,
     _photo: assetUrl(p.profile_photo || p.photo || ""),
+    photos: (Array.isArray(p.photos) ? p.photos : [])
+      .filter((photo) => photo && typeof photo === "object")
+      .map((photo, i) => ({
+        id: photo.id ?? i,
+        label: String(photo.label || `Photo ${i + 1}`),
+        url: safeUrl(assetUrl(photo.url || photo.path || "")),
+      }))
+      .filter((photo) => photo.url),
     documents: docs
       .filter((d) => d && typeof d === "object")
       .map((d, i) => ({
@@ -264,6 +272,7 @@ const TABS = [
       ] },
     ],
   },
+  { id: "photos", label: "Photos" },
   { id: "documents", label: "Documents" },
   {
     id: "preference", label: "Preference",
@@ -337,6 +346,26 @@ function Documents({ docs, onDelete, deletingId }) {
             );
           })}
         </ul>
+      )}
+    </section>
+  );
+}
+
+function Photos({ photos }) {
+  return (
+    <section className="pd-section">
+      <h3 className="pd-section-title"><span className="pd-section-ic"><FaImages /></span>Photos Uploaded by Candidate</h3>
+      {photos.length === 0 ? (
+        <p className="pd-text">No photos have been uploaded for this profile.</p>
+      ) : (
+        <div className="pd-photos">
+          {photos.map((photo) => (
+            <a key={photo.id} className="pd-photo-card" href={photo.url} target="_blank" rel="noopener noreferrer">
+              <img src={photo.url} alt={photo.label} loading="lazy" />
+              <span>{photo.label}</span>
+            </a>
+          ))}
+        </div>
       )}
     </section>
   );
@@ -506,8 +535,10 @@ export default function ProfileDetail() {
             ))}
           </div>
           <div id="pd-panel" role="tabpanel" aria-labelledby={`pd-tab-${active.id}`} className="pd-panel">
-            {active.id === "documents"
-              ? <Documents docs={profile.documents} onDelete={handleDeleteDoc} deletingId={deletingId} />
+            {active.id === "photos"
+              ? <Photos photos={profile.photos} />
+              : active.id === "documents"
+                ? <Documents docs={profile.documents} onDelete={handleDeleteDoc} deletingId={deletingId} />
               : active.sections.map((s) => <Section key={s.title} s={s} profile={profile} />)}
           </div>
         </div>
