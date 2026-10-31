@@ -125,7 +125,12 @@ export default function Login() {
       const passwordChangePath = role === "admin"
         ? "/admin/change-password"
         : "/candidate/change-password";
-      window.location.assign(mustChangePassword ? passwordChangePath : homeForRole(role));
+      const nextPath = isRegistering
+        ? "/candidate/profile"
+        : mustChangePassword
+          ? passwordChangePath
+          : homeForRole(role);
+      window.location.assign(nextPath);
     } catch (err) {
       setServerError(err.message || "Login failed. Please try again.");
       setValues((v) => ({ ...v, password: "" }));

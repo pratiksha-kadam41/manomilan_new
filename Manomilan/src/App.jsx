@@ -7,6 +7,7 @@ import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
 import { request } from "./api.js";
 import { AdminPermissionContext } from "./permission-context.jsx";
+import { getCandidateProfile, invalidateCandidateProfileCache } from "./candidate/api.js";
 
 const Home = lazy(() => import("./pages/Home.jsx"));
 const About = lazy(() => import("./pages/About.jsx"));
@@ -115,6 +116,11 @@ export default function App() {
     token: null,
     data: null,
   });
+  const [candidateProfileState, setCandidateProfileState] = useState({
+    token: null,
+    status: "idle",
+    error: "",
+  });
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -125,6 +131,54 @@ export default function App() {
   const sessionToken = session?.token;
   const sessionRole = session?.role;
   const isSuperAdmin = isSuperAdminSession(session?.user);
+
+  useEffect(() => {
+    if (!sessionToken || sessionRole !== "candidate") {
+      return undefined;
+    }
+
+    let active = true;
+    const verifyProfile = (showChecking = false) => {
+      invalidateCandidateProfileCache();
+      if (showChecking) {
+        setCandidateProfileState({ token: sessionToken, status: "checking", error: "" });
+      }
+      getCandidateProfile()
+        .then((result) => {
+          if (active) {
+            setCandidateProfileState({
+              token: sessionToken,
+              status: result?.profile ? "complete" : "required",
+              error: "",
+            });
+          }
+        })
+        .catch((error) => {
+          if (active) {
+            setCandidateProfileState({
+              token: sessionToken,
+              status: "error",
+              error: error.message || "Could not verify your candidate profile.",
+            });
+          }
+        });
+    };
+    const handleProfileCreated = (event) => {
+      if (event.detail?.profile) {
+        invalidateCandidateProfileCache();
+        setCandidateProfileState({ token: sessionToken, status: "complete", error: "" });
+      } else {
+        verifyProfile(true);
+      }
+    };
+
+    verifyProfile();
+    window.addEventListener("candidate:profile-created", handleProfileCreated);
+    return () => {
+      active = false;
+      window.removeEventListener("candidate:profile-created", handleProfileCreated);
+    };
+  }, [sessionToken, sessionRole]);
 
   useEffect(() => {
     if (!sessionToken || sessionRole !== "admin" || isSuperAdmin) return undefined;
@@ -212,6 +266,22 @@ export default function App() {
     session.user?.is_password_changed === false &&
     path !== "/candidate/change-password" &&
     path !== "/admin/change-password";
+  const candidateProfileStatus = candidateProfileState.token === sessionToken
+    ? candidateProfileState.status
+    : "checking";
+  const needsCandidateProfile =
+    sessionRole === "candidate" &&
+    candidateProfileStatus === "required" &&
+    path !== "/candidate/profile" &&
+    path !== "/candidate/change-password";
+  const checkingCandidateProfile =
+    sessionRole === "candidate" &&
+    (candidateProfileStatus === "checking" || candidateProfileStatus === "idle");
+
+  useEffect(() => {
+    if (needsCandidateProfile) window.location.replace("/candidate/profile");
+  }, [needsCandidateProfile]);
+
   useEffect(() => {
     if (wrongRole) window.location.replace(homeForRole(session.role));
   }, [wrongRole, session?.role]);
@@ -236,6 +306,19 @@ export default function App() {
   }, [mustChangePassword, session?.role]);
   if (wrongRole) return null;
   if (mustChangePassword) return null;
+  if (checkingCandidateProfile) {
+    return <main className="app-loading" role="status">Checking your candidate profile…</main>;
+  }
+  if (candidateProfileStatus === "error" && sessionRole === "candidate") {
+    return (
+      <main className="app-access-error" role="alert">
+        <h1>Unable to verify your profile</h1>
+        <p>{candidateProfileState.error}</p>
+        <button type="button" onClick={() => window.location.reload()}>Try again</button>
+      </main>
+    );
+  }
+  if (needsCandidateProfile) return null;
   if (isAdminPath && loggedIn && session.role === "admin" && !isChangePasswordPath) {
     if (adminRouteDenied) {
       return (
