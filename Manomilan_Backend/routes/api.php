@@ -131,6 +131,7 @@ Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function (
         Route::post('/profile/photo', [CandidateProfileController::class, 'uploadPhoto']);
         Route::delete('/profile/photo', [CandidateProfileController::class, 'deletePhoto']);
         Route::post('/profile/body-photos', [CandidateProfileController::class, 'uploadBodyPhotos']);
+        Route::post('/profile/additional-photos', [CandidateProfileController::class, 'uploadAdditionalPhotos']);
         Route::post('/profile/documents', [CandidateProfileController::class, 'uploadDocuments']);
         Route::delete('/profile/documents/{key}', [CandidateProfileController::class, 'deleteDocument']);
 

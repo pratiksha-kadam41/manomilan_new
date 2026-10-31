@@ -148,7 +148,9 @@ export default function App() {
           if (active) {
             setCandidateProfileState({
               token: sessionToken,
-              status: result?.profile ? "complete" : "required",
+              status: Number(result?.profile?.profile_completion || 0) >= 100
+                ? "complete"
+                : "required",
               error: "",
             });
           }
@@ -163,20 +165,26 @@ export default function App() {
           }
         });
     };
-    const handleProfileCreated = (event) => {
+    const handleProfileUpdated = (event) => {
       if (event.detail?.profile) {
         invalidateCandidateProfileCache();
-        setCandidateProfileState({ token: sessionToken, status: "complete", error: "" });
+        setCandidateProfileState({
+          token: sessionToken,
+          status: Number(event.detail.profile.profile_completion || 0) >= 100
+            ? "complete"
+            : "required",
+          error: "",
+        });
       } else {
         verifyProfile(true);
       }
     };
 
     verifyProfile();
-    window.addEventListener("candidate:profile-created", handleProfileCreated);
+    window.addEventListener("candidate:profile-updated", handleProfileUpdated);
     return () => {
       active = false;
-      window.removeEventListener("candidate:profile-created", handleProfileCreated);
+      window.removeEventListener("candidate:profile-updated", handleProfileUpdated);
     };
   }, [sessionToken, sessionRole]);
 
@@ -272,8 +280,7 @@ export default function App() {
   const needsCandidateProfile =
     sessionRole === "candidate" &&
     candidateProfileStatus === "required" &&
-    path !== "/candidate/profile" &&
-    path !== "/candidate/change-password";
+    path !== "/candidate/profile";
   const checkingCandidateProfile =
     sessionRole === "candidate" &&
     (candidateProfileStatus === "checking" || candidateProfileStatus === "idle");

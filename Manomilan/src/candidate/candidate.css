@@ -2510,6 +2510,14 @@ body.candidate-mode *::after {
   gap: 14px;
 }
 
+.cnd-profile-editor .cnd-form-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cnd-profile-editor .cnd-field-wide {
+  grid-column: span 4;
+}
+
 .cnd-form-actions {
   display: flex;
   justify-content: flex-end;
@@ -3262,7 +3270,15 @@ body.candidate-mode *::after {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .cnd-profile-editor .cnd-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .cnd-field-wide {
+    grid-column: span 2;
+  }
+
+  .cnd-profile-editor .cnd-field-wide {
     grid-column: span 2;
   }
 
@@ -3747,7 +3763,15 @@ body.candidate-mode *::after {
     grid-template-columns: 1fr;
   }
 
+  .cnd-profile-editor .cnd-form-grid {
+    grid-template-columns: 1fr;
+  }
+
   .cnd-field-wide {
+    grid-column: span 1;
+  }
+
+  .cnd-profile-editor .cnd-field-wide {
     grid-column: span 1;
   }
 

@@ -78,6 +78,15 @@ export const invalidateCandidateProfileCache = () => {
   candidateProfileCachedAt = 0;
 };
 
+const notifyCandidateProfileChanged = (result) => {
+  if (result?.profile) {
+    window.dispatchEvent(new CustomEvent("candidate:profile-updated", {
+      detail: { profile: result.profile },
+    }));
+  }
+  return result;
+};
+
 export const getDashboard = async ({ force = false } = {}) => {
   if (!force) {
     const cached = readDashboardCache();
@@ -99,25 +108,29 @@ export const getDashboard = async ({ force = false } = {}) => {
 export const createCandidateProfile = async (payload) => {
   invalidateCandidateProfileCache();
   const result = data(await request("/candidate/profile", { method: "POST", body: payload }));
-  window.dispatchEvent(new CustomEvent("candidate:profile-created", { detail: result }));
-  return result;
+  return notifyCandidateProfileChanged(result);
 };
 
 export const updateCandidateProfile = async (payload) => {
   invalidateCandidateProfileCache();
-  return data(await request("/candidate/profile", { method: "PUT", body: payload }));
+  return notifyCandidateProfileChanged(
+    data(await request("/candidate/profile", { method: "PUT", body: payload })),
+  );
 };
 
 export const uploadCandidatePhoto = async (file) => {
   const form = new FormData();
   form.append("photo", file);
   invalidateCandidateProfileCache();
-  const result = data(await request("/candidate/profile/photo", { method: "POST", body: form }));
-  return result;
+  return notifyCandidateProfileChanged(
+    data(await request("/candidate/profile/photo", { method: "POST", body: form })),
+  );
 };
 
 export const removeCandidatePhoto = async () =>
-  (invalidateCandidateProfileCache(), data(await request("/candidate/profile/photo", { method: "DELETE" })));
+  (invalidateCandidateProfileCache(), notifyCandidateProfileChanged(
+    data(await request("/candidate/profile/photo", { method: "DELETE" })),
+  ));
 
 export const uploadCandidateBodyPhotos = async (photos) => {
   const form = new FormData();
@@ -125,7 +138,18 @@ export const uploadCandidateBodyPhotos = async (photos) => {
     if (file) form.append(field, file);
   });
   invalidateCandidateProfileCache();
-  return data(await request("/candidate/profile/body-photos", { method: "POST", body: form }));
+  return notifyCandidateProfileChanged(
+    data(await request("/candidate/profile/body-photos", { method: "POST", body: form })),
+  );
+};
+
+export const uploadCandidateAdditionalPhotos = async (photos) => {
+  const form = new FormData();
+  photos.forEach((file) => form.append("photos[]", file));
+  invalidateCandidateProfileCache();
+  return notifyCandidateProfileChanged(
+    data(await request("/candidate/profile/additional-photos", { method: "POST", body: form })),
+  );
 };
 
 export const uploadCandidateDocuments = async (files) => {
@@ -133,16 +157,22 @@ export const uploadCandidateDocuments = async (files) => {
   Object.entries(files).forEach(([key, file]) => {
     if (file) form.append(key, file);
   });
-  return data(await request("/candidate/profile/documents", { method: "POST", body: form }));
+  return notifyCandidateProfileChanged(
+    data(await request("/candidate/profile/documents", { method: "POST", body: form })),
+  );
 };
 
 export const removeCandidateDocument = async (key) =>
-  data(await request(`/candidate/profile/documents/${key}`, { method: "DELETE" }));
+  notifyCandidateProfileChanged(
+    data(await request(`/candidate/profile/documents/${key}`, { method: "DELETE" })),
+  );
 
 export const getPreferences = async () => data(await request("/candidate/preferences"));
 
 export const savePreferences = async (payload) =>
-  data(await request("/candidate/preferences", { method: "PUT", body: payload }));
+  notifyCandidateProfileChanged(
+    data(await request("/candidate/preferences", { method: "PUT", body: payload })),
+  );
 
 export const getMatches = async (params = {}, { signal } = {}) => {
   const query = new URLSearchParams(

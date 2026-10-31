@@ -257,6 +257,7 @@ class Profile extends Model
         'instagram', // not updated in database
         'facebook', // not updated in database
         // Medical Details
+        'hasMedicalHistory',
         'personalMedicalHistory',
         'currentMedicalProblems',
         'medications',

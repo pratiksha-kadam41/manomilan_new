@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class ProfileController extends CandidateController
@@ -31,16 +32,24 @@ class ProfileController extends CandidateController
         'blood_group' => 'bloodGroup',
         'mother_tongue' => 'motherTongue',
         'language' => 'language',
+        'special_cases' => 'specialCases',
         'about' => 'knowAboutMyself',
         'address' => 'address',
         'permanent_address' => 'permanent_address',
         'source_of_information' => 'source_of_information',
+        'reference_name' => 'referenceName',
+        'reference_relation' => 'referenceRelation',
+        'reference_contact' => 'referenceContactNumber',
+        'reference_address' => 'referenceAddress',
+        'reference_email' => 'referenceEmail',
         'education' => 'education',
         'degree' => 'degreeDiplomaName1',
         'degree_2' => 'degreeDiplomaName2',
         'specialisation' => 'specialisation1',
+        'specialisation_2' => 'specialisation2',
         'college' => 'universityBoardCollege',
         'additional_education' => 'additionalEducation1',
+        'additional_education_2' => 'additionalEducation2',
         'city_of_education' => 'cityOfEducation',
         'profession' => 'profession',
         'field_of_working' => 'fieldOfWorking',
@@ -57,33 +66,55 @@ class ProfileController extends CandidateController
         'cooking_skills' => 'cookingSkills',
         'diet' => 'diet',
         'smoking' => 'smoking',
+        'smoking_frequency' => 'smokingFrequency',
         'drinking' => 'drinking',
+        'drinking_frequency' => 'drinkingFrequency',
         'partying' => 'partying',
+        'active_on_social_sites' => 'activeOnSocialSites',
+        'has_medical_history' => 'hasMedicalHistory',
+        'personal_medical_history' => 'personalMedicalHistory',
+        'current_medical_problems' => 'currentMedicalProblems',
+        'medications' => 'medications',
         'father_name' => 'fathersName',
         'father_alive' => 'fatherAlive',
         'father_occupation' => 'fathersOccupation',
         'father_contact' => 'fatherContactNumber',
+        'father_native_place' => 'fathersNativePlace',
         'mother_name' => 'mothersName',
         'mother_alive' => 'motherAlive',
         'mother_occupation' => 'mothersOccupation',
         'mother_contact' => 'motherContactNumber',
+        'mother_native_place' => 'mothersNativePlace',
         'brothers' => 'noOfBrothers',
         'brothers_married' => 'brothersMarried',
         'sisters' => 'noOfSisters',
         'sisters_married' => 'sistersMarried',
+        'parents_intercaste_marriage' => 'parentsIntercasteMarriage',
+        'parents_different_caste' => 'parentsDifferentCaste',
         'family_values' => 'familyValues',
         'family_financial_status' => 'familyFinancialStatus',
         'family_annual_income' => 'familyAnnualIncome',
+        'profile_creator_name' => 'profileCreatorName',
+        'profile_creator_relation' => 'profileCreatorRelation',
         'place_of_birth' => 'placeOfBirth',
         'time_of_birth' => 'timeOfBirth',
         'birth_time_ampm' => 'birthTime_ampm',
+        'horoscope_caste' => 'horoscopeCaste',
+        'horoscope_sub_caste' => 'horoscopeSubCaste',
+        'horoscope_dob' => 'horoscopeDob',
         'rashi' => 'rashi',
         'nakshatra' => 'nakshatra',
+        'charan' => 'charan',
+        'gan' => 'gan',
         'gotra' => 'gotra',
         'nadi' => 'nadi',
+        'match_patrika' => 'matchPatrika',
+        'kundali' => 'kundali',
         'home_status' => 'homeStatus',
+        'owned_real_estate' => 'ownedRealEstate',
         'has_vehicle' => 'hasVehicle',
         'vehicle_type' => 'vehicleType',
+        'other_investments' => 'otherInvestments',
         'instagram' => 'instagram',
         'facebook' => 'facebook',
     ];
@@ -388,6 +419,60 @@ class ProfileController extends CandidateController
             return response()->json([
                 'success' => false,
                 'message' => 'Unable to upload the photos right now.',
+            ], 500);
+        }
+    }
+
+    public function uploadAdditionalPhotos(Request $request)
+    {
+        $request->validate([
+            'photos' => ['required', 'array', 'min:1', 'max:4'],
+            'photos.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $user = $this->candidate($request);
+        $profile = $this->candidateProfile($request, true);
+        $stored = [];
+
+        try {
+            foreach ($request->file('photos', []) as $photo) {
+                $stored[] = $photo->store('candidate_images', 'public');
+            }
+
+            DB::transaction(function () use ($profile, $stored) {
+                $locked = Profile::lockForUpdate()->findOrFail($profile->id);
+                $existing = $this->normalizePathList($locked->getRawOriginal('additional_photos'));
+
+                if (count($existing) + count($stored) > 4) {
+                    throw ValidationException::withMessages([
+                        'photos' => ['You can keep up to four additional photos on your profile.'],
+                    ]);
+                }
+
+                $locked->additional_photos = array_merge($existing, $stored);
+                $locked->save();
+                $this->refreshCompletion($locked);
+            });
+
+            $freshProfile = Profile::with(['user', 'preference'])->findOrFail($profile->id);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Additional photos uploaded successfully.',
+                'data' => [
+                    'profile' => $this->presentOwnProfile($freshProfile, $user),
+                ],
+            ]);
+        } catch (Throwable $e) {
+            foreach ($stored as $path) {
+                Storage::disk('public')->delete($path);
+            }
+            $this->rethrowClientError($e);
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to upload additional photos right now.',
             ], 500);
         }
     }
