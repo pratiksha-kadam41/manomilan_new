@@ -12,10 +12,8 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call([
-            ApplicationModuleSeeder::class,
             RbacSeeder::class,
             SuperAdminSeeder::class,
-            CandidateRoleAccessSeeder::class,
         ]);
     }
 }
