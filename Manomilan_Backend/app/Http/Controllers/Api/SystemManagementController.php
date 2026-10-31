@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
+use App\Models\ModulePermission;
 use App\Models\User;
 use App\Support\AuditLogger;
 use App\Module;
@@ -24,15 +25,26 @@ class SystemManagementController extends Controller
     {
         $roles = Role::query()
             ->withCount('users')
-            ->withCount('modulePermissions')
             ->orderBy('name')
             ->get();
-        $roles->each(fn (Role $role) => $role->setAttribute('is_protected', $role->isProtectedSystemRole()));
+        $actionColumns = array_values(ModulePermission::ACTIONS);
+        $permissionCounts = DB::table('module_permissions')
+            ->select('role_id')
+            ->selectRaw('SUM(' . implode(' + ', $actionColumns) . ') as granted_count')
+            ->groupBy('role_id')
+            ->pluck('granted_count', 'role_id');
+        $roles->each(function (Role $role) use ($permissionCounts) {
+            $role->setAttribute('is_protected', $role->isProtectedSystemRole());
+            $role->setAttribute('module_permissions_count', (int) ($permissionCounts[$role->id] ?? 0));
+        });
         $modules = Module::query()
-            ->with('permissions:id,module_id,permission_key')
             ->orderBy('sort_order')
             ->orderBy('module_name')
             ->get();
+        $modules->each(fn (Module $module) => $module->setAttribute(
+            'available_permissions',
+            array_keys(ModulePermission::ACTIONS)
+        ));
 
         return response()->json([
             'success' => true,
@@ -43,7 +55,7 @@ class SystemManagementController extends Controller
                     'roles' => Role::count(),
                     'modules' => Module::count(),
                     'active_users' => User::where('status', 'active')->count(),
-                    'assigned_permissions' => DB::table('role_module_permissions')->count(),
+                    'assigned_permissions' => array_sum($permissionCounts->all()),
                     'audit_activities' => ActivityLog::count(),
                 ],
             ],
@@ -53,48 +65,47 @@ class SystemManagementController extends Controller
     public function myPermissions(Request $request)
     {
         $user = $request->user();
-        $permissions = $user->isSuperAdmin()
-            ? DB::table('module_permissions')
-                ->join('modules', 'modules.id', '=', 'module_permissions.module_id')
-                ->where('modules.status', true)
-                ->select('modules.id as module_id', 'modules.module_key', 'modules.module_name', 'modules.route', 'modules.frontend_routes', 'modules.icon', 'modules.sort_order', 'module_permissions.permission_key')
+        $modules = Module::query()
+            ->where('status', true)
+            ->orderBy('sort_order')
+            ->orderBy('module_name')
+            ->get();
+        $grants = $user->isSuperAdmin()
+            ? collect()
+            : ModulePermission::query()
+                ->where('role_id', $user->role_id)
+                ->whereHas('role', fn ($query) => $query->where('is_active', true))
                 ->get()
-            : DB::table('role_module_permissions')
-                ->join('module_permissions', 'module_permissions.id', '=', 'role_module_permissions.module_permission_id')
-                ->join('modules', 'modules.id', '=', 'module_permissions.module_id')
-                ->join('roles', 'roles.id', '=', 'role_module_permissions.role_id')
-                ->where('roles.id', $user->role_id)
-                ->where('roles.is_active', true)
-                ->where('modules.status', true)
-                ->select('modules.id as module_id', 'modules.module_key', 'modules.module_name', 'modules.route', 'modules.frontend_routes', 'modules.icon', 'modules.sort_order', 'module_permissions.permission_key')
-                ->get();
+                ->keyBy('module_id');
 
-        $data = $permissions
-            ->groupBy('module_id')
-            ->map(function ($items) {
-                $module = $items->first();
-                $grantedPermissions = $items->pluck('permission_key')->unique()->values();
-                if ($grantedPermissions->contains('manage')) {
-                    $grantedPermissions = DB::table('module_permissions')
-                        ->where('module_id', $module->module_id)
-                        ->orderBy('permission_key')
-                        ->pluck('permission_key')
-                        ->unique()
-                        ->values();
+        $data = $modules
+            ->map(function (Module $module) use ($user, $grants) {
+                $grant = $grants->get($module->id);
+                $permissions = $user->isSuperAdmin()
+                    ? array_keys(ModulePermission::ACTIONS)
+                    : collect(ModulePermission::ACTIONS)
+                        ->filter(fn ($column) => $grant && ($grant->{$column} || $grant->can_manage))
+                        ->keys()
+                        ->values()
+                        ->all();
+
+                if (! $user->isSuperAdmin() && $permissions === []) {
+                    return null;
                 }
 
                 return [
-                    'id' => $module->module_id,
+                    'id' => $module->id,
                     'key' => $module->module_key,
                     'name' => $module->module_name,
                     'route' => $module->route,
-                    'routes' => json_decode((string) $module->frontend_routes, true) ?: array_filter([$module->route]),
+                    'routes' => $module->frontend_routes ?: array_filter([$module->route]),
                     'icon' => $module->icon,
                     'sort_order' => $module->sort_order,
                     'requires_super_admin' => $module->module_key === 'system_configuration',
-                    'permissions' => $grantedPermissions,
+                    'permissions' => $permissions,
                 ];
             })
+            ->filter()
             ->values();
 
         return response()->json([
@@ -162,22 +173,27 @@ class SystemManagementController extends Controller
 
     public function showRolePermissions(Role $role)
     {
-        $grants = DB::table('role_module_permissions')
+        $grants = ModulePermission::query()
             ->where('role_id', $role->id)
-            ->get(['module_permission_id', 'updated_at'])
-            ->keyBy('module_permission_id');
+            ->get()
+            ->keyBy('module_id');
         $modules = Module::query()
             ->where('status', true)
-            ->with('permissions')
             ->orderBy('sort_order')
             ->orderBy('module_name')
             ->get();
+        if ($this->isCandidateRole($role)) {
+            $modules = $modules->filter(fn (Module $module) => $module->isCandidatePortalModule());
+        }
         $modules->each(function (Module $module) use ($grants) {
-            $module->permissions->each(function ($permission) use ($grants) {
-                $grant = $grants->get($permission->id);
-                $permission->setAttribute('granted', $grant !== null);
-                $permission->setAttribute('granted_at', $grant?->updated_at);
-            });
+            $grant = $grants->get($module->id);
+            $module->setAttribute('permissions', collect(ModulePermission::ACTIONS)
+                ->map(fn ($column, $key) => [
+                    'key' => $key,
+                    'permission_key' => $key,
+                    'granted' => (bool) ($grant?->{$column} ?? false),
+                ])
+                ->values());
         });
         $lastUpdated = ActivityLog::query()
             ->where('action', 'role.permissions_updated')
@@ -201,22 +217,50 @@ class SystemManagementController extends Controller
         $this->protectSystemRole($role);
         $validated = $request->validate([
             'permissions' => ['present', 'array'],
-            'permissions.*' => ['integer', 'distinct', 'exists:module_permissions,id'],
+            'permissions.*.module_id' => ['required', 'integer', 'distinct', 'exists:modules,id'],
+            'permissions.*.actions' => ['present', 'array'],
+            'permissions.*.actions.*' => ['required', 'string', 'distinct', Rule::in(array_keys(ModulePermission::ACTIONS))],
         ]);
-        $permissionIds = DB::table('module_permissions')
-            ->whereIn('id', $validated['permissions'])
-            ->pluck('id')
-            ->all();
-        if (count($permissionIds) !== count($validated['permissions'])) {
-            return response()->json(['success' => false, 'message' => 'One or more permissions are unavailable.'], 422);
+        if ($this->isCandidateRole($role)) {
+            $candidateModuleIds = Module::query()
+                ->get()
+                ->filter(fn (Module $module) => $module->isCandidatePortalModule())
+                ->modelKeys();
+            $requestedModuleIds = collect($validated['permissions'])
+                ->pluck('module_id')
+                ->map(fn ($id) => (int) $id);
+            if ($requestedModuleIds->diff($candidateModuleIds)->isNotEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Candidate roles can only receive candidate portal module permissions.',
+                ], 422);
+            }
+        } else {
+            $candidateModuleIds = null;
         }
-
-        $oldIds = $role->modulePermissions()->pluck('module_permissions.id')->all();
-        DB::transaction(function () use ($role, $permissionIds, $oldIds, $request) {
-            $syncValues = collect($permissionIds)
-                ->mapWithKeys(fn ($id) => [$id => ['granted_by' => $request->user()->id]])
-                ->all();
-            $role->modulePermissions()->sync($syncValues);
+        $oldPermissions = $role->modulePermissions()->get()->map(fn (ModulePermission $grant) => [
+            'module_id' => $grant->module_id,
+            'actions' => collect(ModulePermission::ACTIONS)
+                ->filter(fn ($column) => $grant->{$column})
+                ->keys()
+                ->values()
+                ->all(),
+        ])->all();
+        DB::transaction(function () use ($role, $validated, $oldPermissions, $request, $candidateModuleIds) {
+            $role->modulePermissions()
+                ->when($candidateModuleIds !== null, fn ($query) => $query->whereIn('module_id', $candidateModuleIds))
+                ->delete();
+            foreach ($validated['permissions'] as $modulePermissions) {
+                $actions = array_fill_keys(array_values(ModulePermission::ACTIONS), false);
+                foreach ($modulePermissions['actions'] as $action) {
+                    $actions[ModulePermission::ACTIONS[$action]] = true;
+                }
+                ModulePermission::create([
+                    'role_id' => $role->id,
+                    'module_id' => $modulePermissions['module_id'],
+                    ...$actions,
+                ]);
+            }
             $this->auditLogger->log(
                 $request->user(),
                 'role.permissions_updated',
@@ -224,8 +268,8 @@ class SystemManagementController extends Controller
                 'Role',
                 $role->id,
                 null,
-                ['permission_ids' => $oldIds],
-                ['permission_ids' => $permissionIds]
+                ['module_permissions' => $oldPermissions],
+                ['module_permissions' => $validated['permissions']]
             );
         });
 
@@ -261,19 +305,12 @@ class SystemManagementController extends Controller
             $moduleKey = Str::limit($baseKey, 105, '') . '_' . $suffix++;
         }
 
-        $module = DB::transaction(function () use ($data, $applicationId, $moduleKey) {
-            $module = Module::create($data + [
+        $module = Module::create($data + [
                 'application_id' => $applicationId,
                 'module_key' => $moduleKey,
                 'status' => true,
             ]);
-            $permissionKeys = DB::table('module_permissions')->distinct()->pluck('permission_key');
-            foreach ($permissionKeys as $permissionKey) {
-                $module->permissions()->create(['permission_key' => $permissionKey]);
-            }
-
-            return $module->load('permissions');
-        });
+        $module->setAttribute('available_permissions', array_keys(ModulePermission::ACTIONS));
         $this->auditLogger->log($request->user(), 'module.created', 'system_configuration', 'Module', $module->id, null, [], $module->only(['module_key', 'module_name', 'description']));
 
         return response()->json(['success' => true, 'data' => $module], 201);
@@ -306,10 +343,15 @@ class SystemManagementController extends Controller
 
     public function deleteModule(Request $request, Module $module)
     {
-        if (DB::table('role_module_permissions')
-            ->join('module_permissions', 'module_permissions.id', '=', 'role_module_permissions.module_permission_id')
-            ->where('module_permissions.module_id', $module->id)
-            ->exists()) {
+        $hasGrants = ModulePermission::query()
+            ->where('module_id', $module->id)
+            ->where(function ($query) {
+                foreach (ModulePermission::ACTIONS as $column) {
+                    $query->orWhere($column, true);
+                }
+            })
+            ->exists();
+        if ($hasGrants) {
             return response()->json(['success' => false, 'message' => 'Remove this module’s role grants before deleting it.'], 409);
         }
 
@@ -435,5 +477,11 @@ class SystemManagementController extends Controller
     {
         return preg_replace('/[^a-z]/', '', strtolower($name)) === 'superadmin'
             || $userType === '00';
+    }
+
+    private function isCandidateRole(Role $role): bool
+    {
+        return (string) $role->user_type === '21'
+            || strtolower(trim((string) $role->name)) === 'candidate';
     }
 }

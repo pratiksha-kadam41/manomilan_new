@@ -69,6 +69,13 @@ class EnforceApiModulePermissions
             return $this->deny($request, 'Forbidden. No access rule is configured for this endpoint.');
         }
 
+        if ($user->portal() === 'candidate' && ! in_array($matched, [
+            'user_side_profile',
+            'matchmaking_suggestions',
+        ], true)) {
+            return $this->deny($request, 'Forbidden.', $matched);
+        }
+
         $permission = $this->permissionFor($method, $path);
         if (! $user->hasModulePermission($matched, $permission)) {
             return $this->deny($request, 'Forbidden.', $matched);

@@ -68,18 +68,20 @@ class User extends Authenticatable
             return true;
         }
 
-        return $this->role()
-            ->where('is_active', true)
-            ->whereHas('modulePermissions', function ($query) use ($moduleKey, $permission) {
-                $query->where(function ($permissionQuery) use ($permission) {
-                    $permissionQuery->where('permission_key', $permission)
-                        ->orWhere('permission_key', 'manage');
-                })
-                    ->whereHas('module', function ($moduleQuery) use ($moduleKey) {
-                        $moduleQuery->where('module_key', $moduleKey)
-                            ->where('status', true);
-                    });
-            })
+        $actionColumn = ModulePermission::ACTIONS[$permission] ?? null;
+        if (! $actionColumn) {
+            return false;
+        }
+
+        return ModulePermission::query()
+            ->where('role_id', $this->role_id)
+            ->whereHas('role', fn ($query) => $query->where('is_active', true))
+            ->whereHas('module', fn ($query) => $query
+                ->where('module_key', $moduleKey)
+                ->where('status', true))
+            ->where(fn ($query) => $query
+                ->where($actionColumn, true)
+                ->orWhere('can_manage', true))
             ->exists();
     }
 

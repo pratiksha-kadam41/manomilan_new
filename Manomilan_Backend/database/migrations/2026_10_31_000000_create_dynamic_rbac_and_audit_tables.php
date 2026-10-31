@@ -9,14 +9,14 @@ use Illuminate\Support\Str;
 return new class extends Migration
 {
     private const PERMISSIONS = [
-        'view',
-        'create',
-        'edit',
-        'delete',
-        'import',
-        'export',
-        'approve',
-        'manage',
+        'view' => 'can_view',
+        'create' => 'can_create',
+        'edit' => 'can_edit',
+        'delete' => 'can_delete',
+        'import' => 'can_import',
+        'export' => 'can_export',
+        'approve' => 'can_approve',
+        'manage' => 'can_manage',
     ];
 
     public function up(): void
@@ -55,19 +55,13 @@ return new class extends Migration
 
         Schema::create('module_permissions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('module_id')->constrained('modules')->cascadeOnDelete();
-            $table->string('permission_key', 40);
-            $table->timestamps();
-            $table->unique(['module_id', 'permission_key']);
-        });
-
-        Schema::create('role_module_permissions', function (Blueprint $table) {
-            $table->id();
             $table->foreignId('role_id')->constrained('roles')->cascadeOnDelete();
-            $table->foreignId('module_permission_id')->constrained('module_permissions')->cascadeOnDelete();
-            $table->foreignId('granted_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->foreignId('module_id')->constrained('modules')->cascadeOnDelete();
+            foreach (self::PERMISSIONS as $column) {
+                $table->boolean($column)->default(false);
+            }
             $table->timestamps();
-            $table->unique(['role_id', 'module_permission_id'], 'role_module_permission_unique');
+            $table->unique(['role_id', 'module_id']);
         });
 
         Schema::create('activity_logs', function (Blueprint $table) {
@@ -93,14 +87,12 @@ return new class extends Migration
             $table->index(['candidate_id', 'created_at']);
         });
 
-        $this->seedPermissionDefinitions();
-        $this->grantInitialPermissions();
+        $this->seedRoleModulePermissions();
     }
 
     public function down(): void
     {
         Schema::dropIfExists('activity_logs');
-        Schema::dropIfExists('role_module_permissions');
         Schema::dropIfExists('module_permissions');
         DB::table('modules')
             ->where('module_key', 'admin_dashboard')
@@ -154,8 +146,13 @@ return new class extends Migration
             'reports_data_export' => ['/reports'],
             'payments_verification' => ['/payments', '/profiles/{id}/payment-screenshots', '/profiles/{id}/payment-screenshot', '/profiles/{id}/receipt'],
             'software_ticket_module' => ['/tickets'],
-            'matchmaking_suggestions' => ['/candidate/matches', '/interests'],
-            'user_side_profile' => ['/candidate', '/home-data', '/my-profile', '/preferences'],
+            'user_side_profile' => ['/candidate/*', '/home-data', '/my-profile', '/preferences'],
+            'matchmaking_suggestions' => [
+                '/candidate/matches',
+                '/candidate/matches/*',
+                '/candidate/interests',
+                '/candidate/interests/*',
+            ],
         ];
 
         foreach ($prefixesByKey as $key => $prefixes) {
@@ -183,6 +180,33 @@ return new class extends Migration
                 ]);
         }
 
+        $candidateModules = [
+            'user_side_profile' => [
+                '/candidate',
+                ['/candidate', '/candidate/profile', '/candidate/notifications', '/candidate/change-password'],
+                ['/candidate/*', '/home-data', '/my-profile', '/preferences'],
+            ],
+            'matchmaking_suggestions' => [
+                '/candidate/matches',
+                ['/candidate/matches', '/candidate/matches/{id}', '/candidate/interests-sent', '/candidate/interests-received'],
+                ['/candidate/matches', '/candidate/matches/*', '/candidate/interests', '/candidate/interests/*'],
+            ],
+            'profile_management' => [
+                '/candidate/matches',
+                ['/candidate/matches/{id}'],
+                ['/profiles'],
+            ],
+        ];
+        foreach ($candidateModules as $key => [$route, $routes, $prefixes]) {
+            DB::table('modules')
+                ->where('module_key', $key)
+                ->update([
+                    'route' => $route,
+                    'frontend_routes' => json_encode($routes),
+                    'api_prefixes' => json_encode($prefixes),
+                ]);
+        }
+
         $applicationId = DB::table('applications')->orderBy('id')->value('id');
         if ($applicationId && ! DB::table('modules')->where('module_key', 'admin_dashboard')->exists()) {
             DB::table('modules')->insert([
@@ -202,61 +226,42 @@ return new class extends Migration
         }
     }
 
-    private function seedPermissionDefinitions(): void
+    private function seedRoleModulePermissions(): void
     {
-        foreach (DB::table('modules')->pluck('id') as $moduleId) {
-            foreach (self::PERMISSIONS as $permission) {
-                DB::table('module_permissions')->insert([
-                    'module_id' => $moduleId,
-                    'permission_key' => $permission,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+        $candidatePermissions = [
+            'user_side_profile' => ['view', 'create', 'edit', 'delete'],
+            'matchmaking_suggestions' => ['view', 'create', 'edit', 'approve'],
+            'profile_management' => ['view'],
+        ];
+        $modules = DB::table('modules')->get(['id', 'module_key']);
+        $roles = DB::table('roles')->get(['id', 'name', 'user_type']);
+        $now = now();
+        $rows = [];
+
+        foreach ($roles as $role) {
+            $normalizedName = preg_replace('/[^a-z]/', '', strtolower((string) $role->name));
+            $isSuperAdmin = $normalizedName === 'superadmin' || (string) $role->user_type === '00';
+            $isCandidate = strtolower((string) $role->name) === 'candidate' || (string) $role->user_type === '21';
+
+            foreach ($modules as $module) {
+                $grantedActions = $isSuperAdmin
+                    ? array_keys(self::PERMISSIONS)
+                    : ($isCandidate ? ($candidatePermissions[$module->module_key] ?? []) : []);
+                $row = [
+                    'role_id' => $role->id,
+                    'module_id' => $module->id,
+                ];
+                foreach (self::PERMISSIONS as $action => $column) {
+                    $row[$column] = in_array($action, $grantedActions, true);
+                }
+                $row['created_at'] = $now;
+                $row['updated_at'] = $now;
+                $rows[] = $row;
             }
         }
-    }
 
-    private function grantInitialPermissions(): void
-    {
-        $superAdminIds = DB::table('roles')
-            ->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])
-            ->pluck('id');
-
-        foreach ($superAdminIds as $roleId) {
-            $this->grantAllPermissions((int) $roleId);
+        foreach (array_chunk($rows, 500) as $chunk) {
+            DB::table('module_permissions')->insert($chunk);
         }
-
-        $candidateRoleIds = DB::table('roles')
-            ->whereRaw('LOWER(name) = ?', ['candidate'])
-            ->orWhere('user_type', '21')
-            ->pluck('id');
-
-        foreach ($candidateRoleIds as $roleId) {
-            foreach ([
-                'user_side_profile' => ['view', 'create', 'edit', 'delete'],
-                'matchmaking_suggestions' => ['view', 'create', 'edit', 'approve'],
-                'profile_management' => ['view'],
-                'payments_verification' => ['view', 'create'],
-                'software_ticket_module' => ['view', 'create', 'edit'],
-            ] as $moduleKey => $permissions) {
-                DB::table('role_module_permissions')->insertUsing(
-                    ['role_id', 'module_permission_id', 'created_at', 'updated_at'],
-                    DB::table('module_permissions')
-                        ->join('modules', 'modules.id', '=', 'module_permissions.module_id')
-                        ->where('modules.module_key', $moduleKey)
-                        ->whereIn('module_permissions.permission_key', $permissions)
-                        ->selectRaw('? as role_id, module_permissions.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP', [$roleId])
-                );
-            }
-        }
-    }
-
-    private function grantAllPermissions(int $roleId): void
-    {
-        DB::table('role_module_permissions')->insertUsing(
-            ['role_id', 'module_permission_id', 'created_at', 'updated_at'],
-            DB::table('module_permissions')
-                ->selectRaw('? as role_id, id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP', [$roleId])
-        );
     }
 };

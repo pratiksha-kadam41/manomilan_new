@@ -29,11 +29,6 @@ class Role extends Model
 
     public function modulePermissions()
     {
-        return $this->belongsToMany(
-            ModulePermission::class,
-            'role_module_permissions',
-            'role_id',
-            'module_permission_id'
-        )->withTimestamps();
+        return $this->hasMany(ModulePermission::class, 'role_id');
     }
 }

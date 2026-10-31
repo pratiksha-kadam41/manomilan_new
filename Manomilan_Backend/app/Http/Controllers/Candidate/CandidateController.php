@@ -101,7 +101,7 @@ abstract class CandidateController extends Controller
         foreach (self::DOCUMENT_KEYS as $key) {
             $documents[$key] = [
                 'key' => $key,
-                'file_url' => $this->fileUrl($profile->{$key} ?? null),
+                'file_url' => $this->fileUrl($profile->{$key} ?? null, 'document'),
                 'status' => $this->cleanDocumentStatus($verification?->{$key.'_status'}),
                 'remarks' => (string) ($verification?->{$key.'_remarks'} ?? ''),
             ];
@@ -439,7 +439,7 @@ abstract class CandidateController extends Controller
         return $profile->location ?: $profile->professionalCity ?: $profile->cityOfEducation;
     }
 
-    protected function fileUrl(?string $path): string
+    protected function fileUrl(?string $path, string $mediaType = 'image'): string
     {
         if (! is_string($path) || trim($path) === '') {
             return '';
@@ -454,14 +454,20 @@ abstract class CandidateController extends Controller
         $path = ltrim($path, '/');
 
         if (str_starts_with($path, 'storage/')) {
-            return url($path);
+            $path = substr($path, strlen('storage/'));
         }
 
         if (str_starts_with($path, 'candidate/')) {
-            return url('storage/'.$path);
+            $legacyPath = substr($path, strlen('candidate/'));
+            $mediaType = str_starts_with($legacyPath, 'documents/') ? 'document' : $mediaType;
+            $path = ($mediaType === 'document' ? 'candidate_documents' : 'candidate_images')
+                .'/'.basename($legacyPath);
+        } elseif (! str_starts_with($path, 'candidate_images/')
+            && ! str_starts_with($path, 'candidate_documents/')) {
+            return url($path);
         }
 
-        return url($path);
+        return url('storage/'.$path);
     }
 
     protected function normalizePathList($value): array
