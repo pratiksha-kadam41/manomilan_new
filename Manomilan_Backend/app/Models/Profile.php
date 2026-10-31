@@ -22,7 +22,8 @@ class Profile extends Model
             // Priority: Model Attribute > Session > Default
             $type = $profile->registration_type ?: session('registration_type', 'quick');
 
-            if ($type === 'melava') {
+            if ($type === 'melava') 
+                {
 
                 $prefix = 'MM3-';
 
