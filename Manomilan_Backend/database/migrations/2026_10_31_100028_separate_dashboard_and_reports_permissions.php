@@ -7,6 +7,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // This migration follows the dynamic RBAC migration that creates these module keys.
         DB::table('modules')
             ->where('module_key', 'reports_data_export')
             ->update(['api_prefixes' => json_encode(['/reports'])]);

@@ -21,24 +21,31 @@ return new class extends Migration
 
     public function up(): void
     {
-        if (! Schema::hasTable('roles')) {
-            Schema::create('roles', function (Blueprint $table) {
-                $table->id();
-                $table->string('name')->unique();
-                $table->string('user_type')->unique();
-                $table->timestamps();
-            });
+        foreach (['roles', 'modules', 'users', 'applications'] as $table) {
+            if (! Schema::hasTable($table)) {
+                throw new RuntimeException("The {$table} table must exist before dynamic RBAC can be installed.");
+            }
         }
 
         if (! Schema::hasColumn('modules', 'module_key')) {
             Schema::table('modules', function (Blueprint $table) {
                 $table->string('module_key', 120)->nullable();
-                $table->string('route', 255)->nullable();
-                $table->text('frontend_routes')->nullable();
-                $table->string('icon', 100)->nullable();
-                $table->unsignedInteger('sort_order')->default(0);
-                $table->text('api_prefixes')->nullable();
             });
+        }
+        if (! Schema::hasColumn('modules', 'route')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->string('route', 255)->nullable());
+        }
+        if (! Schema::hasColumn('modules', 'frontend_routes')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->text('frontend_routes')->nullable());
+        }
+        if (! Schema::hasColumn('modules', 'icon')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->string('icon', 100)->nullable());
+        }
+        if (! Schema::hasColumn('modules', 'sort_order')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->unsignedInteger('sort_order')->default(0));
+        }
+        if (! Schema::hasColumn('modules', 'api_prefixes')) {
+            Schema::table('modules', fn (Blueprint $table) => $table->text('api_prefixes')->nullable());
         }
 
         if (! Schema::hasColumn('roles', 'is_active')) {
@@ -49,49 +56,57 @@ return new class extends Migration
 
         $this->populateModuleKeys();
 
-        Schema::table('modules', function (Blueprint $table) {
-            $table->unique('module_key');
-        });
+        if (! Schema::hasIndex('modules', 'modules_module_key_unique')) {
+            Schema::table('modules', function (Blueprint $table) {
+                $table->unique('module_key');
+            });
+        }
 
-        Schema::create('module_permissions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('module_id')->constrained('modules')->cascadeOnDelete();
-            $table->string('permission_key', 40);
-            $table->timestamps();
-            $table->unique(['module_id', 'permission_key']);
-        });
+        if (! Schema::hasTable('module_permissions')) {
+            Schema::create('module_permissions', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('module_id')->constrained('modules')->cascadeOnDelete();
+                $table->string('permission_key', 40);
+                $table->timestamps();
+                $table->unique(['module_id', 'permission_key']);
+            });
+        }
 
-        Schema::create('role_module_permissions', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('role_id')->constrained('roles')->cascadeOnDelete();
-            $table->foreignId('module_permission_id')->constrained('module_permissions')->cascadeOnDelete();
-            $table->foreignId('granted_by')->nullable()->constrained('users')->nullOnDelete();
-            $table->timestamps();
-            $table->unique(['role_id', 'module_permission_id'], 'role_module_permission_unique');
-        });
+        if (! Schema::hasTable('role_module_permissions')) {
+            Schema::create('role_module_permissions', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('role_id')->constrained('roles')->cascadeOnDelete();
+                $table->foreignId('module_permission_id')->constrained('module_permissions')->cascadeOnDelete();
+                $table->foreignId('granted_by')->nullable()->constrained('users')->nullOnDelete();
+                $table->timestamps();
+                $table->unique(['role_id', 'module_permission_id'], 'role_module_permission_unique');
+            });
+        }
 
-        Schema::create('activity_logs', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->string('user_name_snapshot')->nullable();
-            $table->string('action', 100);
-            $table->foreignId('module_id')->nullable()->constrained('modules')->nullOnDelete();
-            $table->string('module_name_snapshot')->nullable();
-            $table->string('entity_type', 120)->nullable();
-            $table->string('entity_id', 120)->nullable();
-            $table->string('candidate_id', 120)->nullable();
-            $table->json('old_values')->nullable();
-            $table->json('new_values')->nullable();
-            $table->text('description')->nullable();
-            $table->string('ip_address', 45)->nullable();
-            $table->text('user_agent')->nullable();
-            $table->string('request_method', 12)->nullable();
-            $table->text('request_url')->nullable();
-            $table->timestamps();
-            $table->index(['created_at', 'action']);
-            $table->index(['user_id', 'created_at']);
-            $table->index(['candidate_id', 'created_at']);
-        });
+        if (! Schema::hasTable('activity_logs')) {
+            Schema::create('activity_logs', function (Blueprint $table) {
+                $table->id();
+                $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
+                $table->string('user_name_snapshot')->nullable();
+                $table->string('action', 100);
+                $table->foreignId('module_id')->nullable()->constrained('modules')->nullOnDelete();
+                $table->string('module_name_snapshot')->nullable();
+                $table->string('entity_type', 120)->nullable();
+                $table->string('entity_id', 120)->nullable();
+                $table->string('candidate_id', 120)->nullable();
+                $table->json('old_values')->nullable();
+                $table->json('new_values')->nullable();
+                $table->text('description')->nullable();
+                $table->string('ip_address', 45)->nullable();
+                $table->text('user_agent')->nullable();
+                $table->string('request_method', 12)->nullable();
+                $table->text('request_url')->nullable();
+                $table->timestamps();
+                $table->index(['created_at', 'action']);
+                $table->index(['user_id', 'created_at']);
+                $table->index(['candidate_id', 'created_at']);
+            });
+        }
 
         $this->seedPermissionDefinitions();
         $this->grantInitialPermissions();
@@ -183,7 +198,17 @@ return new class extends Migration
                 ]);
         }
 
-        $applicationId = DB::table('applications')->orderBy('id')->value('id');
+        $applicationId = DB::table('applications')->where('app_code', 'Manomilan')->value('id');
+        if (! $applicationId) {
+            $applicationId = DB::table('applications')->insertGetId([
+                'app_code' => 'Manomilan',
+                'app_name' => 'ManoMilan',
+                'description' => 'ManoMilan application',
+                'status' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
         if ($applicationId && ! DB::table('modules')->where('module_key', 'admin_dashboard')->exists()) {
             DB::table('modules')->insert([
                 'application_id' => $applicationId,
@@ -206,12 +231,10 @@ return new class extends Migration
     {
         foreach (DB::table('modules')->pluck('id') as $moduleId) {
             foreach (self::PERMISSIONS as $permission) {
-                DB::table('module_permissions')->insert([
-                    'module_id' => $moduleId,
-                    'permission_key' => $permission,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
+                DB::table('module_permissions')->updateOrInsert(
+                    ['module_id' => $moduleId, 'permission_key' => $permission],
+                    ['created_at' => now(), 'updated_at' => now()]
+                );
             }
         }
     }
@@ -239,13 +262,21 @@ return new class extends Migration
                 'payments_verification' => ['view', 'create'],
                 'software_ticket_module' => ['view', 'create', 'edit'],
             ] as $moduleKey => $permissions) {
+                $permissionQuery = DB::table('module_permissions')
+                    ->join('modules', 'modules.id', '=', 'module_permissions.module_id')
+                    ->where('modules.module_key', $moduleKey)
+                    ->whereIn('module_permissions.permission_key', $permissions)
+                    ->whereNotExists(function ($query) use ($roleId) {
+                        $query->selectRaw('1')
+                            ->from('role_module_permissions as existing_grant')
+                            ->where('existing_grant.role_id', $roleId)
+                            ->whereColumn('existing_grant.module_permission_id', 'module_permissions.id');
+                    })
+                    ->selectRaw('? as role_id, module_permissions.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP', [$roleId]);
+
                 DB::table('role_module_permissions')->insertUsing(
                     ['role_id', 'module_permission_id', 'created_at', 'updated_at'],
-                    DB::table('module_permissions')
-                        ->join('modules', 'modules.id', '=', 'module_permissions.module_id')
-                        ->where('modules.module_key', $moduleKey)
-                        ->whereIn('module_permissions.permission_key', $permissions)
-                        ->selectRaw('? as role_id, module_permissions.id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP', [$roleId])
+                    $permissionQuery
                 );
             }
         }
@@ -253,10 +284,18 @@ return new class extends Migration
 
     private function grantAllPermissions(int $roleId): void
     {
+        $permissionQuery = DB::table('module_permissions')
+            ->whereNotExists(function ($query) use ($roleId) {
+                $query->selectRaw('1')
+                    ->from('role_module_permissions as existing_grant')
+                    ->where('existing_grant.role_id', $roleId)
+                    ->whereColumn('existing_grant.module_permission_id', 'module_permissions.id');
+            })
+            ->selectRaw('? as role_id, id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP', [$roleId]);
+
         DB::table('role_module_permissions')->insertUsing(
             ['role_id', 'module_permission_id', 'created_at', 'updated_at'],
-            DB::table('module_permissions')
-                ->selectRaw('? as role_id, id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP', [$roleId])
+            $permissionQuery
         );
     }
 };
