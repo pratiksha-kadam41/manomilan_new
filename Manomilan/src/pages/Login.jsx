@@ -121,7 +121,11 @@ export default function Login() {
         localStorage.setItem("rememberedUser", values.username);
       else localStorage.removeItem("rememberedUser");
 
-      window.location.assign(homeForRole(role)); // admin → /admin, candidate → /candidate
+      const mustChangePassword = !isRegistering && user?.is_password_changed === false;
+      const passwordChangePath = role === "admin"
+        ? "/admin/change-password"
+        : "/candidate/change-password";
+      window.location.assign(mustChangePassword ? passwordChangePath : homeForRole(role));
     } catch (err) {
       setServerError(err.message || "Login failed. Please try again.");
       setValues((v) => ({ ...v, password: "" }));

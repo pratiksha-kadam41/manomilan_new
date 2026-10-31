@@ -55,7 +55,7 @@ const parseBody = async (response) => {
 
 export async function request(
   path,
-  { method = "GET", body, headers = {}, auth = true, raw = false } = {},
+  { method = "GET", body, headers = {}, auth = true, raw = false, signal: externalSignal } = {},
 ) {
   const url = /^https?:\/\//i.test(path)
     ? path
@@ -70,6 +70,12 @@ export async function request(
 
   const options = { method, headers: finalHeaders };
   const controller = new AbortController();
+  const abortForExternalSignal = () => controller.abort();
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener("abort", abortForExternalSignal, { once: true });
+  }
   const timeoutId = window.setTimeout(() => controller.abort(), 60000);
   options.signal = controller.signal;
 
@@ -87,6 +93,7 @@ export async function request(
     response = await fetch(url, options);
   } catch (error) {
     if (error?.name === "AbortError") {
+      if (externalSignal?.aborted) throw error;
       throw new ApiError("The server took too long to respond. Please try again.", 0);
     }
     throw new ApiError(
@@ -95,6 +102,7 @@ export async function request(
     );
   } finally {
     window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abortForExternalSignal);
   }
 
   if (raw) {

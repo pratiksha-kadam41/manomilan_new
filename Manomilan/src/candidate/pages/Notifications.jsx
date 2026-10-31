@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bell, CheckCheck, CheckCircle2, Heart, Inbox, Loader2, Settings2, Trash2,
-  UserRound,
+  UserRound, Sparkles,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchDetailModal from "../components/MatchDetailModal";
@@ -16,18 +16,28 @@ import {
   markAllNotificationsRead, markNotificationRead,
 } from "../api";
 import { dispatchNotificationsChanged, groupNotifications, timeAgo } from "../utils";
+import "./Notifications.css";
 
 const FILTERS = [
-  ["all", "All notifications"],
+  ["all", "Any status"],
   ["unread", "Unread"],
   ["read", "Read"],
 ];
 
+const CATEGORIES = [
+  ["all", "All"],
+  ["interests", "Interests"],
+  ["matches", "Matches"],
+  ["system", "System"],
+];
+
 const iconFor = (type = "") => {
-  if (type.includes("interest") || type.includes("connect")) return Heart;
-  if (type.includes("document") || type.includes("verified")) return CheckCircle2;
-  if (type.includes("preference")) return Settings2;
-  if (type.includes("profile")) return UserRound;
+  const normalizedType = String(type || "").toLowerCase();
+  if (normalizedType.includes("interest") || normalizedType.includes("connect")) return Heart;
+  if (normalizedType.includes("match")) return Sparkles;
+  if (normalizedType.includes("document") || normalizedType.includes("verified")) return CheckCircle2;
+  if (normalizedType.includes("preference")) return Settings2;
+  if (normalizedType.includes("profile")) return UserRound;
   return Inbox;
 };
 
@@ -41,6 +51,7 @@ export default function Notifications() {
   const [items, setItems] = useState([]);
   const [pagination, setPagination] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [category, setCategory] = useState("all");
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -50,26 +61,31 @@ export default function Notifications() {
   const [removeTarget, setRemoveTarget] = useState(null);
   const [removing, setRemoving] = useState(false);
   const [selected, setSelected] = useState(null);
+  const loadRequestId = useRef(0);
   const { toasts, push, dismiss } = useToasts();
 
   const load = useCallback(async () => {
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     setError("");
     try {
       const result = await getNotifications({
+        category,
         filter,
         page,
         per_page: 12,
       });
+      if (requestId !== loadRequestId.current) return;
       setItems(result?.notifications || []);
       setPagination(result?.pagination || null);
       setUnreadCount(Number(result?.unread_count) || 0);
     } catch (loadError) {
+      if (requestId !== loadRequestId.current) return;
       setError(loadError.message || "Could not load notifications.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
-  }, [filter, page]);
+  }, [category, filter, page]);
 
   useEffect(() => {
     getCandidateProfile()
@@ -87,7 +103,15 @@ export default function Notifications() {
 
   useEffect(() => {
     Promise.resolve().then(load);
+    return () => {
+      loadRequestId.current += 1;
+    };
   }, [load]);
+
+  const changeCategory = (value) => {
+    setCategory(value);
+    setPage(1);
+  };
 
   const changeFilter = (value) => {
     setFilter(value);
@@ -99,10 +123,14 @@ export default function Notifications() {
     setBusyId(item.id);
     try {
       const result = await markNotificationRead(item.id);
-      setItems((current) => current.map((entry) => (
-        entry.id === item.id ? { ...entry, read: true, read_at: new Date().toISOString() } : entry
-      )));
       setUnreadCount(Number(result?.unread_count) || 0);
+      if (filter === "unread") {
+        await load();
+      } else {
+        setItems((current) => current.map((entry) => (
+          entry.id === item.id ? { ...entry, read: true, read_at: new Date().toISOString() } : entry
+        )));
+      }
       dispatchNotificationsChanged();
     } catch (readError) {
       push(readError.message || "Could not mark this notification as read.", "error");
@@ -126,6 +154,7 @@ export default function Notifications() {
       setUnreadCount(0);
       dispatchNotificationsChanged();
       push("All notifications marked as read.");
+      if (filter === "unread") await load();
     } catch (markError) {
       push(markError.message || "Could not mark all notifications as read.", "error");
     } finally {
@@ -154,21 +183,36 @@ export default function Notifications() {
 
   return (
     <CandidateLayout currentPath="/candidate/notifications" candidateInfo={candidateInfo}>
-      <Toasts items={toasts} onDismiss={dismiss} />
-      <PageHeader
-        eyebrow="Notifications"
-        title="Stay up to date"
-        subtitle="Interests, verification updates and important account activity appear here."
-        actions={(
-          <button type="button" className="cnd-btn cnd-btn-primary" onClick={markAll} disabled={markingAll || !unreadCount}>
-            {markingAll ? <Loader2 size={16} className="cnd-spin" /> : <CheckCheck size={16} />}
-            Mark all as read
-          </button>
-        )}
-      />
+      <div className="notifications-page">
+        <Toasts items={toasts} onDismiss={dismiss} />
+        <PageHeader
+          eyebrow="Your updates"
+          title="Notifications"
+          subtitle="Interests, match activity and account updates—all in one place."
+          actions={(
+            <button type="button" className="cnd-btn cnd-btn-primary" onClick={markAll} disabled={markingAll || !unreadCount}>
+              {markingAll ? <Loader2 size={16} className="cnd-spin" /> : <CheckCheck size={16} />}
+              Mark all as read
+            </button>
+          )}
+        />
 
       <section className="cnd-card cnd-notifications-card">
         <header className="cnd-notifications-head">
+          <div className="notifications-category-tabs" role="tablist" aria-label="Notification category">
+            {CATEGORIES.map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={category === value}
+                className={category === value ? "active" : ""}
+                onClick={() => changeCategory(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="cnd-segmented" role="tablist" aria-label="Filter notifications">
             {FILTERS.map(([value, label]) => (
               <button
@@ -203,10 +247,14 @@ export default function Notifications() {
         ) : items.length === 0 ? (
           <EmptyState
             icon={Bell}
-            title={filter === "unread" ? "No unread notifications" : "No notifications yet"}
+            title={filter === "unread"
+              ? "No unread notifications"
+              : category === "all" ? "No notifications yet" : `No ${category} notifications yet`}
             message={filter === "unread"
               ? "You are all caught up. New updates will appear here."
-              : "When someone sends an interest or your verification status changes, you will see it here."}
+              : category === "all"
+                ? "When someone sends an interest or your verification status changes, you will see it here."
+                : "New updates in this category will appear here."}
             action={filter !== "all" ? (
               <button type="button" className="cnd-btn cnd-btn-ghost" onClick={() => changeFilter("all")}>
                 View all notifications
@@ -290,6 +338,7 @@ export default function Notifications() {
         onCancel={() => setRemoveTarget(null)}
         onConfirm={removeNotification}
       />
+      </div>
     </CandidateLayout>
   );
 }

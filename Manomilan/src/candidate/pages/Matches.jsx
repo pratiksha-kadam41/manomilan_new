@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Filter, Loader2, RotateCcw, Search, SlidersHorizontal, Users,
 } from "lucide-react";
@@ -13,6 +13,7 @@ import { getCachedHomeData } from "../../auth";
 import { useNavigate } from "react-router-dom";
 import { getCandidateProfile, getMatches, sendInterest } from "../api";
 import { humanGender, text } from "../utils";
+import "./Matches.css";
 
 const EMPTY_FILTERS = {
   q: "",
@@ -22,6 +23,7 @@ const EMPTY_FILTERS = {
   caste: "",
   city: "",
   education: "",
+  profession: "",
   marital_status: "",
   sort: "best_match",
 };
@@ -47,9 +49,10 @@ export default function Matches() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState({});
-  const [selected, setSelected] = useState(null);
   const [profileChecked, setProfileChecked] = useState(Boolean(cached?.profile));
   const [showMoreFilters, setShowMoreFilters] = useState(false);
+  const loadRequestId = useRef(0);
+  const loadAbortController = useRef(null);
   const { toasts, push, dismiss } = useToasts();
 
   useEffect(() => {
@@ -70,37 +73,59 @@ export default function Matches() {
   }, []);
 
   const load = useCallback(async () => {
+    loadAbortController.current?.abort();
+    const controller = new AbortController();
+    loadAbortController.current = controller;
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     setError("");
     try {
-      const result = await getMatches({ ...applied, page, per_page: 12 });
+      const result = await getMatches({ ...applied, page, per_page: 12 }, { signal: controller.signal });
+      if (requestId !== loadRequestId.current) return;
       setMatches(result?.matches || []);
       setOptions(result?.filters || {});
       setPagination(result?.pagination || null);
     } catch (loadError) {
+      if (requestId !== loadRequestId.current) return;
       setError(loadError.message || "Could not load compatible profiles.");
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
   }, [applied, page]);
 
   useEffect(() => {
     if (!profileChecked || !profile) return;
     Promise.resolve().then(load);
+    return () => {
+      loadAbortController.current?.abort();
+      loadRequestId.current += 1;
+    };
   }, [load, profile, profileChecked]);
 
+  useEffect(() => {
+    if (!showMoreFilters) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setShowMoreFilters(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [showMoreFilters]);
+
   const updateDraft = (key, value) => setDraft((current) => ({ ...current, [key]: value }));
+  const closeFilters = () => setShowMoreFilters(false);
 
   const applyFilters = (event) => {
     event?.preventDefault();
     setPage(1);
     setApplied({ ...draft });
+    closeFilters();
   };
 
   const clearFilters = () => {
     setDraft(EMPTY_FILTERS);
     setApplied(EMPTY_FILTERS);
     setPage(1);
+    closeFilters();
   };
 
   useEffect(() => {
@@ -154,19 +179,20 @@ export default function Matches() {
 
   return (
     <CandidateLayout currentPath="/candidate/matches" candidateInfo={candidateInfo}>
-      <Toasts items={toasts} onDismiss={dismiss} />
-      <PageHeader
-        eyebrow="Discover"
-        title="Find your match"
-        subtitle="Search verified profiles ranked by your partner preferences and compatibility."
-        actions={(
-          <button type="button" className="cnd-btn cnd-btn-ghost" onClick={clearFilters}>
-            <RotateCcw size={16} /> Reset filters
-          </button>
-        )}
-      />
+      <div className={`find-matches-page ${showMoreFilters ? "filters-open" : ""}`}>
+        <Toasts items={toasts} onDismiss={dismiss} />
+        <PageHeader
+          eyebrow="Discover"
+          title="Find your match"
+          subtitle="Search verified profiles ranked by your partner preferences and compatibility."
+          actions={(
+            <button type="button" className="cnd-btn cnd-btn-ghost" onClick={clearFilters}>
+              <RotateCcw size={16} /> Reset filters
+            </button>
+          )}
+        />
 
-      {!profileChecked ? (
+        {!profileChecked ? (
         <CardGridSkeleton count={6} />
       ) : !profile ? (
         <EmptyState
@@ -207,6 +233,7 @@ export default function Matches() {
                 className="cnd-btn cnd-btn-ghost cnd-more-filters-button"
                 onClick={() => setShowMoreFilters((current) => !current)}
                 aria-expanded={showMoreFilters}
+                aria-controls="find-matches-filter-panel"
               >
                 <SlidersHorizontal size={16} />
                 {showMoreFilters ? "Hide filters" : "More filters"}
@@ -214,7 +241,24 @@ export default function Matches() {
               </button>
 
               {showMoreFilters ? (
-              <div className="cnd-advanced-filter-grid">
+              <>
+              <button
+                type="button"
+                className="find-matches-filter-backdrop"
+                onClick={closeFilters}
+                aria-label="Close filters"
+                tabIndex={-1}
+              />
+              <div
+                id="find-matches-filter-panel"
+                className="cnd-advanced-filter-grid find-matches-filter-panel"
+                role="region"
+                aria-label="Match filters"
+              >
+                <div className="find-matches-filter-panel-head">
+                  <strong>Refine your matches</strong>
+                  <button type="button" className="cnd-icon-btn" onClick={closeFilters} aria-label="Close filters">×</button>
+                </div>
               <FormField label="Sort by" name="match-sort">
                 <select id="match-sort" value={draft.sort} onChange={(event) => updateDraft("sort", event.target.value)}>
                   {SORTS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
@@ -274,6 +318,16 @@ export default function Matches() {
                 </select>
               </FormField>
 
+              <FormField label="Profession" name="match-profession">
+                <input
+                  id="match-profession"
+                  type="search"
+                  value={draft.profession}
+                  onChange={(event) => updateDraft("profession", event.target.value)}
+                  placeholder="Any profession"
+                />
+              </FormField>
+
               <FormField label="Marital status" name="marital-status">
                 <select id="marital-status" value={draft.marital_status} onChange={(event) => updateDraft("marital_status", event.target.value)}>
                   <option value="">Any status</option>
@@ -281,6 +335,7 @@ export default function Matches() {
                 </select>
               </FormField>
               </div>
+              </>
               ) : null}
 
               <div className="cnd-filter-actions">
@@ -323,6 +378,7 @@ export default function Matches() {
                   <MatchResultCard
                     key={match.id}
                     match={match}
+                    detailed
                     onOpen={(item) => navigate(`/candidate/matches/${item.id}`)}
                     onInterest={handleInterest}
                     interestBusy={Boolean(busy[match.id])}
@@ -334,7 +390,7 @@ export default function Matches() {
           )}
         </>
       )}
-
+      </div>
     </CandidateLayout>
   );
 }

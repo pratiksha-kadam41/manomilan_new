@@ -36,7 +36,14 @@ const ICON_COLORS = {
   "/admin/report": "#6366f1",
 };
 
-export default function Sidebar({ currentPath }) {
+export default function Sidebar({ currentPath, onNavigate }) {
+  const activePath = menuItems.reduce((active, item) => {
+    const matches =
+      currentPath === item.path ||
+      (item.path !== "/admin" && currentPath.startsWith(`${item.path}/`));
+    return matches && item.path.length > active.length ? item.path : active;
+  }, "");
+
   return (
     <aside className="adm-sidebar">
       <div className="adm-brand">
@@ -53,7 +60,8 @@ export default function Sidebar({ currentPath }) {
               key={item.path}
               to={item.path}
               title={item.label}
-              className={`adm-link ${currentPath === item.path ? "active" : ""}`}
+              className={`adm-link ${activePath === item.path ? "active" : ""}`}
+              onClick={onNavigate}
             >
               <span className="adm-link-icon" style={{ "--adm-icon-color": ICON_COLORS[item.path] || "#64748b" }}>
                 <Icon size={20} strokeWidth={2.2} />

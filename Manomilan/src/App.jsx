@@ -26,7 +26,10 @@ import ProfileVerify from "./admin/pages/Profiles/ProfileVerify.jsx";
 import Receipt from "./admin/pages/Profiles/Receipt.jsx";
 import PaymentScreenshot from "./admin/pages/Profiles/PaymentScreenshot.jsx";
 import MelavaPayments from "./admin/pages/MelavaPayments.jsx";
+import MelavaBioDataPage from "./admin/pages/MelavaBioDataPage.jsx";
 import MelavaCampaigns from "./admin/pages/MelavaCampaigns.jsx";
+import Reports from "./admin/pages/Reports.jsx";
+import ResetPasswords from "./admin/pages/ResetPasswords.jsx";
 import ProfileDetail from "./pages/ProfileDetail.jsx";
 
 // Add a page here: "/url-name": Component
@@ -55,12 +58,18 @@ const ROUTES = {
   "/admin": Dashboard,
   "/admin/change-password": ChangePassword,
   "/admin/profiles": Profiles,
+  "/admin/nri-profiles": Profiles,
+  "/admin/verified-profiles": Profiles,
+  "/admin/unverified-profiles": Profiles,
   "/admin/melava": MelavaPayments,
   "/admin/melava-campaigns": MelavaCampaigns,
+  "/admin/reset-passwords": ResetPasswords,
+  "/admin/report": Reports,
 };
 
 // Pages whose URL contains an id (only digits are accepted)
 const DYNAMIC_ROUTES = [
+  { pattern: /^\/admin\/melava-biodata\/(\d+)$/, Page: MelavaBioDataPage },
   { pattern: /^\/admin\/profiles\/(\d+)\/details$/, Page: ProfileDetail },
   { pattern: /^\/admin\/profiles\/(\d+)$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
@@ -115,10 +124,24 @@ export default function App() {
   const wrongRole =
     (isAdminPath && session && !isAdminRole(session.role))
     || (isCandidatePath && session && isAdminRole(session.role));
+  const mustChangePassword =
+    loggedIn &&
+    session.user?.is_password_changed === false &&
+    path !== "/candidate/change-password" &&
+    path !== "/admin/change-password";
   useEffect(() => {
     if (wrongRole) window.location.replace(homeForRole(session.role));
   }, [wrongRole, session?.role]);
+  useEffect(() => {
+    if (mustChangePassword) {
+      const passwordChangePath = isAdminRole(session.role)
+        ? "/admin/change-password"
+        : "/candidate/change-password";
+      window.location.replace(passwordChangePath);
+    }
+  }, [mustChangePassword, session?.role]);
   if (wrongRole) return null;
+  if (mustChangePassword) return null;
 
   // CHANGED: find the page (and the id from the URL, if any)
   const { Page: Matched, params } = matchRoute(path);

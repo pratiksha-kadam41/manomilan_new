@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\DocumentVerification;
 use App\Http\Controllers\Controller;
 use App\Profile;
+use App\Support\NriProfileScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,9 +79,16 @@ class ProfileController extends Controller
             return $this->forbidden();
         }
 
+        $request->validate([
+            'verification_status' => ['nullable', Rule::in(['verified', 'unverified'])],
+            'nri' => ['nullable', 'boolean'],
+        ]);
+
         $q = trim((string) $request->input('q', ''));
         $gender = $request->input('gender');
         $regType = $request->input('reg_type');
+        $verificationStatus = $request->input('verification_status');
+        $nri = $request->boolean('nri');
 
         $sortBy = $request->input('sort_by', 'registration_date');
         if (! in_array($sortBy, ['registration_number', 'registration_date', 'serial_no'], true)) {
@@ -122,7 +130,17 @@ class ProfileController extends Controller
                 } else {
                     $query->where('profiles.registration_type', $regType);
                 }
+            })
+            ->when($verificationStatus === 'verified', function ($query) {
+                $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) = 'completed'");
+            })
+            ->when($verificationStatus === 'unverified', function ($query) {
+                $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) != 'completed'");
             });
+
+        if ($nri) {
+            $query = NriProfileScope::apply($query);
+        }
 
         if ($sortBy === 'registration_number') {
             $query->orderByRaw("COALESCE(NULLIF(profiles.registration_number, ''), profiles.profile_id) {$sortOrder}");
@@ -151,9 +169,16 @@ class ProfileController extends Controller
             return $this->forbidden();
         }
 
+        $request->validate([
+            'verification_status' => ['nullable', Rule::in(['verified', 'unverified'])],
+            'nri' => ['nullable', 'boolean'],
+        ]);
+
         $q = trim((string) $request->input('q', ''));
         $gender = $request->input('gender');
         $regType = $request->input('reg_type');
+        $verificationStatus = $request->input('verification_status');
+        $nri = $request->boolean('nri');
         $sortBy = $request->input('sort_by', 'registration_date');
         if (! in_array($sortBy, ['registration_number', 'registration_date', 'serial_no'], true)) {
             $sortBy = 'registration_date';
@@ -200,7 +225,17 @@ class ProfileController extends Controller
                 } else {
                     $query->where('profiles.registration_type', $regType);
                 }
+            })
+            ->when($verificationStatus === 'verified', function ($query) {
+                $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) = 'completed'");
+            })
+            ->when($verificationStatus === 'unverified', function ($query) {
+                $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) != 'completed'");
             });
+
+        if ($nri) {
+            $query = NriProfileScope::apply($query);
+        }
 
         if ($sortBy === 'registration_number') {
             $query->orderByRaw("COALESCE(NULLIF(profiles.registration_number, ''), profiles.profile_id) {$sortOrder}");

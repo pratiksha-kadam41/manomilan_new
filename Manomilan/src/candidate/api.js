@@ -6,10 +6,12 @@ let candidateProfileCache;
 let candidateProfileCachedAt = 0;
 let matchesCache = new Map();
 let matchesRequestCache = new Map();
+let matchesCacheVersion = 0;
 let matchCache = new Map();
 let matchRequestCache = new Map();
 
 const CANDIDATE_PROFILE_CACHE_MS = 5 * 60 * 1000;
+const MATCHES_CACHE_MS = 30 * 1000;
 const DASHBOARD_CACHE_KEY = "candidate_dashboard_cache";
 const DASHBOARD_CACHE_MS = 60 * 60 * 1000;
 let dashboardRequest = null;
@@ -120,17 +122,32 @@ export const getPreferences = async () => data(await request("/candidate/prefere
 export const savePreferences = async (payload) =>
   data(await request("/candidate/preferences", { method: "PUT", body: payload }));
 
-export const getMatches = async (params = {}) => {
+export const getMatches = async (params = {}, { signal } = {}) => {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, value]) => value !== "" && value != null),
   ).toString();
   const cacheKey = query || "__default__";
-  if (matchesCache.has(cacheKey)) return matchesCache.get(cacheKey);
+  const cached = matchesCache.get(cacheKey);
+  if (cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
+  if (cached) matchesCache.delete(cacheKey);
+
+  const cacheVersion = matchesCacheVersion;
+  const path = `/candidate/matches${query ? `?${query}` : ""}`;
+  if (signal) {
+    const result = data(await request(path, { signal }));
+    if (cacheVersion === matchesCacheVersion) {
+      matchesCache.set(cacheKey, { result, cachedAt: Date.now() });
+    }
+    return result;
+  }
+
   if (!matchesRequestCache.has(cacheKey)) {
-    matchesRequestCache.set(cacheKey, request(`/candidate/matches${query ? `?${query}` : ""}`)
+    matchesRequestCache.set(cacheKey, request(path)
       .then((body) => data(body))
       .then((result) => {
-        matchesCache.set(cacheKey, result);
+        if (cacheVersion === matchesCacheVersion) {
+          matchesCache.set(cacheKey, { result, cachedAt: Date.now() });
+        }
         return result;
       })
       .finally(() => matchesRequestCache.delete(cacheKey)));
@@ -156,6 +173,7 @@ export const getMatch = async (id) => {
 };
 
 export const invalidateMatchesCache = () => {
+  matchesCacheVersion += 1;
   matchesCache.clear();
   matchCache.clear();
 };

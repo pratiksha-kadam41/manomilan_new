@@ -6,10 +6,10 @@ import "../admin.css";
 
 export default function AdminLayout({ currentPath, contentClassName = "", children }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // Close the dropdown when clicking anywhere outside it
   useEffect(() => {
     const handleClick = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
@@ -20,26 +20,61 @@ export default function AdminLayout({ currentPath, contentClassName = "", childr
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    if (!mobileOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setMobileOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
+
   const handleLogout = () => {
-  setMenuOpen(false);
-  clearSession();                  // removes the session and cancels it on the server
-  window.location.replace("/");   // replace, so Back can't return to the admin page
-};
+    setMenuOpen(false);
+    clearSession();
+    window.location.replace("/");
+  };
+
   const handleChangePassword = () => {
     setMenuOpen(false);
     window.location.assign("/admin/change-password");
   };
 
+  const toggleNavigation = () => {
+    if (window.matchMedia("(max-width: 768px)").matches) {
+      setMobileOpen((open) => !open);
+      return;
+    }
+    setCollapsed((value) => !value);
+  };
+
   return (
-    <div className={`adm-wrapper ${collapsed ? "collapsed" : ""}`}>
-      <Sidebar currentPath={currentPath} />
+    <div className={`adm-wrapper ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`}>
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="adm-sidebar-overlay"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
+      <Sidebar
+        currentPath={currentPath}
+        onNavigate={() => setMobileOpen(false)}
+      />
 
       <div className="adm-main">
         <header className="adm-topbar">
           <button
             className="adm-toggle"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label="Toggle sidebar"
+            type="button"
+            onClick={toggleNavigation}
+            aria-label="Toggle navigation menu"
+            aria-expanded={
+              window.matchMedia("(max-width: 768px)").matches
+                ? mobileOpen
+                : !collapsed
+            }
           >
             <Menu size={22} />
           </button>

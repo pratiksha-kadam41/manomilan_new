@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\Auth\ChangePasswordController;
 use App\Http\Controllers\Api\Auth\LoginController;
 use App\Http\Controllers\Api\Auth\RegisterController;
+use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\Api\EnquiryController;
 use App\Http\Controllers\Api\HomeController;
 use App\Http\Controllers\Api\InterestController;
@@ -43,6 +44,8 @@ Route::middleware('auth.api-token')->group(function () {
 
     Route::get('/dashboard', [HomeController::class, 'dashboard']);
     Route::get('/home-data', [HomeController::class, 'homeData']);
+    Route::get('/admin/users', [AdminUserController::class, 'index']);
+    Route::post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword'])->whereNumber('id');
 
     // Specific profile routes must stay above the generic /profiles/{id} route.
     Route::get('/profiles/allProfiles', [ProfileController::class, 'allProfiles']);
@@ -80,6 +83,8 @@ Route::middleware('auth.api-token')->group(function () {
 
     Route::get('/melava-registrations', [MelavaRegistrationController::class, 'index']);
     Route::get('/melava-registrations/{id}', [MelavaRegistrationController::class, 'show']);
+    Route::put('/melava-registrations/{id}', [MelavaRegistrationController::class, 'update']);
+    Route::post('/melava-registrations/{id}/payment', [MelavaRegistrationController::class, 'updatePayment']);
     Route::put('/melava-registrations/{id}/payment-status', [MelavaRegistrationController::class, 'updatePaymentStatus']);
     Route::get('/melava-campaigns', [MelavaCampaignController::class, 'index']);
     Route::post('/melava-campaigns', [MelavaCampaignController::class, 'store']);

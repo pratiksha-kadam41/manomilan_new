@@ -12,14 +12,20 @@ class ChangePasswordController extends Controller
 {
     public function changePassword(Request $request)
     {
-        $data = $request->validate([
-            'current_password' => ['required', 'string'],
-            'new_password' => ['required', 'string', 'min:6', 'max:255', 'confirmed'],
-        ]);
-
         $user = $request->user();
+        $rules = [
+            'new_password' => ['required', 'string', 'min:6', 'max:255', 'confirmed'],
+        ];
 
-        if (! Hash::check($data['current_password'], $user->password)) {
+        if ($user->is_password_changed) {
+            $rules['current_password'] = ['required', 'string'];
+        } else {
+            $rules['current_password'] = ['nullable', 'string'];
+        }
+
+        $data = $request->validate($rules);
+
+        if ($user->is_password_changed && ! Hash::check($data['current_password'], $user->password)) {
             return response()->json([
                 'success' => false,
                 'message' => 'Current password is incorrect.',

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Download, X } from "lucide-react";
+import { Download, ExternalLink, X } from "lucide-react";
 import { BIODATA_TEMPLATES } from "./biodataTemplates.js";
 import "./BioDataModal.css";
 
@@ -122,9 +122,20 @@ function BioDataPaper({ profile, template, orientation, paperRef }) {
   );
 }
 
-export default function BioDataModal({ profile, onClose }) {
-  const [selected, setSelected] = useState(null);
-  const [orientation, setOrientation] = useState("portrait");
+export default function BioDataModal({
+  profile,
+  onClose,
+  onOpenFullScreen,
+  initialTemplateId = "",
+  initialOrientation = "portrait",
+  fullScreen = false,
+  loading = false,
+  loadError = "",
+}) {
+  const [selected, setSelected] = useState(
+    () => BIODATA_TEMPLATES.find((template) => template.id === String(initialTemplateId)) || null,
+  );
+  const [orientation, setOrientation] = useState(initialOrientation);
   const [creatingPdf, setCreatingPdf] = useState(false);
   const [error, setError] = useState("");
   const paperRef = useRef(null);
@@ -187,14 +198,21 @@ export default function BioDataModal({ profile, onClose }) {
   };
 
   return (
-    <div className="bd-overlay" role="presentation" onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
+    <div className={`bd-overlay${fullScreen ? " bd-overlay-fullscreen" : ""}`} role="presentation" onMouseDown={(event) => {
+      if (!fullScreen && event.target === event.currentTarget) onClose();
     }}>
-      <section className={`bd-dialog${selected ? " bd-dialog-preview" : ""}`} role="dialog" aria-modal="true"
+      <section className={`bd-dialog${selected ? " bd-dialog-preview" : ""}${fullScreen ? " bd-dialog-fullscreen" : ""}`} role="dialog" aria-modal="true"
         aria-labelledby="bd-dialog-title">
         <header className="bd-dialog-head">
           <h2 id="bd-dialog-title">{selected ? "Bio-Data Preview" : "Select a Template"}</h2>
-          <button type="button" className="bd-close" aria-label="Close biodata preview" onClick={onClose}><X size={22} /></button>
+          <button
+            type="button"
+            className="bd-close"
+            aria-label={fullScreen ? "Close full-page biodata" : "Close biodata preview"}
+            onClick={onClose}
+          >
+            <X size={22} />
+          </button>
         </header>
 
         {!selected ? (
@@ -228,17 +246,43 @@ export default function BioDataModal({ profile, onClose }) {
               </button>
             </div>
             <div className="bd-preview-scroll">
-              <BioDataPaper
-                profile={profile}
-                template={selected}
-                orientation={orientation}
-                paperRef={paperRef}
-              />
+              {loading ? (
+                <div className="bd-load-state" role="status">
+                  <span className="bd-loader" />
+                  <strong>Preparing candidate details…</strong>
+                  <span>You can choose the template while this loads.</span>
+                </div>
+              ) : loadError ? (
+                <div className="bd-load-error" role="alert">{loadError}</div>
+              ) : profile ? (
+                <BioDataPaper
+                  profile={profile}
+                  template={selected}
+                  orientation={orientation}
+                  paperRef={paperRef}
+                />
+              ) : (
+                <div className="bd-load-error" role="alert">Candidate BioData is unavailable.</div>
+              )}
             </div>
             {error && <p className="bd-error" role="alert">{error}</p>}
             <footer className="bd-actions">
               <button type="button" className="bd-btn bd-btn-back" onClick={() => { setSelected(null); setError(""); }}>Back to Templates</button>
-              <button type="button" className="bd-btn bd-btn-download" onClick={downloadPdf} disabled={creatingPdf}>
+              {onOpenFullScreen && profile && !loading && !loadError && (
+                <button
+                  type="button"
+                  className="bd-btn bd-btn-fullscreen"
+                  onClick={() => onOpenFullScreen({ template: selected, orientation })}
+                >
+                  <ExternalLink size={17} /> Open Full Page
+                </button>
+              )}
+              <button
+                type="button"
+                className="bd-btn bd-btn-download"
+                onClick={downloadPdf}
+                disabled={creatingPdf || loading || Boolean(loadError) || !profile}
+              >
                 <Download size={17} /> {creatingPdf ? "Creating PDF…" : "Download as PDF"}
               </button>
             </footer>

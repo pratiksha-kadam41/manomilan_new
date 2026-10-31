@@ -14,6 +14,7 @@ class NotificationController extends CandidateController
             $user = $this->candidate($request);
             $filters = $request->validate([
                 'filter' => ['nullable', 'in:all,unread,read'],
+                'category' => ['nullable', 'in:all,interests,matches,system'],
                 'type' => ['nullable', 'string', 'max:50'],
                 'page' => ['nullable', 'integer', 'min:1'],
                 'per_page' => ['nullable', 'integer', 'min:5', 'max:50'],
@@ -29,6 +30,20 @@ class NotificationController extends CandidateController
             }
             if (! empty($filters['type'])) {
                 $query->where('type', $filters['type']);
+            }
+
+            $category = $filters['category'] ?? 'all';
+            if ($category === 'interests') {
+                $query->where(function ($categoryQuery) {
+                    $categoryQuery->whereRaw('LOWER(type) LIKE ?', ['%interest%'])
+                        ->orWhereRaw('LOWER(type) LIKE ?', ['%connect%']);
+                });
+            } elseif ($category === 'matches') {
+                $query->whereRaw('LOWER(type) LIKE ?', ['%match%']);
+            } elseif ($category === 'system') {
+                $query->whereRaw('LOWER(type) NOT LIKE ?', ['%interest%'])
+                    ->whereRaw('LOWER(type) NOT LIKE ?', ['%connect%'])
+                    ->whereRaw('LOWER(type) NOT LIKE ?', ['%match%']);
             }
 
             $paginator = $query->latest()->paginate((int) ($filters['per_page'] ?? 12));

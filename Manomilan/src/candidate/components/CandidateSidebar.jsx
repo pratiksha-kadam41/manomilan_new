@@ -40,7 +40,7 @@ export default function CandidateSidebar({ currentPath, unreadCount = 0, onLogou
   return (
     <aside className="cnd-sidebar">
       <Link className="cnd-sidebar-brand" to="/candidate" aria-label="Aaryans Manomilan candidate portal">
-        <img src="/img/aaryan-manomilan-logo.png" alt="Aaryans Manomilan" />
+        <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
       </Link>
 
       <div className="cnd-sidebar-scroll">

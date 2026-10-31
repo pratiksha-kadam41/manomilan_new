@@ -36,6 +36,14 @@ export function saveSession({ token, role, user = null }) {
   );
 }
 
+export function markPasswordChanged() {
+  const session = read();
+  if (!session?.user) return;
+
+  session.user.is_password_changed = true;
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
 export function getSession() {
   const session = read();
   if (!session) return null;

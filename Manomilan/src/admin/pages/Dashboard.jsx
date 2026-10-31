@@ -76,8 +76,6 @@ const MONTH_FMT = new Intl.DateTimeFormat("en-IN", { month: "short" });
 const TIME_FMT = new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit" });
 const TODAY_FMT = new Intl.DateTimeFormat("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 const RTF = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-const REDUCED_MOTION =
-  typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 const slug = (v) => String(v || "").toLowerCase().replace(/\s+/g, "-");
 const parseDay = (v) => (v ? new Date(`${v}T00:00:00`) : null);
@@ -138,34 +136,6 @@ const downloadCsv = (rows, filename) => {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
-/* Smooth count-up for numbers; skips animation for reduced-motion users. */
-function useCountUp(target, duration = 800) {
-  const [value, setValue] = useState(typeof target === "number" ? target : 0);
-  const prev = useRef(0);
-
-  useEffect(() => {
-    if (typeof target !== "number") return undefined;
-    if (REDUCED_MOTION) {
-      setValue(target);
-      prev.current = target;
-      return undefined;
-    }
-    const from = prev.current;
-    const start = performance.now();
-    let raf;
-    const tick = (now) => {
-      const t = Math.min((now - start) / duration, 1);
-      setValue(Math.round(from + (target - from) * (1 - Math.pow(1 - t, 3))));
-      if (t < 1) raf = requestAnimationFrame(tick);
-      else prev.current = target;
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, duration]);
-
-  return typeof target === "number" ? value : null;
-}
-
 /* =====================================================================
    3. SMALL COMPONENTS
    ===================================================================== */
@@ -206,12 +176,12 @@ const HeroArt = memo(function HeroArt() {
 
 const KpiCard = memo(function KpiCard({ item, value, index }) {
   const Icon = item.icon;
-  const shown = useCountUp(value);
+  const shown = typeof value === "number" ? value.toLocaleString("en-IN") : "—";
   return (
     <AppLink to={item.to} className="dx-kpi" style={{ "--c": item.color, "--i": index }}>
       <span className="dx-kpi-icon"><Icon size={22} aria-hidden="true" /></span>
       <span className="dx-kpi-body">
-        <strong>{shown === null ? "—" : shown.toLocaleString("en-IN")}</strong>
+        <strong>{shown}</strong>
         <small>{item.label}</small>
       </span>
       <ArrowUpRight className="dx-kpi-go" size={16} aria-hidden="true" />
@@ -307,14 +277,19 @@ export default function Dashboard() {
     let active = true;
     if (!silentRef.current) setLoading(true);
     silentRef.current = false;
-    setError("");
 
     const params = period === "custom"
       ? { force: true, period: "", from: fromDate, to: toDate }
       : { force: true, period };
 
     getAdminDashboard(params)
-      .then((data) => { if (active) { setStats(data); setUpdatedAt(new Date()); } })
+      .then((data) => {
+        if (active) {
+          setStats(data);
+          setError("");
+          setUpdatedAt(new Date());
+        }
+      })
       .catch((err) => { if (active) setError(err?.message || "Could not load dashboard data."); })
       .finally(() => { if (active) setLoading(false); });
 

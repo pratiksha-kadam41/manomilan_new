@@ -9,6 +9,7 @@ export default function MatchResultCard({
   onOpen,
   onInterest,
   interestBusy = false,
+  detailed = false,
 }) {
   const interestDone = Boolean(match.interest_id);
   const interestDisabled = interestDone || interestBusy;
@@ -33,7 +34,13 @@ export default function MatchResultCard({
         <span className="cnd-match-body">
           <span className="cnd-match-title-row">
             <strong>{name}</strong>
+            {detailed && match.match_percentage != null ? (
+              <span className="find-match-score">{Math.round(Number(match.match_percentage))}% match</span>
+            ) : null}
           </span>
+          {detailed && (match.registration_number || match.profile_id) ? (
+            <span className="find-match-id">ID: {match.registration_number || match.profile_id}</span>
+          ) : null}
           <span className="cnd-match-sub">
             {[age, gender, match.city].filter(Boolean).join(" • ") || "Profile details added"}
           </span>
@@ -48,6 +55,9 @@ export default function MatchResultCard({
                 <span key={reason}>{reason}</span>
               ))}
             </span>
+          ) : null}
+          {detailed && match.about ? (
+            <span className="find-match-about">{match.about}</span>
           ) : null}
         </span>
       </button>

@@ -1,12 +1,3 @@
-export const stats = {
-  totalUsers: 1923,
-  totalProfiles: 1599,
-  verified: 1357,
-  unverified: 242,
-};
-
-export const genderData = { male: 994, female: 605 };
-
 export const menuItems = [
   { label: "Dashboard", path: "/admin" },
   { label: "Profiles", path: "/admin/profiles" },

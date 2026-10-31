@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, BadgeCheck, Briefcase, GraduationCap, Heart, Loader2,
-  MapPin, Pause, Play, ChevronLeft, ChevronRight, X,
+  ArrowLeft, BadgeCheck, Briefcase, GraduationCap, Heart, Home, Loader2,
+  MapPin, Pause, Play, ChevronLeft, ChevronRight, Sparkles, UserRound, X,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import { getCandidateProfile, getMatch, sendInterest } from "../api";
-import { Avatar, ErrorState, Skeleton } from "../components/Ui";
+import { Avatar, ErrorState, Skeleton, Toasts } from "../components/Ui";
 import { displayValue, humanGender, text } from "../utils";
+import { useToasts } from "../useToasts";
+import "./CandidateProfileView.css";
 
 const value = (item) => text(item) ? item : null;
 
@@ -22,6 +24,7 @@ export default function CandidateProfileView({ params = {} }) {
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
   const [slideshow, setSlideshow] = useState(false);
   const [slideshowFullscreen, setSlideshowFullscreen] = useState(false);
+  const { toasts, push, dismiss } = useToasts();
 
   useEffect(() => {
     let active = true;
@@ -58,12 +61,6 @@ export default function CandidateProfileView({ params = {} }) {
   }, [candidate]);
 
   useEffect(() => {
-    setActivePhotoIndex(0);
-    setSlideshow(false);
-    setSlideshowFullscreen(false);
-  }, [id]);
-
-  useEffect(() => {
     if (!slideshow || photos.length < 2) return undefined;
     const timer = window.setInterval(() => {
       setActivePhotoIndex((current) => (current + 1) % photos.length);
@@ -73,19 +70,26 @@ export default function CandidateProfileView({ params = {} }) {
 
   useEffect(() => {
     if (!slideshowFullscreen) return undefined;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const closeOnEscape = (event) => {
       if (event.key === "Escape") {
         setSlideshow(false);
         setSlideshowFullscreen(false);
+      } else if (event.key === "ArrowLeft" && photos.length > 1) {
+        setSlideshow(false);
+        setActivePhotoIndex((current) => (current - 1 + photos.length) % photos.length);
+      } else if (event.key === "ArrowRight" && photos.length > 1) {
+        setSlideshow(false);
+        setActivePhotoIndex((current) => (current + 1) % photos.length);
       }
     };
     window.addEventListener("keydown", closeOnEscape);
     return () => {
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [slideshowFullscreen]);
+  }, [photos.length, slideshowFullscreen]);
 
   const movePhoto = (direction) => {
     setSlideshow(false);
@@ -102,7 +106,8 @@ export default function CandidateProfileView({ params = {} }) {
   const details = candidate?.details || {};
   const sections = [
     {
-      title: "Basic details",
+      title: "Personal information",
+      icon: UserRound,
       rows: [
         ["Registration number", candidate?.registration_number],
         ["Gender", humanGender(candidate?.gender)],
@@ -117,13 +122,11 @@ export default function CandidateProfileView({ params = {} }) {
         ["Sub community", details.sub_caste],
         ["Mother tongue", candidate?.mother_tongue],
         ["Languages", details.language],
-        ["Current location", candidate?.city],
-        ["Address", details.address],
-        ["Permanent address", details.permanent_address],
       ],
     },
     {
-      title: "Education",
+      title: "Education and career",
+      icon: GraduationCap,
       rows: [
         ["Education", candidate?.education],
         ["Degree / diploma", candidate?.degree],
@@ -131,11 +134,6 @@ export default function CandidateProfileView({ params = {} }) {
         ["Specialisation", details.specialisation],
         ["College / university", candidate?.college],
         ["City of education", details.city_of_education],
-      ],
-    },
-    {
-      title: "Career",
-      rows: [
         ["Profession", candidate?.profession],
         ["Working field", candidate?.field_of_working],
         ["Organisation", candidate?.organisation],
@@ -148,6 +146,7 @@ export default function CandidateProfileView({ params = {} }) {
     },
     {
       title: "Family",
+      icon: Home,
       rows: [
         ["Father", details.father_name],
         ["Father alive", details.father_alive],
@@ -165,7 +164,18 @@ export default function CandidateProfileView({ params = {} }) {
       ],
     },
     {
-      title: "Lifestyle and interests",
+      title: "Location details",
+      icon: MapPin,
+      rows: [
+        ["Current location", candidate?.city],
+        ["Professional city", details.professional_city],
+        ["Address", details.address],
+        ["Permanent address", details.permanent_address],
+      ],
+    },
+    {
+      title: "Additional information",
+      icon: Sparkles,
       rows: [
         ["Diet", candidate?.diet],
         ["Smoking", candidate?.smoking],
@@ -178,11 +188,6 @@ export default function CandidateProfileView({ params = {} }) {
         ["Cooking skills", details.cooking_skills],
         ["Instagram", details.instagram],
         ["Facebook", details.facebook],
-      ],
-    },
-    {
-      title: "Birth and horoscope",
-      rows: [
         ["Place of birth", details.place_of_birth],
         ["Time of birth", details.time_of_birth],
         ["Rashi", details.rashi],
@@ -199,6 +204,14 @@ export default function CandidateProfileView({ params = {} }) {
     try {
       const result = await sendInterest(candidate.id);
       setCandidate((current) => ({ ...current, interest_id: result?.interest?.id || -1 }));
+      push(`Interest sent to ${text(candidate.full_name, "this profile")}.`);
+    } catch (interestError) {
+      if (interestError.status === 409) {
+        setCandidate((current) => ({ ...current, interest_id: current?.interest_id || -1 }));
+        push("You have already sent an interest to this profile.", "info");
+      } else {
+        push(interestError.message || "Could not send the interest.", "error");
+      }
     } finally {
       setInterestBusy(false);
     }
@@ -212,7 +225,8 @@ export default function CandidateProfileView({ params = {} }) {
 
   return (
     <CandidateLayout currentPath="/candidate/matches" candidateInfo={candidateInfo}>
-      <div className="cnd-profile-view">
+      <div className="match-details-page">
+        <Toasts items={toasts} onDismiss={dismiss} />
         <button type="button" className="cnd-btn cnd-btn-ghost" onClick={() => navigate(-1)}>
           <ArrowLeft size={17} /> Back to matches
         </button>
@@ -232,7 +246,9 @@ export default function CandidateProfileView({ params = {} }) {
                   <h1>{text(candidate.full_name, "Candidate")}</h1>
                   {candidate.verified ? <span><BadgeCheck size={17} /> Verified</span> : null}
                 </div>
-                <p>{[candidate.age ? `${candidate.age} years` : "", humanGender(candidate.gender), candidate.city].filter(Boolean).join(" • ")}</p>
+                <p>
+                  {[candidate.registration_number || candidate.profile_id ? `ID: ${candidate.registration_number || candidate.profile_id}` : "", candidate.age ? `${candidate.age} years` : "", humanGender(candidate.gender), candidate.city].filter(Boolean).join(" • ")}
+                </p>
                 <div className="cnd-profile-tags">
                   {candidate.profession ? <span><Briefcase size={15} /> {candidate.profession}</span> : null}
                   {candidate.education ? <span><GraduationCap size={15} /> {candidate.education}</span> : null}
@@ -362,7 +378,7 @@ export default function CandidateProfileView({ params = {} }) {
                         aria-label={`Show photo ${index + 1}`}
                         key={`${photo}-${index}`}
                       >
-                        <img src={photo} alt="" />
+                        <img src={photo} alt="" loading="lazy" decoding="async" />
                       </button>
                     ))}
                   </div>
@@ -374,9 +390,10 @@ export default function CandidateProfileView({ params = {} }) {
               {sections.map((section) => {
                 const rows = section.rows.filter(([, item]) => value(item) !== null);
                 if (!rows.length) return null;
+                const SectionIcon = section.icon;
                 return (
                   <section className="cnd-card cnd-profile-section" key={section.title}>
-                    <h2>{section.title}</h2>
+                    <h2><SectionIcon size={18} /> {section.title}</h2>
                     <dl>
                       {rows.map(([label, item]) => (
                         <div key={label}><dt>{label}</dt><dd>{displayValue(item)}</dd></div>

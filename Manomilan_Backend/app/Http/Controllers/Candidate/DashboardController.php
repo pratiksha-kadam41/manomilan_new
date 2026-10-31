@@ -6,6 +6,7 @@ use App\Models\CandidateNotification;
 use App\Profile;
 use App\ProfileVisitor;
 use App\UserInterest;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Throwable;
 
@@ -15,18 +16,16 @@ class DashboardController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $profile = $this->candidateProfile($request);
+            $profile = $user->profile_id
+                ? Profile::with('preference')->find($user->profile_id)
+                : null;
             $preference = $profile?->preference;
-            if ($profile) {
-                $preference = $profile->preference;
-            }
 
             $stats = [
                 'profile_completion' => $profile ? (int) $profile->profile_completion : 0,
                 'profile_views' => 0,
                 'matches_available' => 0,
                 'interests_sent' => 0,
-                'unread_notifications' => 0,
             ];
 
             $missing = [];
@@ -45,14 +44,10 @@ class DashboardController extends CandidateController
                 $missing = $this->completionGaps($profile, $preference);
             }
 
-            $stats['unread_notifications'] = CandidateNotification::where('user_id', $user->id)
-                ->whereNull('read_at')
-                ->count();
-
             $recentNotifications = CandidateNotification::where('user_id', $user->id)
                 ->latest()
                 ->limit(5)
-                ->get()
+                ->get(['id', 'type', 'title', 'message', 'read_at', 'created_at'])
                 ->map(fn (CandidateNotification $notification) => [
                     'id' => $notification->id,
                     'type' => $notification->type,
@@ -66,7 +61,7 @@ class DashboardController extends CandidateController
                 'success' => true,
                 'data' => [
                     'user' => $this->presentUser($user),
-                    'profile' => $profile ? $this->presentOwnProfile($profile, $user) : null,
+                    'profile' => $profile ? $this->presentDashboardProfile($profile) : null,
                     'stats' => $stats,
                     'completion' => [
                         'percentage' => $profile ? (int) $profile->profile_completion : 0,
@@ -84,6 +79,28 @@ class DashboardController extends CandidateController
                 'message' => 'Unable to load your dashboard right now.',
             ], 500);
         }
+    }
+
+    private function presentDashboardProfile(Profile $profile): array
+    {
+        return [
+            'id' => $profile->id,
+            'registration_number' => $profile->registration_number ?: $profile->profile_id,
+            'profile_id' => $profile->profile_id,
+            'full_name' => $profile->fullName,
+            'gender' => $profile->groomOrBride,
+            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
+            'photo_url' => $this->fileUrl($profile->profilePhoto),
+            'city' => $this->profileCity($profile),
+            'profile_completion' => (int) $profile->profile_completion,
+            'has_documents' => collect(self::documentKeys())
+                ->contains(fn (string $key) => filled($profile->{$key} ?? null)),
+            'details' => [
+                'education' => $profile->education,
+                'profession' => $profile->profession,
+            ],
+            'preference' => $this->presentPreference($profile->preference),
+        ];
     }
 
     private function completionGaps(Profile $profile, $preference): array

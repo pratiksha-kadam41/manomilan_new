@@ -59,15 +59,188 @@ class MelavaRegistrationController extends Controller
             return $this->forbidden();
         }
 
-        $registrations = MelavaRegistration::with('profile')
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'payment_status' => ['nullable', Rule::in(['pending', 'verified'])],
+            'booklet' => ['nullable', Rule::in(['yes', 'no'])],
+            'gender' => ['nullable', Rule::in(['groom', 'bride'])],
+            'melava_number' => ['nullable', 'string', 'max:255'],
+            'include_filters' => ['nullable', 'boolean'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $query = MelavaRegistration::with('profile')
+            ->when(! empty($filters['q']), function ($query) use ($filters) {
+                $term = trim($filters['q']);
+                $query->where(function ($search) use ($term) {
+                    if (ctype_digit($term)) {
+                        $numberMatch = strlen($term) === 10
+                            ? ['=', $term]
+                            : ['like', $term.'%'];
+                        $search->where('username', $numberMatch[0], $numberMatch[1])
+                            ->orWhereHas('profile', function ($profile) use ($numberMatch) {
+                                $profile->where('serial_no', $numberMatch[0], $numberMatch[1])
+                                    ->orWhere('phone', $numberMatch[0], $numberMatch[1]);
+                            });
+
+                        return;
+                    }
+
+                    $search->where('fullName', 'like', '%' . $term . '%')
+                        ->orWhere('source_of_information', 'like', '%' . $term . '%')
+                        ->orWhere('city', 'like', '%' . $term . '%')
+                        ->orWhere('melava_title', 'like', '%' . $term . '%')
+                        ->orWhere('melava_number', 'like', '%' . $term . '%')
+                        ->orWhereHas('profile', function ($profile) use ($term) {
+                            $profile->where('serial_no', 'like', '%' . $term . '%')
+                                ->orWhere('professionalCity', 'like', '%' . $term . '%');
+                        });
+                });
+            })
+            ->when(isset($filters['payment_status']), function ($query) use ($filters) {
+                $query->where('payment_verified', $filters['payment_status'] === 'verified');
+            })
+            ->when(isset($filters['booklet']), function ($query) use ($filters) {
+                $query->where('is_booklet_req', $filters['booklet'] === 'yes');
+            })
+            ->when(isset($filters['gender']), function ($query) use ($filters) {
+                $genders = $filters['gender'] === 'bride'
+                    ? ['bride', 'female', 'f', 'vadhu']
+                    : ['groom', 'male', 'm', 'var'];
+                $query->whereIn(DB::raw('LOWER(groomOrBride)'), $genders);
+            })
+            ->when(isset($filters['melava_number']), function ($query) use ($filters) {
+                $query->where('melava_number', $filters['melava_number']);
+            });
+
+        $registrations = $query
             ->latest()
-            ->paginate((int) $request->input('per_page', 20));
+            ->paginate((int) ($filters['per_page'] ?? 20));
 
         $registrations->getCollection()->transform(
             fn (MelavaRegistration $registration) => $this->presentRegistration($registration)
         );
 
-        return response()->json(['success' => true, 'data' => $registrations]);
+        $allRegistrations = DB::table('melava_registrations');
+        $stats = $allRegistrations
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw("SUM(CASE WHEN LOWER(groomOrBride) IN ('groom', 'male', 'm', 'var') THEN 1 ELSE 0 END) AS groom")
+            ->selectRaw("SUM(CASE WHEN LOWER(groomOrBride) IN ('bride', 'female', 'f', 'vadhu') THEN 1 ELSE 0 END) AS bride")
+            ->selectRaw('SUM(CASE WHEN is_booklet_req = 1 THEN 1 ELSE 0 END) AS booklet')
+            ->first();
+
+        $response = [
+            'success' => true,
+            'data' => $registrations,
+            'stats' => [
+                'total' => (int) ($stats->total ?? 0),
+                'groom' => (int) ($stats->groom ?? 0),
+                'bride' => (int) ($stats->bride ?? 0),
+                'booklet' => (int) ($stats->booklet ?? 0),
+            ],
+        ];
+
+        if ($request->boolean('include_filters')) {
+            $response['melava_numbers'] = DB::table('melava_registrations')
+                ->whereNotNull('melava_number')
+                ->where('melava_number', '<>', '')
+                ->distinct()
+                ->orderBy('melava_number')
+                ->pluck('melava_number')
+                ->values();
+        }
+
+        return response()->json($response);
+    }
+
+    public function updatePayment(Request $request, int $id)
+    {
+        if (! $this->isAdmin($request->user())) {
+            return $this->forbidden();
+        }
+
+        $registration = MelavaRegistration::find($id);
+        if (! $registration) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Melava registration not found.',
+            ], 404);
+        }
+
+        $data = $request->validate([
+            'payment_type' => ['required', Rule::in(['registration', 'booklet'])],
+            'payment_verified' => ['required', 'boolean'],
+            'payment_screenshot' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+        ]);
+
+        if ($data['payment_type'] === 'booklet' && ! $registration->is_booklet_req) {
+            throw ValidationException::withMessages([
+                'payment_type' => ['This candidate did not request a booklet.'],
+            ]);
+        }
+
+        if (! $request->hasFile('payment_screenshot') && ! $registration->getAttribute(
+            $data['payment_type'] === 'booklet' ? 'booklet_payment_screenshot' : 'payment_screenshot'
+        )) {
+            throw ValidationException::withMessages([
+                'payment_screenshot' => ['Upload a payment proof before saving this payment.'],
+            ]);
+        }
+
+        $newPath = null;
+        try {
+            if ($request->hasFile('payment_screenshot')) {
+                $newPath = $this->storeUpload($request->file('payment_screenshot'), 'melava_payments');
+            }
+
+            DB::transaction(function () use ($registration, $data, $newPath) {
+                $screenshotField = $data['payment_type'] === 'booklet'
+                    ? 'booklet_payment_screenshot'
+                    : 'payment_screenshot';
+                $verifiedField = $data['payment_type'] === 'booklet'
+                    ? 'booklet_payment_verified'
+                    : 'payment_verified';
+
+                if ($newPath) {
+                    $registration->{$screenshotField} = $newPath;
+                }
+                $registration->{$verifiedField} = (bool) $data['payment_verified'];
+                $registration->save();
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Melava payment updated successfully.',
+                'data' => [
+                    'registration_id' => $registration->id,
+                    'payment_type' => $data['payment_type'],
+                    'payment_verified' => (bool) $data['payment_verified'],
+                    'payment_screenshot_url' => $newPath
+                        ? $this->fileUrl($newPath)
+                        : $this->fileUrl($registration->getAttribute(
+                            $data['payment_type'] === 'booklet' ? 'booklet_payment_screenshot' : 'payment_screenshot'
+                        )),
+                ],
+            ]);
+        } catch (Throwable $e) {
+            if ($newPath) {
+                $absolutePath = public_path($newPath);
+                if (is_file($absolutePath)) {
+                    unlink($absolutePath);
+                }
+            }
+
+            Log::error('Melava payment update failed', [
+                'registration_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update the Melava payment right now.',
+            ], 500);
+        }
     }
 
     public function updatePaymentStatus(Request $request, int $id)
@@ -803,15 +976,311 @@ class MelavaRegistrationController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $this->presentRegistration($registration),
+            'data' => $this->presentRegistration($registration, true),
         ]);
     }
 
-    private function presentRegistration(MelavaRegistration $registration): array
+    public function update(Request $request, int $id)
     {
-        return array_merge($registration->toArray(), [
+        if (! $this->isAdmin($request->user())) {
+            return $this->forbidden();
+        }
+
+        $registration = MelavaRegistration::with('profile')->find($id);
+        if (! $registration || ! $registration->profile) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Melava registration or candidate profile was not found.',
+            ], 404);
+        }
+
+        $request->merge(['username' => $registration->username]);
+        $this->normalizeInput($request);
+        foreach (['existing_candidate_photos', 'existing_additional_photos', 'removed_files'] as $field) {
+            if (is_string($request->input($field))) {
+                $decoded = json_decode($request->input($field), true);
+                if (! is_array($decoded)) {
+                    throw ValidationException::withMessages([
+                        $field => ['Registration file details are invalid.'],
+                    ]);
+                }
+                $request->merge([$field => $decoded]);
+            }
+        }
+
+        $profileFields = [
+            'weight', 'havingSpecsLenses', 'bloodGroup', 'motherTongue', 'language',
+            'specialCases', 'knowAboutMyself', 'permanent_address', 'placeOfBirth',
+            'degreeDiplomaName1', 'degreeDiplomaName2', 'specialisation1', 'specialisation2',
+            'universityBoardCollege', 'additionalEducation1', 'additionalEducation2',
+            'cityOfEducation', 'fieldOfWorking', 'organisationWorkingIn', 'designation',
+            'lengthOfEmployment', 'monthlyIncome', 'annualIncome', 'income_currency', 'hobbies',
+            'extraCurricularActivities', 'achievements', 'sportsAndFitnessLikings',
+            'cookingSkills', 'activeOnSocialSites', 'instagram', 'facebook',
+            'personalMedicalHistory', 'currentMedicalProblems', 'medications', 'parents_contact',
+            'fathersName', 'fatherAlive', 'fatherContactNumber', 'fathersOccupation',
+            'fathersNativePlace', 'mothersName', 'motherAlive', 'motherContactNumber',
+            'mothersOccupation', 'mothersNativePlace', 'noOfBrothers', 'brothersMarried',
+            'noOfSisters', 'sistersMarried', 'parentsIntercasteMarriage', 'parentsDifferentCaste',
+            'familyValues', 'familyFinancialStatus', 'familyAnnualIncome', 'profileCreatorName',
+            'profileCreatorRelation', 'referenceName', 'referenceRelation', 'referenceAddress',
+            'referenceContactNumber', 'referenceEmail',
+        ];
+        $preferenceFields = [
+            'preferred_religion', 'preferred_caste', 'preferred_sub_caste', 'height_from',
+            'height_to', 'preferred_education', 'working_partner', 'preferred_working_field',
+            'expected_income', 'family_type', 'financial_background', 'family_values',
+            'preferred_country', 'preferred_state', 'preferred_city', 'preferred_location',
+            'other_expectations',
+        ];
+        $rules = [
+            'username' => ['required', 'digits:10'],
+            'fullName' => ['required', 'string', 'max:255'],
+            'groomOrBride' => ['required', Rule::in(['groom', 'bride'])],
+            'birthDate' => ['required', 'date', 'before:today'],
+            'maritalStatus' => ['required', 'string', 'max:50'],
+            'religion' => ['required', 'string', 'max:255'],
+            'caste' => ['required', 'string', 'max:255'],
+            'height' => ['required', 'string', 'max:50'],
+            'source_of_information' => ['required', 'string', 'max:255'],
+            'address' => ['required', 'string', 'max:5000'],
+            'education' => ['required', 'string', 'max:255'],
+            'profession' => ['required', 'string', 'max:5000'],
+            'professionalCity' => ['required', 'string', 'max:5000'],
+            'timeOfBirth' => ['nullable', 'date_format:H:i'],
+            'birthTime_ampm' => ['nullable', Rule::in(['AM', 'PM'])],
+            'age_from' => ['nullable', 'integer', 'min:18', 'max:99'],
+            'age_to' => ['nullable', 'integer', 'min:18', 'max:99'],
+            'booklet_required' => ['nullable', 'boolean'],
+            'profilePhoto' => ['nullable', 'image', 'max:5120'],
+            'full_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'half_body_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'selfie_photo' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'identificationProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'birthDateProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'educationProof' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'biodata' => ['nullable', 'file', 'mimes:pdf,doc,docx', 'max:5120'],
+            'additionalPhotos' => ['nullable', 'array', 'max:4'],
+            'additionalPhotos.*' => ['image', 'max:5120'],
+            'candidate_photos' => ['nullable', 'array', 'max:5'],
+            'candidate_photos.*' => ['image', 'max:5120'],
+            'existing_candidate_photos' => ['nullable', 'array', 'max:5'],
+            'existing_candidate_photos.*' => ['string', 'max:2048'],
+            'existing_additional_photos' => ['nullable', 'array', 'max:4'],
+            'existing_additional_photos.*' => ['string', 'max:2048'],
+            'removed_files' => ['nullable', 'array'],
+            'removed_files.*' => [
+                Rule::in([
+                    'profilePhoto', 'full_body_photo', 'half_body_photo', 'selfie_photo',
+                    'identificationProof', 'birthDateProof', 'educationProof',
+                    'candidate_photos', 'additional_photos',
+                ]),
+            ],
+        ];
+        foreach (array_merge($profileFields, $preferenceFields) as $field) {
+            $rules[$field] = ['nullable', 'string', 'max:5000'];
+        }
+        foreach (['noOfBrothers', 'brothersMarried', 'noOfSisters', 'sistersMarried'] as $field) {
+            $rules[$field] = ['nullable', 'integer', 'min:0', 'max:20'];
+        }
+        $rules['referenceEmail'] = ['nullable', 'email', 'max:255'];
+        $data = $request->validate($rules);
+
+        try {
+            DB::transaction(function () use ($request, $data, $registration) {
+                $profile = $registration->profile;
+                $user = User::find($registration->user_id);
+                if (! $user) {
+                    throw new \RuntimeException('The Melava candidate account no longer exists.');
+                }
+                $removedFiles = $request->input('removed_files', []);
+                $existingCandidatePhotos = array_values(array_intersect(
+                    $this->normalizePathList($registration->getRawOriginal('candidate_photos')),
+                    $request->input('existing_candidate_photos', [])
+                ));
+                $existingAdditionalPhotos = array_values(array_intersect(
+                    $this->normalizePathList($profile->getRawOriginal('additional_photos')),
+                    $request->input('existing_additional_photos', [])
+                ));
+                $candidateUploadCount = count((array) $request->file('candidate_photos', []));
+                $additionalUploadCount = count((array) $request->file('additionalPhotos', []));
+
+                if (count($existingCandidatePhotos) + $candidateUploadCount > 5) {
+                    throw ValidationException::withMessages([
+                        'candidate_photos' => ['You can keep or upload up to 5 candidate photos.'],
+                    ]);
+                }
+                if (count($existingAdditionalPhotos) + $additionalUploadCount > 4) {
+                    throw ValidationException::withMessages([
+                        'additionalPhotos' => ['You can keep or upload up to 4 additional photos.'],
+                    ]);
+                }
+
+                $profileData = $this->profilePayload($request);
+                $profileData['phone'] = $registration->username;
+                $profileData['source_of_information'] = $data['source_of_information'];
+                $profileData['professionalCity'] = $data['professionalCity'];
+
+                $uploads = [
+                    'profilePhoto' => ['profilePhoto', 'profile_photos'],
+                    'full_body_photo' => ['full_body_photo', 'full_body_photos'],
+                    'half_body_photo' => ['half_body_photo', 'half_body_photos'],
+                    'selfie_photo' => ['selfie_photo', 'selfie_photos'],
+                    'identificationProof' => ['identificationProof', 'melava_documents'],
+                    'birthDateProof' => ['birthDateProof', 'melava_documents'],
+                    'educationProof' => ['educationProof', 'melava_documents'],
+                ];
+                foreach ($uploads as $field => [$input, $directory]) {
+                    if ($request->hasFile($input)) {
+                        $path = $this->storeUpload($request->file($input), $directory);
+                        $profileData[$field] = $path;
+                    } elseif (in_array($field, $removedFiles, true)) {
+                        $profileData[$field] = $field === 'profilePhoto' ? 'default.png' : null;
+                    }
+                }
+
+                $additionalPhotos = $this->storeUploads($request->file('additionalPhotos', []), 'melava_additional_photos');
+                if ($additionalPhotos || in_array('additional_photos', $removedFiles, true)) {
+                    $profileData['additional_photos'] = array_merge($existingAdditionalPhotos, $additionalPhotos);
+                }
+
+                $profile->fill($profileData);
+                $profile->save();
+                $user->name = $data['fullName'];
+                $user->save();
+
+                $preferenceData = $this->preferencePayload($request);
+                $preferenceData['preferred_location'] = $data['preferred_location']
+                    ?? trim(implode(', ', array_filter([
+                        $data['preferred_city'] ?? null,
+                        $data['preferred_state'] ?? null,
+                        $data['preferred_country'] ?? null,
+                    ])));
+                Preference::updateOrCreate(['user_id' => $user->id], $preferenceData);
+
+                $registration->fill([
+                    'fullName' => $data['fullName'],
+                    'groomOrBride' => $data['groomOrBride'],
+                    'birthDate' => $data['birthDate'],
+                    'maritalStatus' => $data['maritalStatus'],
+                    'caste' => $data['caste'],
+                    'subCaste' => $data['subCaste'] ?? null,
+                    'education' => $data['education'],
+                    'profession' => $data['profession'],
+                    'city' => $data['professionalCity'],
+                    'address' => $data['address'],
+                    'height' => $data['height'],
+                    'parents_contact' => $data['parents_contact'] ?? null,
+                    'fathersName' => $data['fathersName'] ?? null,
+                    'mothersName' => $data['mothersName'] ?? null,
+                    'noOfBrothers' => $data['noOfBrothers'] ?? null,
+                    'noOfSisters' => $data['noOfSisters'] ?? null,
+                    'age_from' => $data['age_from'] ?? null,
+                    'age_to' => $data['age_to'] ?? null,
+                    'height_from' => $data['height_from'] ?? null,
+                    'height_to' => $data['height_to'] ?? null,
+                    'preferred_education' => $data['preferred_education'] ?? null,
+                    'preferred_working_field' => $data['preferred_working_field'] ?? null,
+                    'preferred_caste' => $data['preferred_caste'] ?? null,
+                    'preferred_location' => $preferenceData['preferred_location'] ?: null,
+                    'other_expectations' => $data['other_expectations'] ?? '',
+                    'source_of_information' => $data['source_of_information'],
+                    'birth_verification_doc' => $request->hasFile('birthDateProof')
+                        ? $profile->birthDateProof
+                        : $registration->birth_verification_doc,
+                    'candidate_photos' => $request->exists('existing_candidate_photos')
+                        || $request->hasFile('candidate_photos')
+                        || in_array('candidate_photos', $removedFiles, true)
+                        ? array_merge(
+                            $existingCandidatePhotos,
+                            $this->storeUploads($request->file('candidate_photos', []), 'melava_candidate_photos')
+                        )
+                        : $registration->candidate_photos,
+                    'biodata' => $request->hasFile('biodata')
+                        ? $this->storeUpload($request->file('biodata'), 'melava_biodata')
+                        : $registration->biodata,
+                    'is_booklet_req' => $request->boolean('booklet_required'),
+                    'total_amount' => (float) $registration->registration_fee
+                        + ($request->boolean('booklet_required') ? (float) $registration->booklet_fee : 0),
+                    'updated_by' => $request->user()->id,
+                ]);
+                $registration->save();
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Melava registration updated successfully.',
+                'data' => ['registration_id' => $registration->id],
+            ]);
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            Log::error('Melava registration admin update failed', [
+                'registration_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update the Melava registration right now.',
+            ], 500);
+        }
+    }
+
+    private function presentRegistration(MelavaRegistration $registration, bool $includeFormData = false): array
+    {
+        $data = array_merge($registration->toArray(), [
             'payment_screenshot_url' => $this->fileUrl($registration->payment_screenshot),
+            'booklet_payment_screenshot_url' => $this->fileUrl($registration->booklet_payment_screenshot),
+            'profile_photo_url' => $this->fileUrl($registration->profile?->getRawOriginal('profilePhoto')),
         ]);
+
+        if ($includeFormData) {
+            $profile = $registration->profile;
+            $user = User::with('preference')->find($registration->user_id);
+            $campaign = DB::table('melava_campaigns')->where('id', $registration->melava_campaign_id)->first();
+            $profilePhoto = $profile?->getRawOriginal('profilePhoto');
+            $candidatePhotos = $this->normalizePathList($registration->getRawOriginal('candidate_photos'));
+            $additionalPhotos = $this->normalizePathList($profile?->getRawOriginal('additional_photos'));
+
+            $data['edit_form'] = [
+                'profile' => $profile ? $this->profileForRestore($profile) : [],
+                'preference' => $user?->preference?->toArray() ?? [],
+                'profile_photo_url' => $this->fileUrl($profilePhoto),
+                'profile_photo_path' => $profilePhoto,
+                'full_body_photo_url' => $this->fileUrl($profile?->getRawOriginal('full_body_photo')),
+                'full_body_photo_path' => $profile?->getRawOriginal('full_body_photo'),
+                'half_body_photo_url' => $this->fileUrl($profile?->getRawOriginal('half_body_photo')),
+                'half_body_photo_path' => $profile?->getRawOriginal('half_body_photo'),
+                'selfie_photo_url' => $this->fileUrl($profile?->getRawOriginal('selfie_photo')),
+                'selfie_photo_path' => $profile?->getRawOriginal('selfie_photo'),
+                'identification_proof_url' => $this->fileUrl($profile?->getRawOriginal('identificationProof')),
+                'identification_proof_path' => $profile?->getRawOriginal('identificationProof'),
+                'birth_date_proof_url' => $this->fileUrl(
+                    $profile?->getRawOriginal('birthDateProof') ?: $registration->birth_verification_doc
+                ),
+                'birth_date_proof_path' => $profile?->getRawOriginal('birthDateProof') ?: $registration->birth_verification_doc,
+                'education_proof_url' => $this->fileUrl($profile?->getRawOriginal('educationProof')),
+                'education_proof_path' => $profile?->getRawOriginal('educationProof'),
+                'candidate_photos_urls' => array_map(fn ($path) => $this->fileUrl($path), $candidatePhotos),
+                'candidate_photos_paths' => $candidatePhotos,
+                'additional_photos_urls' => array_map(fn ($path) => $this->fileUrl($path), $additionalPhotos),
+                'additional_photos_paths' => $additionalPhotos,
+                'campaign' => $campaign ? [
+                    'id' => (int) $campaign->id,
+                    'title' => $campaign->title,
+                    'melava_code' => $campaign->melava_code,
+                    'currency' => $campaign->currency,
+                    'fee' => (float) $campaign->registration_fee,
+                    'booklet_available' => (bool) $campaign->booklet_available,
+                    'booklet_fee' => (float) $campaign->booklet_fee,
+                    'qr_image_url' => $this->fileUrl($campaign->qr_image_path),
+                ] : null,
+            ];
+        }
+
+        return $data;
     }
 
     private function fileUrl($path): string

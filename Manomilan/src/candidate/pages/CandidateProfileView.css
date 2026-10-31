@@ -1,0 +1,392 @@
+.match-details-page {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 1180px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.match-details-page > .cnd-btn {
+  justify-self: start;
+  min-height: 40px;
+  border-radius: 10px;
+}
+
+.match-details-page .cnd-profile-hero {
+  display: grid;
+  grid-template-columns: 176px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  margin: 0;
+  padding: 24px;
+  border: 1px solid #efdee4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 9px 28px rgba(80, 20, 42, 0.07);
+}
+
+.match-details-page .cnd-profile-hero-photo {
+  display: grid;
+  place-items: center;
+  width: 176px;
+  height: 190px;
+  overflow: hidden;
+  border: 1px solid #f1e2e7;
+  border-radius: 12px;
+  background: #fff5f8;
+}
+
+.match-details-page .cnd-profile-hero-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.match-details-page .cnd-profile-hero-copy {
+  min-width: 0;
+}
+
+.match-details-page .cnd-profile-name {
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.match-details-page .cnd-profile-name h1 {
+  color: #311622;
+  font-size: clamp(23px, 3vw, 32px);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.match-details-page .cnd-profile-name > span {
+  color: #137650;
+  font-size: 12px;
+}
+
+.match-details-page .cnd-profile-hero-copy > p {
+  margin: 9px 0 14px;
+  color: #806873;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.match-details-page .cnd-profile-tags {
+  gap: 8px;
+}
+
+.match-details-page .cnd-profile-tags > span {
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #f0e2e7;
+  border-radius: 9px;
+  color: #6f4f5b;
+  background: #fff9fb;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.match-details-page .cnd-profile-interest {
+  min-width: 150px;
+  min-height: 44px;
+  border-radius: 10px;
+}
+
+.match-details-page .cnd-profile-interest.done {
+  color: #137650;
+  border-color: #ccebdd;
+  background: #e8f8f1;
+}
+
+.match-details-page .cnd-profile-section {
+  min-width: 0;
+  padding: 21px;
+  border: 1px solid #efdee4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 7px 22px rgba(80, 20, 42, 0.05);
+}
+
+.match-details-page .cnd-profile-section h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 15px;
+  color: #421b2a;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.match-details-page .cnd-profile-section h2 svg {
+  flex: 0 0 auto;
+  color: #ad3159;
+}
+
+.match-details-page .cnd-profile-about p {
+  margin: 0;
+  color: #6e5961;
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+.match-details-page .cnd-profile-photo-heading {
+  margin-bottom: 14px;
+}
+
+.match-details-page .cnd-profile-slideshow-button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #ead4dc;
+  border-radius: 9px;
+  color: #86123c;
+  background: #fff;
+  font-size: 12px;
+}
+
+.match-details-page .cnd-profile-carousel {
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+  border: 1px solid #f0e2e7;
+  border-radius: 12px;
+  background: #f9f4f6;
+}
+
+.match-details-page .cnd-profile-carousel-image {
+  object-fit: contain;
+}
+
+.match-details-page .cnd-profile-carousel-arrow {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: rgba(57, 22, 38, 0.68);
+}
+
+.match-details-page .cnd-profile-carousel-count {
+  background: rgba(57, 22, 38, 0.76);
+}
+
+.match-details-page .cnd-profile-thumbnails {
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.match-details-page .cnd-profile-thumbnails button {
+  flex-basis: 76px;
+  height: 76px;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 10px;
+}
+
+.match-details-page .cnd-profile-thumbnails button.active {
+  border-color: #ad3159;
+}
+
+.match-details-page .cnd-profile-details-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.match-details-page .cnd-profile-section dl div {
+  grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f3e8ec;
+}
+
+.match-details-page .cnd-profile-section dl div:last-child {
+  border-bottom: 0;
+}
+
+.match-details-page .cnd-profile-section dt {
+  color: #8d7580;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.match-details-page .cnd-profile-section dd {
+  color: #39232c;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.match-details-page .cnd-profile-view-loading {
+  grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.match-details-page .cnd-skeleton-modal-photo {
+  min-height: 230px;
+}
+
+.match-details-page .cnd-photo-slideshow {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  grid-template: auto 1fr auto / 72px minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  background: rgba(28, 12, 19, 0.97);
+}
+
+.match-details-page .cnd-photo-slideshow-top {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.match-details-page .cnd-photo-slideshow-top button,
+.match-details-page .cnd-photo-slideshow-arrow {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.match-details-page .cnd-photo-slideshow-top button {
+  width: 42px;
+  height: 42px;
+}
+
+.match-details-page .cnd-photo-slideshow-image {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 150px);
+  object-fit: contain;
+}
+
+.match-details-page .cnd-photo-slideshow-arrow {
+  grid-row: 2;
+  width: 52px;
+  height: 52px;
+}
+
+.match-details-page .cnd-photo-slideshow-prev {
+  grid-column: 1;
+}
+
+.match-details-page .cnd-photo-slideshow-next {
+  grid-column: 3;
+}
+
+.match-details-page .cnd-photo-slideshow-control {
+  grid-column: 1 / -1;
+  justify-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 999px;
+  color: #24121a;
+  background: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .match-details-page .cnd-profile-hero {
+    grid-template-columns: 140px minmax(0, 1fr);
+    gap: 18px;
+    padding: 18px;
+  }
+
+  .match-details-page .cnd-profile-hero-photo {
+    width: 140px;
+    height: 160px;
+  }
+
+  .match-details-page .cnd-profile-interest {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 620px) {
+  .match-details-page {
+    gap: 14px;
+  }
+
+  .match-details-page .cnd-profile-hero {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 13px;
+    padding: 17px;
+    text-align: center;
+  }
+
+  .match-details-page .cnd-profile-hero-photo {
+    width: min(100%, 220px);
+    height: 230px;
+  }
+
+  .match-details-page .cnd-profile-hero-copy {
+    width: 100%;
+  }
+
+  .match-details-page .cnd-profile-name,
+  .match-details-page .cnd-profile-tags {
+    justify-content: center;
+  }
+
+  .match-details-page .cnd-profile-interest {
+    grid-column: auto;
+    width: 100%;
+    justify-self: stretch;
+  }
+
+  .match-details-page .cnd-profile-section {
+    padding: 16px;
+  }
+
+  .match-details-page .cnd-profile-photo-heading {
+    align-items: flex-start;
+  }
+
+  .match-details-page .cnd-profile-carousel {
+    aspect-ratio: 4 / 5;
+  }
+
+  .match-details-page .cnd-profile-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .match-details-page .cnd-profile-section dl div {
+    grid-template-columns: minmax(105px, 0.8fr) minmax(0, 1.2fr);
+    gap: 9px;
+  }
+
+  .match-details-page .cnd-profile-view-loading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .match-details-page .cnd-photo-slideshow {
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    gap: 5px;
+    padding: 10px;
+  }
+
+  .match-details-page .cnd-photo-slideshow-image {
+    max-height: calc(100dvh - 140px);
+  }
+
+  .match-details-page .cnd-photo-slideshow-arrow {
+    width: 40px;
+    height: 40px;
+  }
+}

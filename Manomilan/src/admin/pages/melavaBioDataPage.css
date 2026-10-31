@@ -1,0 +1,59 @@
+.mbp-state {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: #e9eef0;
+  color: #23313e;
+  font-family: inherit;
+}
+
+.mbp-state section {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 480px);
+  padding: 32px;
+  border: 1px solid #dbe3ea;
+  border-radius: 14px;
+  background: #fff;
+  text-align: center;
+}
+
+.mbp-state h1,
+.mbp-state p {
+  margin: 0;
+}
+
+.mbp-state p {
+  color: #6b7280;
+}
+
+.mbp-state button {
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #2a6365;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.mbp-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #dbe3ea;
+  border-top-color: #2a6365;
+  border-radius: 50%;
+  animation: mbp-spin 0.8s linear infinite;
+}
+
+@keyframes mbp-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mbp-spinner { animation: none; }
+}

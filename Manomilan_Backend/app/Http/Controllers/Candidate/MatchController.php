@@ -28,6 +28,7 @@ class MatchController extends CandidateController
                 'caste' => ['nullable', 'string', 'max:255'],
                 'city' => ['nullable', 'string', 'max:255'],
                 'education' => ['nullable', 'string', 'max:255'],
+                'profession' => ['nullable', 'string', 'max:255'],
                 'marital_status' => ['nullable', 'string', 'max:50'],
                 'sort' => ['nullable', 'in:best_match,newest,age_asc,age_desc'],
                 'page' => ['nullable', 'integer', 'min:1'],
@@ -78,7 +79,6 @@ class MatchController extends CandidateController
                 return array_merge($this->presentPublicProfile($profile), [
                     'match_percentage' => $match['score'],
                     'match_reasons' => $match['reasons'],
-                    'interest_id' => $interestRow?->id,
                     'interest_id' => $interestRow?->id,
                 ]);
             });
@@ -155,7 +155,6 @@ class MatchController extends CandidateController
                         'match_percentage' => $match['score'],
                         'match_reasons' => $match['reasons'],
                         'interest_id' => $interest?->id,
-                        'interest_id' => $interest?->id,
                     ]),
                 ],
             ]);
@@ -189,14 +188,22 @@ class MatchController extends CandidateController
             $query->whereDate('birthDate', '>=', Carbon::now()->subYears((int) $filters['age_max'] + 1)->addDay()->toDateString());
         }
 
-        foreach (['religion', 'caste', 'marital_status'] as $column) {
-            if (! empty($filters[$column])) {
-                $query->where($column, $filters[$column]);
+        foreach ([
+            'religion' => 'religion',
+            'caste' => 'caste',
+            'marital_status' => 'maritalStatus',
+        ] as $filter => $column) {
+            if (! empty($filters[$filter])) {
+                $query->where($column, $filters[$filter]);
             }
         }
 
         if (! empty($filters['education'])) {
             $query->where('education', 'like', '%'.$filters['education'].'%');
+        }
+
+        if (! empty($filters['profession'])) {
+            $query->where('profession', 'like', '%'.trim($filters['profession']).'%');
         }
 
         if (! empty($filters['city'])) {

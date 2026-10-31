@@ -17,6 +17,14 @@
   --adm-sidebar-collapsed: 78px;
 }
 
+#root:has(.adm-wrapper) {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  border: 0;
+  text-align: left;
+}
+
 *,
 *::before,
 *::after {
@@ -43,7 +51,11 @@ body {
   background: #fff;
   border-right: 1px solid var(--adm-border);
   box-shadow: 4px 0 24px rgba(16, 24, 40, 0.04);
-  transition: width 0.25s ease;
+  transition: width 0.25s ease, transform 0.25s ease;
+}
+
+.adm-sidebar-overlay {
+  display: none;
 }
 
 .adm-brand {
@@ -276,14 +288,25 @@ body {
 @media (max-width: 768px) {
   .adm-sidebar {
     width: min(280px, 86vw);
+    transform: translateX(-100%);
+    box-shadow: 12px 0 32px rgba(16, 24, 40, 0.14);
+  }
+
+  .adm-wrapper.mobile-open .adm-sidebar {
+    transform: translateX(0);
+  }
+
+  .adm-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: block;
+    border: 0;
+    background: rgba(16, 24, 40, 0.4);
   }
 
   .adm-main {
     margin-left: 0;
-  }
-
-  .adm-wrapper.collapsed .adm-sidebar {
-    transform: translateX(-100%);
   }
 
   .adm-wrapper.collapsed .adm-main {
@@ -313,7 +336,7 @@ body {
   --dx-border: var(--adm-border, #e6ecf1);
   --dx-primary: var(--adm-primary, #1f7a6f);
   --dx-tint: var(--adm-tint, #e6f2f0);
-  --dx-shadow: 0 1px 2px rgba(16, 40, 56, .04), 0 10px 28px rgba(16, 40, 56, .06);
+  --dx-shadow: 0 1px 3px rgba(16, 40, 56, .06);
   display: grid;
   gap: 20px;
   color: var(--dx-text);
@@ -323,19 +346,12 @@ body {
 .dx-page ul { list-style: none; }
 .dx-page :where(button, a, input):focus-visible { outline: 2px solid var(--dx-primary); outline-offset: 2px; }
 
-/* One-time staggered entrance (index comes from --i) */
-.dx-kpi, .dx-action, .dx-panel, .dx-person, .dx-event {
-  animation: dxRise .5s cubic-bezier(.2, .7, .2, 1) both;
-  animation-delay: calc(var(--i, 0) * 45ms);
-}
-@keyframes dxRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @keyframes dxSpin { to { transform: rotate(360deg); } }
-@keyframes dxFill { from { --p: 0; } }
 
 .dx-panel {
   padding: 22px 24px;
   border: 1px solid var(--dx-border);
-  border-radius: 24px;
+  border-radius: 14px;
   background: #fff;
   box-shadow: var(--dx-shadow);
   min-width: 0;
@@ -376,13 +392,10 @@ body {
   gap: 24px;
   min-height: 300px;
   padding: 26px 32px;
-  border-radius: 28px;
+  border-radius: 14px;
   color: #fff;
-  background:
-    radial-gradient(circle at 88% 15%, rgba(255, 111, 159, .18), transparent 38%),
-    radial-gradient(circle at 58% 110%, rgba(36, 217, 181, .24), transparent 42%),
-    linear-gradient(120deg, #087d89 0%, #087c7d 42%, #0b6077 72%, #07546d 100%);
-  box-shadow: 0 20px 40px rgba(15, 76, 92, .25);
+  background: var(--dx-primary);
+  box-shadow: 0 8px 22px rgba(15, 76, 92, .14);
 }
 .dx-hero-copy { position: relative; z-index: 3; min-width: 0; flex: 0 1 45%; align-self: center; }
 .dx-kicker {
@@ -429,24 +442,19 @@ body {
   z-index: 4;
   color: rgba(255, 255, 255, .72);
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .16));
-  animation: dxFloat 4s ease-in-out infinite;
 }
 .dx-hero-heart-one { left: 31%; top: 20%; font-size: 18px; }
-.dx-hero-heart-two { left: 46%; top: 40%; font-size: 13px; animation-delay: -1.3s; }
-.dx-hero-heart-three { right: 25%; top: 25%; font-size: 15px; animation-delay: -2.2s; }
+.dx-hero-heart-two { left: 46%; top: 40%; font-size: 13px; }
+.dx-hero-heart-three { right: 25%; top: 25%; font-size: 15px; }
 .dx-hero-flower { color: rgba(255, 180, 202, .86); font-size: 22px; }
 .dx-hero-flower-one { left: 27%; bottom: 18%; }
-.dx-hero-flower-two { right: 18%; bottom: 10%; animation-delay: -1.8s; }
+.dx-hero-flower-two { right: 18%; bottom: 10%; }
 .dx-orbit { transform-origin: 120px 100px; animation: dxSpin 40s linear infinite; }
 .dx-ring { transform-box: fill-box; transform-origin: center; animation: dxRingPulse 6s ease-in-out infinite; }
 .dx-ring-b { animation-delay: -3s; }
 .dx-beat { transform-box: fill-box; transform-origin: center; animation: dxBeat 2.4s ease-in-out infinite; }
 .dx-float { transform-box: fill-box; transform-origin: center; animation: dxFloat 5s ease-in-out infinite; }
 .dx-f2 { animation-delay: -1.2s; } .dx-f3 { animation-delay: -2.4s; } .dx-f4 { animation-delay: -3.6s; }
-@keyframes dxRingPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-@keyframes dxBeat { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
-@keyframes dxFloat { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-9px) rotate(6deg); } }
-
 /* ================= 3. Quick actions ================= */
 .dx-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
 .dx-action {
@@ -455,12 +463,12 @@ body {
   gap: 12px;
   padding: 14px 16px;
   border: 1px solid var(--dx-border);
-  border-radius: 18px;
+  border-radius: 12px;
   background: #fff;
   box-shadow: var(--dx-shadow);
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: border-color .18s ease;
 }
-.dx-action:hover { transform: translateY(-3px); border-color: var(--t, #cfe3df); box-shadow: 0 14px 30px rgba(16, 40, 56, .1); }
+.dx-action:hover { border-color: var(--t, #cfe3df); }
 .dx-action strong { display: block; font-size: 14px; }
 .dx-action small { color: var(--dx-soft); font-size: 12px; }
 .dx-action-icon {
@@ -469,12 +477,10 @@ body {
   height: 42px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 10px;
   color: var(--t);
   background: color-mix(in srgb, var(--t) 14%, #fff);
-  transition: transform .18s ease;
 }
-.dx-action:hover .dx-action-icon { transform: rotate(-6deg) scale(1.08); }
 .dx-action.teal { --t: #1f7a6f; } .dx-action.green { --t: #16a34a; } .dx-action.violet { --t: #7c4dd6; }
 .dx-action.blue { --t: #2f7de1; } .dx-action.amber { --t: #d97706; }
 
@@ -569,7 +575,7 @@ body {
   padding: 18px;
   overflow: hidden;
   border: 1px solid var(--dx-border);
-  border-radius: 22px;
+  border-radius: 14px;
   background: #fff;
   box-shadow: var(--dx-shadow);
   transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
@@ -590,20 +596,16 @@ body {
   background: color-mix(in srgb, var(--c) 9%, transparent);
   transition: transform .3s ease;
 }
-.dx-kpi:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--c) 35%, #fff); box-shadow: 0 16px 34px color-mix(in srgb, var(--c) 18%, transparent); }
-.dx-kpi:hover::after { transform: scale(1.25); }
+.dx-kpi:hover { border-color: color-mix(in srgb, var(--c) 35%, #fff); }
 .dx-kpi-icon {
   position: relative; z-index: 1;
   flex-shrink: 0;
   width: 50px; height: 50px;
   display: grid; place-items: center;
-  border-radius: 16px;
+  border-radius: 12px;
   color: #fff;
-  background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 70%, #000));
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--c) 35%, transparent);
-  transition: transform .2s ease;
+  background: var(--c);
 }
-.dx-kpi:hover .dx-kpi-icon { transform: rotate(-6deg) scale(1.08); }
 .dx-kpi-body { position: relative; z-index: 1; display: grid; min-width: 0; }
 .dx-kpi-body strong { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .dx-kpi-body small { margin-top: 3px; color: var(--dx-muted); font-size: 13.5px; }
@@ -620,7 +622,6 @@ body {
   width: 128px; height: 128px;
   border-radius: 50%;
   background: conic-gradient(var(--a) calc(var(--p) * 1%), var(--b) 0);
-  animation: dxFill .9s cubic-bezier(.2, .7, .2, 1) both;
 }
 .dx-donut.is-empty { background: #eef1f4; animation: none; }
 .dx-donut-hole {
@@ -641,8 +642,8 @@ body {
 
 .dx-paybar { display: flex; height: 16px; margin-top: 22px; overflow: hidden; border-radius: 999px; background: #eef1f4; }
 .dx-paybar i { height: 100%; transition: width .8s cubic-bezier(.2, .8, .2, 1); }
-.dx-paybar .paid { background: linear-gradient(90deg, #14b8a6, #2dd4bf); }
-.dx-paybar .due { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+.dx-paybar .paid { background: #14b8a6; }
+.dx-paybar .due { background: #f59e0b; }
 
 /* ================= 7. Recent people & events ================= */
 .dx-main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -669,10 +670,10 @@ body {
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid #edf1f4;
-  border-radius: 16px;
-  transition: border-color .15s, background .15s, transform .15s;
+  border-radius: 12px;
+  transition: border-color .15s, background .15s;
 }
-.dx-person:hover { border-color: #cfe3df; background: #fafdfc; transform: translateX(3px); }
+.dx-person:hover { border-color: #cfe3df; background: #fafdfc; }
 .dx-person-main { display: grid; flex: 1; min-width: 0; }
 .dx-person-main strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .dx-person-main small { overflow: hidden; color: var(--dx-soft); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -703,14 +704,13 @@ body {
 .dx-status.unverified, .dx-status.rejected { background: #fdecec; color: #b42323; }
 
 .dx-events { display: grid; gap: 14px; }
-.dx-event { overflow: hidden; border: 1px solid #edf1f4; border-radius: 20px; background: #fff; transition: transform .2s ease, box-shadow .2s ease; }
-.dx-event:hover { transform: translateY(-3px); box-shadow: 0 14px 30px rgba(16, 40, 56, .1); }
+.dx-event { overflow: hidden; border: 1px solid #edf1f4; border-radius: 14px; background: #fff; }
 .dx-event-cover {
   position: relative;
   height: 112px;
   display: grid; place-items: center;
   overflow: hidden;
-  background: linear-gradient(135deg, var(--g1), var(--g2));
+  background: var(--dx-primary);
   color: rgba(255, 255, 255, .85);
 }
 .dx-event-cover::before, .dx-event-cover::after {
@@ -767,7 +767,7 @@ body {
   .dx-hero-summary { font-size: 17px !important; }
 }
 @media (max-width: 700px) {
-  .dx-hero { padding: 24px 22px; border-radius: 22px; }
+  .dx-hero { padding: 24px 22px; }
   .dx-hero h1 { font-size: 23px; }
   .dx-hero-art { display: none; }
   .dx-insights { grid-template-columns: 1fr; }
@@ -777,10 +777,10 @@ body {
   .dx-tabs button { flex: 1 1 40%; }
   .dx-kpis { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .dx-kpi { padding: 14px; gap: 10px; }
-  .dx-kpi-icon { width: 42px; height: 42px; border-radius: 13px; }
+  .dx-kpi-icon { width: 42px; height: 42px; }
   .dx-kpi-body strong { font-size: 22px; }
   .dx-kpi-body small { font-size: 12.5px; }
-  .dx-panel { padding: 18px; border-radius: 20px; }
+  .dx-panel { padding: 18px; }
   .dx-person { flex-wrap: wrap; }
   .dx-person .dx-type { display: none; }
 }

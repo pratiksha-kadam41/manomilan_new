@@ -3,7 +3,7 @@ import { KeyRound, Loader2, ShieldCheck, AlertTriangle } from "lucide-react";
 import AdminLayout from "../admin/components/AdminLayout";
 import CandidateLayout from "../candidate/components/CandidateLayout";
 import { request } from "../api";
-import { getSession, isAdminRole } from "../auth";
+import { getSession, homeForRole, isAdminRole, markPasswordChanged } from "../auth";
 import "./change-password.css";
 
 const EMPTY = { current_password: "", new_password: "", new_password_confirmation: "" };
@@ -37,11 +37,13 @@ export default function ChangePassword() {
     setSaving(true);
     try {
       const body = await request("/change-password", {
-        method: "POST",
+        method: "PUT",
         body: values,
       });
       setValues(EMPTY);
       setSuccess(body?.message || "Password changed successfully.");
+      markPasswordChanged();
+      window.setTimeout(() => window.location.replace(homeForRole(session?.role)), 700);
     } catch (err) {
       setError(err.message || "Could not change your password.");
     } finally {
@@ -57,7 +59,11 @@ export default function ChangePassword() {
             <span className="cp-icon"><KeyRound size={22} /></span>
             <div>
               <h1>Change Password</h1>
-              <p>Choose a strong password you do not use anywhere else.</p>
+              <p>
+                {session?.user?.is_password_changed === false
+                  ? "For your account security, create a new password before continuing."
+                  : "Choose a strong password you do not use anywhere else."}
+              </p>
             </div>
           </div>
 
@@ -73,16 +79,18 @@ export default function ChangePassword() {
           )}
 
           <form onSubmit={submit} className="cp-form">
-            <label>
-              Current password
-              <input
-                type="password"
-                value={values.current_password}
-                onChange={update("current_password")}
-                autoComplete="current-password"
-                required
-              />
-            </label>
+            {session?.user?.is_password_changed !== false ? (
+              <label>
+                Current password
+                <input
+                  type="password"
+                  value={values.current_password}
+                  onChange={update("current_password")}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+            ) : null}
             <label>
               New password
               <input

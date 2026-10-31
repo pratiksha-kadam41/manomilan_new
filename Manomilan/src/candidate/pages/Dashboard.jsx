@@ -37,9 +37,10 @@ const STATS = [
 
 export default function Dashboard() {
   const cached = useMemo(() => getCachedHomeData(), []);
-  const [data, setData] = useState(() => readDashboardCache());
+  const dashboardCache = useMemo(() => readDashboardCache(), []);
+  const [data, setData] = useState(() => dashboardCache || cached);
   const [suggested, setSuggested] = useState([]);
-  const [loading, setLoading] = useState(() => !readDashboardCache());
+  const [loading, setLoading] = useState(() => !dashboardCache);
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
   const [busy, setBusy] = useState({});
@@ -56,21 +57,23 @@ export default function Dashboard() {
       setSuggestedError("");
     } catch (loadError) {
       setError(loadError.message || "Could not load your dashboard.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   useEffect(() => {
-    if (!data) window.setTimeout(() => load(), 0);
-    return () => {};
-  }, [load]);
+    if (!dashboardCache) {
+      const timer = window.setTimeout(() => load(), 0);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [dashboardCache, load]);
 
   const profile = data?.profile || (!loading ? cached?.profile : null);
   const user = data?.user || (!loading ? cached?.user : null);
   const stats = data?.stats || {};
-  const backendCompletion = loading
-    ? 0
-    : Number(stats.profile_completion ?? profile?.profile_completion ?? 0);
+  const backendCompletion = Number(stats.profile_completion ?? profile?.profile_completion ?? 0);
   const completion = Array.isArray(data?.completion?.missing) && data.completion.missing.length === 0
     ? 100
     : backendCompletion;
@@ -136,10 +139,11 @@ export default function Dashboard() {
         title={`${greeting()}, ${displayName}`}
       />
 
-      {loading && !data ? <DashboardSkeleton /> : error ? (
+      {loading && !data ? <DashboardSkeleton /> : error && !data ? (
         <ErrorState message={error} onRetry={load} />
       ) : (
         <>
+          {error ? <ErrorState message={error} onRetry={load} /> : null}
           <section className="cnd-hero">
             <div className="cnd-hero-copy">
               <div className="cnd-hero-title-row">
@@ -297,7 +301,7 @@ export default function Dashboard() {
             subtitle="Ranked using your preferences and profile compatibility"
             icon={Sparkles}
             action={<a href="/candidate/matches" className="cnd-text-link">See all matches <ArrowRight size={14} /></a>}
-            className="cnd-suggested"
+            className="cnd-suggested cnd-dashboard-suggested"
           >
             {suggestedError ? (
               <ErrorState message={suggestedError} onRetry={load} />

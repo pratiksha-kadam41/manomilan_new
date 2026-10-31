@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   Search, Download, UserX, Pencil, CreditCard, Receipt, BadgeCheck,
   ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Phone,
@@ -31,6 +31,13 @@ const REG_TYPES = [
   { value: "existing", label: "Existing Registration" },
   { value: "melava_existing", label: "Melava + Existing Registrations" },
 ];
+
+const PROFILE_VIEWS = {
+  "/admin/profiles": { title: "Profile List", description: "Browse and manage registered profiles." },
+  "/admin/nri-profiles": { title: "NRI Profiles", description: "Profiles matching the existing NRI location criteria." },
+  "/admin/verified-profiles": { title: "Verified Profiles", description: "Profiles with completed identity and birth-date verification." },
+  "/admin/unverified-profiles": { title: "Unverified Profiles", description: "Profiles still waiting for verification." },
+};
 
 async function getProfiles(params) {
   const clean = Object.fromEntries(
@@ -106,7 +113,17 @@ function SortHead({ label, field, sort, onSort }) {
    2. THE PAGE
    ==================================================================== */
 export default function Profiles() {
-  const [filters, setFilters] = useState({ q: "", gender: "", reg_type: "" });
+  const { pathname } = useLocation();
+  const currentPath = pathname.replace(/\/+$/, "") || "/";
+  const view = PROFILE_VIEWS[currentPath] || PROFILE_VIEWS["/admin/profiles"];
+  const verificationStatus =
+    currentPath === "/admin/verified-profiles"
+      ? "verified"
+      : currentPath === "/admin/unverified-profiles"
+        ? "unverified"
+        : undefined;
+  const isNriView = currentPath === "/admin/nri-profiles";
+  const [filters, setFilters] = useState({ q: "", gender: "all", reg_type: "all" });
   const [search, setSearch] = useState("");           // typed text (sent after a short pause)
   const [sort, setSort] = useState({ by: "registration_date", order: "desc" });
   const [page, setPage] = useState(1);
@@ -120,10 +137,12 @@ export default function Profiles() {
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState(null);
+  const toastTimer = useRef(null);
 
   const showToast = (type, text) => {
     setToast({ type, text });
-    setTimeout(() => setToast(null), 3500);
+    window.clearTimeout(toastTimer.current);
+    toastTimer.current = window.setTimeout(() => setToast(null), 3500);
   };
 
   const openReceipt = (event, id) => {
@@ -172,14 +191,21 @@ export default function Profiles() {
     setLoading(true);
     setError("");
     try {
-      const data = await getProfiles({ ...filters, sort_by: sort.by, sort_order: sort.order, page });
+      const data = await getProfiles({
+        ...filters,
+        verification_status: verificationStatus,
+        nri: isNriView ? "1" : undefined,
+        sort_by: sort.by,
+        sort_order: sort.order,
+        page,
+      });
       if (id === reqId.current) setResult(data);
     } catch (e) {
       if (id === reqId.current) setError(e.message);
     } finally {
       if (id === reqId.current) setLoading(false);
     }
-  }, [filters, sort, page]);
+  }, [filters, sort, page, verificationStatus, isNriView]);
 
   useEffect(() => {
     const timer = setTimeout(load, 0);
@@ -190,7 +216,10 @@ export default function Profiles() {
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") { setPhoto(null); setConfirm(null); } };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.clearTimeout(toastTimer.current);
+    };
   }, []);
 
   const setFilter = (name) => (e) => { setFilters((f) => ({ ...f, [name]: e.target.value })); setPage(1); };
@@ -198,13 +227,27 @@ export default function Profiles() {
     setSort((s) => ({ by: field, order: s.by === field && s.order === "asc" ? "desc" : "asc" }));
     setPage(1);
   };
-  const hasFilters = search || filters.gender || filters.reg_type;
-  const clearFilters = () => { setSearch(""); setFilters({ q: "", gender: "", reg_type: "" }); setPage(1); };
+  const hasFilters = Boolean(
+    search.trim() ||
+    (filters.gender && filters.gender !== "all") ||
+    (filters.reg_type && filters.reg_type !== "all"),
+  );
+  const clearFilters = () => {
+    setSearch("");
+    setFilters({ q: "", gender: "all", reg_type: "all" });
+    setPage(1);
+  };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      await exportProfiles({ ...filters, sort_by: sort.by, sort_order: sort.order });
+      await exportProfiles({
+        ...filters,
+        verification_status: verificationStatus,
+        nri: isNriView ? "1" : undefined,
+        sort_by: sort.by,
+        sort_order: sort.order,
+      });
       showToast("success", "Profiles exported successfully.");
     } catch (e) {
       showToast("error", e.message);
@@ -230,14 +273,16 @@ export default function Profiles() {
   const rows = result?.data || [];
 
   return (
-    <AdminLayout currentPath="/admin/profiles">
+    <AdminLayout currentPath={currentPath}>
       <div className="pf-page">
       {/* ---------- Header ---------- */}
       <div className="pf-head">
         <div>
-          <h1>Profile List</h1>
+          <h1>{view.title}</h1>
           <p>
-            <Users size={15} /> {result ? `${result.total.toLocaleString()} profiles in total` : "Loading profiles…"}
+            <Users size={15} /> {result
+              ? `${result.total.toLocaleString()} ${currentPath === "/admin/profiles" ? "profiles in total" : "profiles found"}`
+              : view.description}
           </p>
         </div>
         <div className="pf-head-actions">
@@ -264,13 +309,11 @@ export default function Profiles() {
           )}
         </div>
 
-        <select value={filters.gender} onChange={setFilter("gender")} aria-label="Bride or Groom">
-          <option value="" disabled>Select Bride/Groom</option>
+        <select value={filters.gender} onChange={setFilter("gender")} aria-label="Filter by profile type">
           {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
         </select>
 
-        <select value={filters.reg_type} onChange={setFilter("reg_type")} aria-label="Registration type">
-          <option value="" disabled>Select Registration Type</option>
+        <select value={filters.reg_type} onChange={setFilter("reg_type")} aria-label="Filter by registration type">
           {REG_TYPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
         </select>
 

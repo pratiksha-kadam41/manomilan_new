@@ -23,6 +23,19 @@ class AuthenticateApiToken
         auth()->setUser($user);
         $request->setUserResolver(fn () => $user);
 
+        if (! $user->is_password_changed) {
+            $route = $request->route();
+            $allowedRoutes = ['api/change-password', 'api/logout'];
+
+            if (! $route || ! in_array($route->uri(), $allowedRoutes, true)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Change your password before continuing.',
+                    'password_change_required' => true,
+                ], 403);
+            }
+        }
+
         return $next($request);
     }
 }

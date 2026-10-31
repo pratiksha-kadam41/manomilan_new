@@ -189,7 +189,7 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
               <Menu size={21} />
             </button>
             <Link to="/candidate" className="cnd-mobile-brand" aria-label="Candidate dashboard">
-              <img src="/img/aaryan-manomilan-logo.png" alt="Aaryans Manomilan" />
+              <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
             </Link>
             <div className="cnd-topbar-title">
               <span>Candidate Portal</span>

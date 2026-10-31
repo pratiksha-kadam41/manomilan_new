@@ -1,0 +1,255 @@
+.ar-page {
+  --ar-primary: #1f7a6f;
+  --ar-text: #1d2939;
+  --ar-muted: #667085;
+  --ar-border: #e5eaf0;
+  display: grid;
+  gap: 18px;
+  max-width: 1440px;
+  margin: 0 auto;
+  color: var(--ar-text);
+}
+
+.ar-heading,
+.ar-actions,
+.ar-toolbar,
+.ar-periods,
+.ar-dates,
+.ar-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ar-heading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.ar-heading h1 {
+  margin: 0;
+  color: var(--ar-text);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.ar-heading p,
+.ar-panel-heading p {
+  margin: 4px 0 0;
+  color: var(--ar-muted);
+  font-size: 14px;
+}
+
+.ar-panel {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--ar-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(16, 40, 56, 0.05);
+}
+
+.ar-toolbar {
+  flex-wrap: wrap;
+}
+
+.ar-toolbar > small {
+  margin-left: auto;
+  color: var(--ar-muted);
+}
+
+.ar-periods {
+  flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid var(--ar-border);
+  border-radius: 10px;
+}
+
+.ar-periods button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ar-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ar-periods button.active {
+  background: #edf7f5;
+  color: var(--ar-primary);
+  font-weight: 700;
+}
+
+.ar-dates {
+  flex-wrap: wrap;
+}
+
+.ar-dates label {
+  display: grid;
+  gap: 4px;
+  color: var(--ar-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ar-dates input {
+  min-height: 38px;
+  padding: 6px 9px;
+  border: 1px solid var(--ar-border);
+  border-radius: 8px;
+  color: var(--ar-text);
+  font: inherit;
+}
+
+.ar-button {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border: 1px solid var(--ar-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ar-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ar-button.primary {
+  border-color: var(--ar-primary);
+  background: var(--ar-primary);
+  color: #fff;
+}
+
+.ar-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ar-spin {
+  animation: ar-spin 0.9s linear infinite;
+}
+
+.ar-panel-heading {
+  margin-bottom: 18px;
+}
+
+.ar-panel-heading h2 {
+  margin: 0;
+  color: var(--ar-text);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.ar-heading-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #edf7f5;
+  color: var(--ar-primary);
+}
+
+.ar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.ar-metric {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--ar-border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ar-metric span {
+  display: block;
+  color: var(--ar-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ar-metric strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--ar-primary);
+  font-size: 26px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ar-error,
+.ar-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--ar-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ar-muted);
+}
+
+.ar-error {
+  border-color: #f4c7c3;
+  background: #fff5f4;
+  color: #b42318;
+}
+
+.ar-error button {
+  padding: 7px 12px;
+  border: 1px solid #e8b3af;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ar-panel.is-loading {
+  opacity: 0.7;
+}
+
+@keyframes ar-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 640px) {
+  .ar-panel {
+    padding: 16px;
+  }
+
+  .ar-actions,
+  .ar-actions .ar-button,
+  .ar-toolbar,
+  .ar-periods {
+    width: 100%;
+  }
+
+  .ar-actions > * {
+    flex: 1;
+  }
+
+  .ar-toolbar > small {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .ar-periods button {
+    flex: 1;
+    padding-inline: 8px;
+  }
+}
