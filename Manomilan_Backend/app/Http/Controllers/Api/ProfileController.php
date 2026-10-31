@@ -878,6 +878,7 @@ class ProfileController extends Controller
         try {
             DB::transaction(function () use ($profile, $data) {
                 DocumentVerification::updateOrCreate(['profile_id' => $profile->id], $data);
+                $profile->syncDocumentVerificationStatus();
             });
 
             return response()->json([

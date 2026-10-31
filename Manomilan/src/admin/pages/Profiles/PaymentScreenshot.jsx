@@ -61,18 +61,18 @@ const safeUrl = (url) => {
 };
 
 const cleanStatus = (s) => (s === "verified" ? "verified" : "pending");
-const cleanType = (t) => (t === "melava" ? "melava" : "payment");
+const cleanType = (t) => (["melava", "combined"].includes(t) ? t : "payment");
 
 async function getPayments(id) {
   const res = guard(await fetch(`${BASE}/profiles/${encodeURIComponent(id)}/payment-screenshots`, { headers: authHeaders() }));
   return res.json();
 }
 
-async function verifyPayment(profileId, screenshotId, type) {
+async function verifyPayment(profileId, screenshotId, type, melavaId) {
   guard(await fetch(`${BASE}/profiles/${encodeURIComponent(profileId)}/payment-screenshots/${encodeURIComponent(screenshotId)}/verify`, {
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ type }),
+    body: JSON.stringify({ type, ...(melavaId ? { melava_id: melavaId } : {}) }),
   }));
 }
 
@@ -182,7 +182,10 @@ export default function PaymentScreenshot({ params }) {
             id: s.id,
             type: cleanType(s.type),
             status: cleanStatus(s.status),
+            payment_status: cleanStatus(s.payment_status),
+            melava_status: cleanStatus(s.melava_status),
             image_url: safeUrl(s.image_url),
+            melava_id: s.melava_id,
           })),
         );
       })
@@ -207,8 +210,10 @@ export default function PaymentScreenshot({ params }) {
     const { item } = confirm;
     setVerifyingId(item.id);
     try {
-      await verifyPayment(id, item.id, item.type);
-      setShots((list) => list.map((s) => (s.id === item.id ? { ...s, status: "verified" } : s)));
+      await verifyPayment(id, item.id, item.type, item.melava_id);
+      setShots((list) => list.map((s) => (s.id === item.id
+        ? { ...s, status: "verified", payment_status: "verified", melava_status: "verified" }
+        : s)));
       showToast("success", "Payment verified.");
       setConfirm(null);
     } catch (e) {
@@ -260,9 +265,12 @@ export default function PaymentScreenshot({ params }) {
   };
 
   /* ---- what to show in the top badges ---- */
-  const paymentShots = shots.filter((s) => s.type === "payment");
-  const melavaShot = shots.find((s) => s.type === "melava");
-  const paymentVerified = paymentShots.some((s) => s.status === "verified");
+  const paymentShots = shots.filter((s) => s.type === "payment" || s.type === "combined");
+  const melavaShot = shots.find((s) => s.type === "melava" || s.type === "combined");
+  const paymentVerified = paymentShots.some((s) => (s.payment_status || s.status) === "verified");
+  const melavaVerified = melavaShot
+    ? (melavaShot.melava_status || melavaShot.status) === "verified"
+    : false;
   let n = 0;                                                         // numbers the normal screenshots: #1, #2 …
 
   return (
@@ -307,9 +315,9 @@ export default function PaymentScreenshot({ params }) {
                       </span>
                     )}
                     {melavaShot && (
-                      <span className={`ps-big ${melavaShot.status === "verified" ? "ok" : "wait"}`}>
-                        {melavaShot.status === "verified" ? <BadgeCheck size={18} /> : <Clock size={18} />}
-                        Melava Registration {melavaShot.status === "verified" ? "Verified" : "Pending"}
+                      <span className={`ps-big ${melavaVerified ? "ok" : "wait"}`}>
+                        {melavaVerified ? <BadgeCheck size={18} /> : <Clock size={18} />}
+                        Melava Registration {melavaVerified ? "Verified" : "Pending"}
                       </span>
                     )}
                   </div>
@@ -327,7 +335,11 @@ export default function PaymentScreenshot({ params }) {
 
               {!loading && shots.map((s) => {
                 if (s.type === "payment") n += 1;
-                const title = s.type === "melava" ? "Melava Registration Screenshot" : `Screenshot #${n}`;
+                const title = s.type === "melava"
+                  ? "Melava Registration Screenshot"
+                  : s.type === "combined"
+                    ? "Shared Payment Screenshot"
+                    : `Screenshot #${n}`;
                 return (
                   <Screenshot
                     key={s.id}
@@ -377,7 +389,12 @@ export default function PaymentScreenshot({ params }) {
             <div className="ps-modal" role="dialog" aria-modal="true" aria-labelledby="ps-confirm-title">
               <div className="ps-modal-icon"><BadgeCheck size={30} /></div>
               <h3 id="ps-confirm-title">Verify this payment?</h3>
-              <p>You are about to mark <strong>{confirm.title}</strong> as verified. Please make sure the amount and the name in the screenshot are correct.</p>
+              <p>
+                You are about to mark <strong>{confirm.title}</strong> as verified.
+                {confirm.item.type === "combined"
+                  ? " This approves both the profile payment and Melava registration payment."
+                  : " Please make sure the amount and the name in the screenshot are correct."}
+              </p>
               <div className="ps-modal-actions">
                 <button type="button" className="ps-btn ps-btn-ghost" onClick={() => setConfirm(null)} disabled={!!verifyingId}>Cancel</button>
                 <button type="button" className="ps-btn ps-btn-green" onClick={doVerify} disabled={!!verifyingId}>

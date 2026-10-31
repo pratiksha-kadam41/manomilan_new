@@ -30,21 +30,54 @@ class PaymentController extends Controller
                 ], 404);
             }
 
-            $screenshots = PaymentScreenshot::where('profile_id', $profile->id)
+            $payments = PaymentScreenshot::where('profile_id', $profile->id)
                 ->latest()
-                ->get()
-                ->map(fn (PaymentScreenshot $payment) => [
-                    'id' => $payment->id,
-                    'type' => 'payment',
-                    'status' => $payment->payment_verified ? 'verified' : 'pending',
-                    'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
-                ]);
+                ->get();
 
-            $melavaScreenshots = MelavaRegistration::where('profile_id', $profile->id)
+            $melavaRegistrations = MelavaRegistration::where('profile_id', $profile->id)
                 ->whereNotNull('payment_screenshot')
                 ->where('payment_screenshot', '<>', '')
                 ->latest()
-                ->get()
+                ->get();
+
+            $matchedMelavaIds = [];
+            $screenshots = $payments->map(function (PaymentScreenshot $payment) use (
+                $request,
+                $melavaRegistrations,
+                &$matchedMelavaIds
+            ) {
+                $melavaRegistration = $melavaRegistrations->first(
+                    fn (MelavaRegistration $registration) => $registration->payment_screenshot === $payment->screenshot_path
+                );
+
+                if (! $melavaRegistration) {
+                    return [
+                        'id' => $payment->id,
+                        'type' => 'payment',
+                        'status' => $payment->payment_verified ? 'verified' : 'pending',
+                        'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                    ];
+                }
+
+                $matchedMelavaIds[] = $melavaRegistration->id;
+                $paymentStatus = $payment->payment_verified ? 'verified' : 'pending';
+                $melavaStatus = $melavaRegistration->payment_verified ? 'verified' : 'pending';
+
+                return [
+                    'id' => $payment->id,
+                    'type' => 'combined',
+                    'melava_id' => $melavaRegistration->id,
+                    'status' => $paymentStatus === 'verified' && $melavaStatus === 'verified'
+                        ? 'verified'
+                        : 'pending',
+                    'payment_status' => $paymentStatus,
+                    'melava_status' => $melavaStatus,
+                    'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                ];
+            });
+
+            $melavaScreenshots = $melavaRegistrations
+                ->reject(fn (MelavaRegistration $registration) => in_array($registration->id, $matchedMelavaIds, true))
                 ->map(fn (MelavaRegistration $registration) => [
                     'id' => $registration->id,
                     'type' => 'melava',
@@ -82,7 +115,8 @@ class PaymentController extends Controller
         }
 
         $data = $request->validate([
-            'type' => ['required', Rule::in(['payment', 'melava'])],
+            'type' => ['required', Rule::in(['payment', 'melava', 'combined'])],
+            'melava_id' => ['required_if:type,combined', 'integer', 'min:1'],
         ]);
 
         try {
@@ -104,11 +138,28 @@ class PaymentController extends Controller
                 ], 404);
             }
 
-            DB::transaction(function () use ($data, $payment, $profileId) {
+            $combinedRegistration = null;
+            if ($data['type'] === 'combined') {
+                $combinedRegistration = MelavaRegistration::where('profile_id', $profileId)
+                    ->where('payment_screenshot', $payment->screenshot_path)
+                    ->find($data['melava_id']);
+
+                if (! $combinedRegistration) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Matching Melava payment screenshot not found.',
+                    ], 404);
+                }
+            }
+
+            DB::transaction(function () use ($data, $payment, $profileId, $combinedRegistration) {
                 $payment->payment_verified = true;
                 $payment->save();
 
-                if ($data['type'] === 'melava') {
+                if ($data['type'] === 'combined') {
+                    $combinedRegistration->payment_verified = true;
+                    $combinedRegistration->save();
+                } elseif ($data['type'] === 'melava') {
                     PaymentScreenshot::where('profile_id', $profileId)
                         ->where('screenshot_path', $payment->payment_screenshot)
                         ->update(['payment_verified' => true]);
