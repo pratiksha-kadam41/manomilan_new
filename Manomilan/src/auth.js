@@ -1,4 +1,4 @@
-import { request } from "./api";
+import { apiMediaUrl, request } from "./api";
 
 const ADMIN_ROLES = ["admin", "super"];
 
@@ -12,10 +12,14 @@ localStorage.removeItem("adminToken");
 
 export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 
-const roleForUser = (user) =>
-  String(user?.portal || user?.role?.user_type || user?.user_type) === "21"
-    ? "candidate"
-    : "admin";
+const isCandidateUser = (user) => {
+  const portal = String(user?.portal || "").trim().toLowerCase();
+  return portal === "candidate"
+    || (portal !== "admin"
+      && String(user?.role?.user_type || user?.user_type).trim() === "21");
+};
+
+const roleForUser = (user) => isCandidateUser(user) ? "candidate" : "admin";
 
 export const homeForRole = (role) =>
   isAdminRole(role) ? "/admin" : "/candidate";
@@ -48,6 +52,11 @@ export function getSession() {
   const session = read();
   if (!session) return null;
 
+  if (isCandidateUser(session.user) && session.role !== "candidate") {
+    session.role = "candidate";
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  }
+
   const now = Date.now();
   if (
     now - session.lastActive > IDLE_LIMIT ||
@@ -70,7 +79,7 @@ export function getCachedHomeData() {
         registration_number: source.registration_number || source.profile_id,
         full_name: source.full_name || source.fullName,
         gender: source.gender || source.groomOrBride,
-        photo_url: source.photo_url || "",
+        photo_url: apiMediaUrl(source.photo_url || source.profilePhoto),
         birth_date: source.birth_date || source.birthDate,
         city: source.city || source.location || source.professionalCity,
         education: source.education || "",

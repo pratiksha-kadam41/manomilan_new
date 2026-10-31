@@ -1,7 +1,27 @@
-import { request } from "../api";
+import { apiMediaUrl, request } from "../api";
 import { updateCachedUserProfile } from "../auth";
 
-const data = (body) => body?.data ?? null;
+const normalizeCandidateMedia = (value, key = "") => {
+  if (Array.isArray(value)) {
+    return key.endsWith("_photo_urls")
+      ? value.map(apiMediaUrl)
+      : value.map((item) => normalizeCandidateMedia(item));
+  }
+  if (!value || typeof value !== "object") {
+    return key === "photo_url" || key === "file_url" || key.endsWith("_photo_url")
+      ? apiMediaUrl(value)
+      : value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([field, item]) => [
+      field,
+      normalizeCandidateMedia(item, field),
+    ]),
+  );
+};
+
+const data = (body) => normalizeCandidateMedia(body?.data ?? null);
 let candidateProfileCache;
 let candidateProfileCachedAt = 0;
 let matchesCache = new Map();
@@ -20,7 +40,7 @@ export const readDashboardCache = () => {
   try {
     const cached = JSON.parse(sessionStorage.getItem(DASHBOARD_CACHE_KEY));
     if (cached?.savedAt && Date.now() - cached.savedAt < DASHBOARD_CACHE_MS) {
-      return cached.data || null;
+      return normalizeCandidateMedia(cached.data || null);
     }
   } catch {
     sessionStorage.removeItem(DASHBOARD_CACHE_KEY);

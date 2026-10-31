@@ -6,22 +6,12 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import CandidateSidebar from "./CandidateSidebar";
 import {
-  clearSession, getCachedHomeData, getSession, updateCachedUserProfile,
+  clearSession, getCachedHomeData, getSession,
 } from "../../auth";
-import { apiUrl } from "../../api";
-import { getCandidateProfile, getUnreadNotificationCount } from "../api";
-import { initials, text } from "../utils";
+import { apiMediaUrl } from "../../api";
+import { getUnreadNotificationCount } from "../api";
+import { initials } from "../utils";
 import "../candidate.css";
-
-const MEDIA_BASE = apiUrl.replace(/\/api\/?$/i, "");
-
-const mediaUrl = (value) => {
-  const path = text(value);
-  if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path;
-  if (path.startsWith("/")) return `${MEDIA_BASE}${path}`;
-  return `${MEDIA_BASE}/${path}`;
-};
 
 const TABS = [
   ["/candidate", "Home", Home],
@@ -36,90 +26,39 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const cachedHome = getCachedHomeData();
-  const [sharedCandidate, setSharedCandidate] = useState(() => ({
-    name: candidateInfo?.name
-      || cachedHome?.profile?.full_name
-      || cachedHome?.user?.name
-      || cachedHome?.user?.username
-      || "",
-    id: candidateInfo?.id
-      || cachedHome?.profile?.registration_number
-      || cachedHome?.profile?.profile_id
-      || cachedHome?.user?.username
-      || "",
-    photo: candidateInfo?.photo || cachedHome?.profile?.photo_url || "",
-  }));
   const menuRef = useRef(null);
   const session = getSession();
   const sessionUser = session?.user;
   const sessionProfile = sessionUser?.profile || {};
 
   const candidateName =
-    sharedCandidate.name
-    || candidateInfo?.name
+    (candidateInfo?.name && !["Candidate", "Your profile"].includes(candidateInfo.name)
+      ? candidateInfo.name
+      : "")
     || sessionProfile.full_name
     || sessionProfile.fullName
+    || cachedHome?.profile?.full_name
     || sessionUser?.name
     || sessionUser?.username
     || "Candidate";
   const candidateId =
-    sharedCandidate.id
-    || candidateInfo?.id
+    candidateInfo?.id
     || sessionProfile.registration_number
     || sessionProfile.profile_id
+    || cachedHome?.profile?.registration_number
+    || cachedHome?.profile?.profile_id
     || "Member";
   const candidatePhoto =
-    sharedCandidate.photo
-    || candidateInfo?.photo
-    || sessionProfile.photo_url
-    || mediaUrl(sessionProfile.profilePhoto);
+    apiMediaUrl(
+      candidateInfo?.photo
+      || cachedHome?.profile?.photo_url
+      || sessionProfile.photo_url
+      || sessionProfile.profilePhoto,
+    );
 
   useEffect(() => {
     document.body.classList.add("candidate-mode");
     return () => document.body.classList.remove("candidate-mode");
-  }, []);
-
-  useEffect(() => {
-    const nextName = candidateInfo?.name
-      && !["Candidate", "Your profile"].includes(candidateInfo.name)
-      ? candidateInfo.name
-      : "";
-    const nextId = candidateInfo?.id && candidateInfo.id !== "Your profile"
-      ? candidateInfo.id
-      : "";
-    if (nextName || candidateInfo?.photo || nextId) {
-      setSharedCandidate((current) => ({
-        name: nextName || current.name,
-        id: nextId || current.id,
-        photo: candidateInfo?.photo || current.photo,
-      }));
-    }
-  }, [candidateInfo?.name, candidateInfo?.photo, candidateInfo?.id]);
-
-  useEffect(() => {
-    const hasSharedIdentity = Boolean(
-      (sharedCandidate.name && !["Candidate", "Your profile"].includes(sharedCandidate.name))
-      && sharedCandidate.photo,
-    );
-    if (hasSharedIdentity) return;
-
-    let active = true;
-    getCandidateProfile()
-      .then((result) => {
-        if (!active || !result?.profile) return;
-        const profile = result.profile;
-        const next = {
-          name: profile.full_name || result.user?.name || result.user?.username || "",
-          id: profile.registration_number || profile.profile_id || result.user?.username || "",
-          photo: profile.photo_url || "",
-        };
-        setSharedCandidate(next);
-        updateCachedUserProfile(profile);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
   }, []);
 
   useEffect(() => {
@@ -224,7 +163,14 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
                 aria-haspopup="menu"
               >
                 <span className="cnd-user-avatar">
-                  {candidatePhoto ? <img src={candidatePhoto} alt="" /> : initials(candidateName)}
+                  <span>{initials(candidateName)}</span>
+                  {candidatePhoto ? (
+                    <img
+                      src={candidatePhoto}
+                      alt=""
+                      onError={(event) => event.currentTarget.remove()}
+                    />
+                  ) : null}
                 </span>
                 <span className="cnd-user-meta">
                   <strong>{candidateName}</strong>

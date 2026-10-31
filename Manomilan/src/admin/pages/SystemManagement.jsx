@@ -387,7 +387,13 @@ export default function SystemManagement() {
                     <thead><tr><th>Module</th><th><label><input type="checkbox" checked={permissionModules.length > 0 && permissionModules.every((module) => module.permissions.every((permission) => permission.granted))} onChange={(event) => permissionModules.forEach((module) => toggleModulePermissions(module, event.target.checked))} /> Select all role permissions</label></th><th>Available actions</th></tr></thead>
                     <tbody>{permissionModules.map((module) => (
                       <tr key={module.id}>
-                        <td><strong>{module.module_name}</strong><small>{module.module_key}</small></td>
+                        <td>
+                          <strong>{module.module_name}</strong>
+                          <small>{module.module_key}</small>
+                          {(module.frontend_routes || []).filter((route) => route.startsWith("/candidate")).map((route) => (
+                            <small key={route}>{route}</small>
+                          ))}
+                        </td>
                         <td><input aria-label={`Select all permissions for ${module.module_name}`} type="checkbox" checked={module.permissions.length > 0 && module.permissions.every((permission) => permission.granted)} onChange={(event) => toggleModulePermissions(module, event.target.checked)} /></td>
                         <td className="sm-permissions">{module.permissions.map((permission) => (
                           <label key={permission.key}>

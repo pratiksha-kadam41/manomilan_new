@@ -15,6 +15,51 @@ export class ApiError extends Error {
 
 export const apiUrl = API_URL;
 
+export function apiMediaUrl(value) {
+  const mediaPath = String(value || "").trim();
+  if (!mediaPath) return "";
+
+  const apiOrigin = new URL(API_URL, window.location.origin).origin;
+  const knownUploadFolders = [
+    "profile_photos/",
+    "full_body_photos/",
+    "half_body_photos/",
+    "selfie_photos/",
+    "melava_candidate_photos/",
+  ];
+  const mediaFolders = /^\/(?:storage\/)?candidate(?:_images|_documents)\//i;
+
+  try {
+    const parsedUrl = new URL(mediaPath, apiOrigin);
+    let path = parsedUrl.pathname;
+
+    if (/^https?:/i.test(mediaPath)
+      && !/^\/(?:storage|uploads|candidate)\//i.test(path)
+      && !mediaFolders.test(path)) {
+      return mediaPath;
+    }
+
+    const storedPath = path.replace(/^\/storage\//i, "").replace(/^\/+/, "");
+    if (/^candidate\/documents\//i.test(storedPath)) {
+      path = `/storage/candidate_documents/${storedPath.split("/").pop()}`;
+    } else if (/^candidate\/(?:profile_photos|body_photos)\//i.test(storedPath)) {
+      path = `/storage/candidate_images/${storedPath.split("/").pop()}`;
+    } else if (/^candidate_images\//i.test(storedPath)) {
+      path = `/storage/${storedPath}`;
+    } else if (/^candidate_documents\//i.test(storedPath)) {
+      path = `/storage/${storedPath}`;
+    } else if (/^candidate\//i.test(storedPath)) {
+      path = `/storage/${storedPath}`;
+    } else if (knownUploadFolders.some((folder) => path.startsWith(`/${folder}`))) {
+      path = `/uploads${path}`;
+    }
+
+    return `${apiOrigin}${path}${parsedUrl.search}${parsedUrl.hash}`;
+  } catch {
+    return mediaPath;
+  }
+}
+
 const readStoredSession = () => {
   try {
     return JSON.parse(sessionStorage.getItem(SESSION_KEY));

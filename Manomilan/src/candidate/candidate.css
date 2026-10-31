@@ -434,6 +434,7 @@ body.candidate-mode *::after {
 }
 
 .cnd-user-avatar {
+  position: relative;
   display: grid;
   place-items: center;
   width: 40px;
@@ -450,9 +451,12 @@ body.candidate-mode *::after {
 }
 
 .cnd-user-avatar img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: inherit;
 }
 
 .cnd-user-meta {

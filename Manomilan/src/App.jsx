@@ -1,39 +1,40 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "./components/Header.jsx";
 import Footer from "./components/Footer.jsx";
-import Home from "./pages/Home.jsx";
-import About from "./pages/About.jsx";
 import ComingSoon from "./pages/ComingSoon.jsx";
-import HowItWorks from "./pages/HowItWorks.jsx";
-import SuccessStories from "./pages/SuccessStories.jsx";
-import OurServices from "./pages/OurServices.jsx";
-import ContactUs from "./pages/ContactUs.jsx";
-import Login from "./pages/Login.jsx";
-import ChangePassword from "./pages/ChangePassword.jsx";
-import MelavaRegistration from "./pages/MelavaRegistration.jsx";
-import Dashboard from "./admin/pages/Dashboard";
-import CandidateDashboard from "./candidate/pages/Dashboard";
-import CandidateMatches from "./candidate/pages/Matches";
-import CandidateProfile from "./candidate/pages/Profile";
-import CandidateActivity from "./candidate/pages/Activity";
-import CandidateNotifications from "./candidate/pages/Notifications";
-import CandidateProfileView from "./candidate/pages/CandidateProfileView";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
-import Profiles from "./admin/pages/Profiles/Profiles.jsx";
-import ProfileVerify from "./admin/pages/Profiles/ProfileVerify.jsx";
-import Receipt from "./admin/pages/Profiles/Receipt.jsx";
-import PaymentScreenshot from "./admin/pages/Profiles/PaymentScreenshot.jsx";
-import MelavaPayments from "./admin/pages/MelavaPayments.jsx";
-import MelavaBioDataPage from "./admin/pages/MelavaBioDataPage.jsx";
-import MelavaCampaigns from "./admin/pages/MelavaCampaigns.jsx";
-import Reports from "./admin/pages/Reports.jsx";
-import ResetPasswords from "./admin/pages/ResetPasswords.jsx";
-import SystemManagement from "./admin/pages/SystemManagement.jsx";
-import ProfileDetail from "./pages/ProfileDetail.jsx";
 import { request } from "./api.js";
 import { AdminPermissionContext } from "./permission-context.jsx";
+
+const Home = lazy(() => import("./pages/Home.jsx"));
+const About = lazy(() => import("./pages/About.jsx"));
+const HowItWorks = lazy(() => import("./pages/HowItWorks.jsx"));
+const SuccessStories = lazy(() => import("./pages/SuccessStories.jsx"));
+const OurServices = lazy(() => import("./pages/OurServices.jsx"));
+const ContactUs = lazy(() => import("./pages/ContactUs.jsx"));
+const Login = lazy(() => import("./pages/Login.jsx"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword.jsx"));
+const MelavaRegistration = lazy(() => import("./pages/MelavaRegistration.jsx"));
+const Dashboard = lazy(() => import("./admin/pages/Dashboard"));
+const CandidateDashboard = lazy(() => import("./candidate/pages/Dashboard"));
+const CandidateMatches = lazy(() => import("./candidate/pages/Matches"));
+const CandidateProfile = lazy(() => import("./candidate/pages/Profile"));
+const CandidateActivity = lazy(() => import("./candidate/pages/Activity"));
+const CandidateNotifications = lazy(() => import("./candidate/pages/Notifications"));
+const CandidateProfileView = lazy(() => import("./candidate/pages/CandidateProfileView"));
+const Profiles = lazy(() => import("./admin/pages/Profiles/Profiles.jsx"));
+const ProfileVerify = lazy(() => import("./admin/pages/Profiles/ProfileVerify.jsx"));
+const Receipt = lazy(() => import("./admin/pages/Profiles/Receipt.jsx"));
+const PaymentScreenshot = lazy(() => import("./admin/pages/Profiles/PaymentScreenshot.jsx"));
+const MelavaPayments = lazy(() => import("./admin/pages/MelavaPayments.jsx"));
+const MelavaBioDataPage = lazy(() => import("./admin/pages/MelavaBioDataPage.jsx"));
+const MelavaCampaigns = lazy(() => import("./admin/pages/MelavaCampaigns.jsx"));
+const Reports = lazy(() => import("./admin/pages/Reports.jsx"));
+const ResetPasswords = lazy(() => import("./admin/pages/ResetPasswords.jsx"));
+const SystemManagement = lazy(() => import("./admin/pages/SystemManagement.jsx"));
+const ProfileDetail = lazy(() => import("./pages/ProfileDetail.jsx"));
 
 // Add a page here: "/url-name": Component
 const ROUTES = {
@@ -255,10 +256,11 @@ export default function App() {
   return (
     <>
       {!hideChrome && <Header />}
-      {/* CHANGED: pass params so the page receives the profile id */}
       {Page ? (
         <AdminPermissionContext.Provider value={permissionContext}>
-          <Page key={`${path}-${params.id || ""}`} params={params} />
+          <Suspense fallback={<main className="app-loading" role="status">Loading…</main>}>
+            <Page key={`${path}-${params.id || ""}`} params={params} />
+          </Suspense>
         </AdminPermissionContext.Provider>
       ) : <ComingSoon path={path} />}
       {!hideChrome && <Footer />}
