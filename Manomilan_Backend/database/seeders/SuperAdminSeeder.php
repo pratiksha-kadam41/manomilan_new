@@ -15,7 +15,7 @@ class SuperAdminSeeder extends Seeder
     public function run(): void
     {
         $email = trim((string) env('SUPER_ADMIN_EMAIL', 'super'));
-        $password = (string) env('SUPER_ADMIN_PASSWORD', 'password');
+        $pas        VITE_API_URL=http://192.168.1.25:8000/apisword = (string) env('SUPER_ADMIN_PASSWORD', 'password');
 
         $email = trim((string) env('SUPER_ADMIN_EMAIL', 'super'));
 $password = (string) env('SUPER_ADMIN_PASSWORD', 'password');

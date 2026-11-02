@@ -120,15 +120,20 @@ class InterestController extends Controller
             return null;
         }
 
+        $photos = is_array($profile->photos) ? $profile->photos : [];
+        $photoPath = $photos['profile_photo'] ?? $photos[0] ?? null;
+        $employment = $profile->employments()->latest('id')->first();
+        $education = $profile->educations()->latest('id')->first();
+
         return [
             'id' => $profile->id,
-            'full_name' => $profile->fullName,
-            'photo_url' => $profile->profilePhoto ? url(ltrim($profile->profilePhoto, '/')) : '',
-            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
-            'city' => $profile->professionalCity ?: $profile->cityOfEducation,
-            'education' => $profile->education,
-            'profession' => $profile->profession,
-            'gender' => $profile->groomOrBride,
+            'full_name' => $profile->full_name,
+            'photo_url' => is_string($photoPath) && $photoPath !== '' ? url(ltrim($photoPath, '/')) : '',
+            'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
+            'city' => $employment?->employment_city ?: $education?->education_city,
+            'education' => $education?->education_level ?: $education?->degree_name,
+            'profession' => $employment?->profession,
+            'gender' => $profile->groomorbride,
         ];
     }
 

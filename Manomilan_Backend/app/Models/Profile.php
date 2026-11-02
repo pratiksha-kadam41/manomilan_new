@@ -4,7 +4,10 @@ namespace App;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use App\PaymentScreenshot;
 use App\MelavaRegistration;
 use App\Http\Controllers\Controller;
@@ -16,90 +19,61 @@ class Profile extends Model
     {
         parent::boot();
 
-        // Generate registration_number and profile_id
-        static::creating(function ($profile) {
+        static::creating(function (self $profile): void {
+            if (Schema::hasColumn($profile->getTable(), 'reg_id')) {
+                if (! $profile->reg_id) {
+                    $prefix = 'MM3-';
+                    $lastId = self::query()
+                        ->where('reg_id', 'like', $prefix.'%')
+                        ->orderByDesc('id')
+                        ->value('reg_id');
+                    $nextNumber = $lastId && preg_match('/^MM3-(\d+)$/', $lastId, $matches)
+                        ? (int) $matches[1] + 1
+                        : 1;
+                    $profile->reg_id = $prefix.str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
+                }
 
-            // Priority: Model Attribute > Session > Default
+                return;
+            }
+
+            if (! Schema::hasColumn($profile->getTable(), 'registration_number')) {
+                return;
+            }
+
             $type = $profile->registration_type ?: session('registration_type', 'quick');
+            $prefix = $type === 'melava' ? 'MM3-' : 'AMM2026';
+            $lastProfile = self::query()
+                ->where('registration_number', 'like', $prefix.'%')
+                ->orderByDesc('id')
+                ->first();
+            $nextNumber = 1;
 
-            if ($type === 'melava') 
-                {
+            if (
+                $lastProfile &&
+                preg_match('/^'.preg_quote($prefix, '/').'(?:B|G)?(\d+)$/', (string) $lastProfile->registration_number, $matches)
+            ) {
+                $nextNumber = (int) $matches[1] + 1;
+            }
 
-                $prefix = 'MM3-';
-
-                // Find the highest existing Melava registration number
-                $lastProfile = self::where('registration_number', 'like', $prefix . '%')
-                    ->orderByRaw(
-                        'CAST(SUBSTRING(registration_number, ' .
-                        (strlen($prefix) + 1) .
-                        ') AS UNSIGNED) DESC'
-                    )
-                    ->first();
-
-                $nextNumber = 1;
-
-                if (
-                    $lastProfile &&
-                    preg_match('/^' . preg_quote($prefix, '/') . '(?:B|G)?(\d+)$/', $lastProfile->registration_number, $matches)
-                ) {
-                    $nextNumber = (int) $matches[1] + 1;
-                }
-
-                $profile->registration_number = $prefix .
-                    str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
-
-                $profile->profile_id = $profile->registration_number;
-
-            } else {
-
-                // Quick registration number
-                $prefix = 'AMM2026';
-
-                // Find the highest existing quick registration number
-                $lastProfile = self::where('registration_number', 'like', $prefix . '%')
-                    ->orderByRaw(
-                        'CAST(SUBSTRING(registration_number, ' .
-                        (strlen($prefix) + 1) .
-                        ') AS UNSIGNED) DESC'
-                    )
-                    ->first();
-
-                $nextNumber = 1;
-
-                if (
-                    $lastProfile &&
-                    preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $lastProfile->registration_number, $matches)
-                ) {
-                    $nextNumber = (int) $matches[1] + 1;
-                }
-
-                $profile->registration_number = $prefix .
-                    str_pad($nextNumber, 4, '0', STR_PAD_LEFT);
-
+            $profile->registration_number = $prefix.str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
+            if (Schema::hasColumn($profile->getTable(), 'profile_id')) {
                 $profile->profile_id = $profile->registration_number;
             }
         });
 
+        static::saving(function (self $profile): void {
+            if (! Schema::hasColumn($profile->getTable(), 'serial_no')) {
+                return;
+            }
 
-        // Generate serial_no for the current Melava batch
-        static::saving(function ($profile) {
-
-            // Only generate a serial number for a Melava registration
-            // belonging to the current batch, if serial_no is empty.
-            //
-            // "existing" covers candidates who were already registered on
-            // the website (e.g. Melava 2) and have now registered for the
-            // current batch. Their controllers clear the stale serial so it
-            // is regenerated here with the correct age-group-wise prefix.
             if (
-                !in_array($profile->registration_type, ['melava', 'existing'], true) ||
-                $profile->melava_batch !== Controller::CURRENT_MELAVA_BATCH ||
-                !empty($profile->serial_no)
+                ! in_array($profile->registration_type, ['melava', 'existing'], true)
+                || $profile->melava_batch !== Controller::CURRENT_MELAVA_BATCH
+                || ! empty($profile->serial_no)
             ) {
                 return;
             }
 
-            // Ensure birth date is available and valid
             if (empty($profile->birthDate)) {
                 return;
             }
@@ -173,7 +147,11 @@ class Profile extends Model
 
     public function isMelava3Candidate()
     {
-        return strpos($this->profile_id, 'MM3-') === 0 && $this->melava_batch === 'october_2026';
+        $registrationId = $this->reg_id ?: $this->profile_id;
+
+        return is_string($registrationId)
+            && str_starts_with($registrationId, 'MM3-')
+            && $this->melava_batch === 'october_2026';
     }
 
     /**
@@ -189,6 +167,31 @@ class Profile extends Model
     }
 
     protected $fillable = [
+        'reg_id',
+        'groomorbride',
+        'full_name',
+        'birth_date',
+        'height_cm',
+        'weight_kg',
+        'has_spectacles',
+        'blood_group',
+        'mother_tongue',
+        'languages',
+        'special_cases',
+        'about_me',
+        'photos',
+        'monthly_income',
+        'annual_income',
+        'personal_medical_history',
+        'current_medical_problems',
+        'medications',
+        'birth_place',
+        'birth_time',
+        'created_by',
+        'creator_relation',
+        'addresses',
+        'verification_status',
+        'status',
         'profile_id',
         'serial_no',
         'registration_number',
@@ -305,11 +308,7 @@ class Profile extends Model
         'active',
     ];
 
-    protected $attributes = [
-        'profileVerificationStatus' => 'Pending',
-        'active' => 'active',
-        'profile_completion' => 0,
-    ];
+    protected $attributes = [];
 
     /**
      * The attributes that should be cast to native types.
@@ -318,6 +317,14 @@ class Profile extends Model
      */
     protected $casts = [
         'additional_photos' => 'array',
+        'languages' => 'array',
+        'photos' => 'array',
+        'addresses' => 'array',
+        'has_spectacles' => 'boolean',
+        'height_cm' => 'decimal:2',
+        'weight_kg' => 'decimal:2',
+        'monthly_income' => 'decimal:2',
+        'annual_income' => 'decimal:2',
     ];
 
     public const VERIFICATION_DOCUMENT_KEYS = [
@@ -353,16 +360,21 @@ class Profile extends Model
 
         $paymentsLoaded = $this->relationLoaded('paymentScreenshots');
         $melavaLoaded = $this->relationLoaded('melavaRegistrations');
+        $profileMelavaLoaded = $this->relationLoaded('profileMelavaRegistrations');
 
-        if ($paymentsLoaded && $melavaLoaded) {
+        if ($paymentsLoaded && $melavaLoaded && $profileMelavaLoaded) {
             return $this->paymentScreenshots->contains(fn ($payment) => (bool) $payment->payment_verified)
-                || $this->melavaRegistrations->contains(fn ($registration) => (bool) $registration->payment_verified);
+                || $this->melavaRegistrations->contains(fn ($registration) => (bool) $registration->payment_verified)
+                || $this->profileMelavaRegistrations->contains(fn ($registration) => (bool) $registration->payment_verified);
         }
 
         return PaymentScreenshot::where('profile_id', $this->id)
                 ->where('payment_verified', true)
                 ->exists()
             || MelavaRegistration::where('profile_id', $this->id)
+                ->where('payment_verified', true)
+                ->exists()
+            || $this->profileMelavaRegistrations()
                 ->where('payment_verified', true)
                 ->exists();
     }
@@ -375,9 +387,30 @@ class Profile extends Model
 
         $uploaded = [];
         $verified = [];
+        $documents = $this->relationLoaded('profileDocuments')
+            ? $this->profileDocuments
+            : $this->profileDocuments()->first();
+        $documentColumnMap = [
+            'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
+            'birthDateProof' => ['birth_certificate'],
+            'addressProof' => ['address_proof'],
+            'educationProof' => ['education_certificate'],
+            'professionProof' => ['profession_proof'],
+            'incomeProof' => ['income_proof'],
+            'casteCertificate' => ['caste_certificate'],
+            'medicalFitnessCertificate' => ['medical_fitness_certificate'],
+            'selfieVerification' => [],
+        ];
 
         foreach (self::VERIFICATION_DOCUMENT_KEYS as $key) {
-            if (filled($this->{$key})) {
+            $legacyPath = array_key_exists($key, $this->getAttributes())
+                ? $this->getAttribute($key)
+                : null;
+            $normalizedPath = collect($documentColumnMap[$key] ?? [])
+                ->map(fn (string $column) => $documents?->{$column})
+                ->first(fn ($path) => filled($path));
+
+            if (filled($legacyPath) || filled($normalizedPath)) {
                 $uploaded[] = $key;
 
                 if ($this->isVerifiedDocumentStatus($verification?->{$key.'_status'})) {
@@ -412,9 +445,12 @@ class Profile extends Model
         $type = strtolower(trim((string) $this->registration_type));
         $hasMelavaRecord = $this->hasAttribute('melava_registration_exists')
             ? (bool) $this->getAttribute('melava_registration_exists')
-            : ($this->relationLoaded('melavaRegistrations')
-                ? $this->melavaRegistrations->isNotEmpty()
-                : $this->melavaRegistrations()->exists());
+            : (($this->relationLoaded('profileMelavaRegistrations')
+                ? $this->profileMelavaRegistrations->isNotEmpty()
+                : $this->profileMelavaRegistrations()->exists())
+                || ($this->relationLoaded('melavaRegistrations')
+                    ? $this->melavaRegistrations->isNotEmpty()
+                    : $this->melavaRegistrations()->exists()));
         $hasMelava = $type === 'melava'
             || filled($this->melava_batch)
             || $hasMelavaRecord;
@@ -444,8 +480,8 @@ class Profile extends Model
         $summary = $this->verificationSummary();
         $status = $summary['status'];
 
-        if ($this->profileVerificationStatus !== $status) {
-            $this->profileVerificationStatus = $status;
+        if ($this->verification_status !== $status) {
+            $this->verification_status = $status;
             $this->save();
 
             return true;
@@ -797,5 +833,40 @@ class Profile extends Model
     public function melavaRegistrations()
     {
         return $this->hasMany(MelavaRegistration::class, 'profile_id');
+    }
+
+    public function familyDetails(): HasOne
+    {
+        return $this->hasOne(ProfileFamilyDetail::class, 'profile_id', 'id');
+    }
+
+    public function educations(): HasMany
+    {
+        return $this->hasMany(ProfileEducation::class, 'profile_id', 'id');
+    }
+
+    public function employments(): HasMany
+    {
+        return $this->hasMany(ProfileEmployment::class, 'profile_id', 'id');
+    }
+
+    public function religionDetails(): HasOne
+    {
+        return $this->hasOne(ProfileReligionDetail::class, 'profile_id', 'id');
+    }
+
+    public function profileDocuments(): HasOne
+    {
+        return $this->hasOne(ProfileDocument::class, 'profile_id', 'id');
+    }
+
+    public function partnerPreferences(): HasOne
+    {
+        return $this->hasOne(ProfilePartnerPreference::class, 'profile_id', 'id');
+    }
+
+    public function profileMelavaRegistrations(): HasMany
+    {
+        return $this->hasMany(ProfileMelavaRegistration::class, 'profile_id', 'id');
     }
 }

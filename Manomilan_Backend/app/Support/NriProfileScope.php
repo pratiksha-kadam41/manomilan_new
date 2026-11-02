@@ -19,14 +19,16 @@ class NriProfileScope
     {
         return $query->where(function (Builder $query) {
             foreach (self::CITY_KEYWORDS as $keyword) {
-                if (strlen($keyword) <= 2) {
-                    $query->orWhereRaw(
-                        'profiles.professionalCity REGEXP ?',
-                        ['\\b' . $keyword . '\\b'],
-                    );
-                } else {
-                    $query->orWhere('profiles.professionalCity', 'LIKE', '%' . $keyword . '%');
-                }
+                $matchCity = static function (Builder $locationQuery, string $column) use ($keyword): void {
+                    if (strlen($keyword) <= 2) {
+                        $locationQuery->whereRaw('LOWER(TRIM('.$column.')) = ?', [strtolower($keyword)]);
+                    } else {
+                        $locationQuery->where($column, 'LIKE', '%'.$keyword.'%');
+                    }
+                };
+
+                $query->orWhereHas('employments', fn (Builder $employment) => $matchCity($employment, 'employment_city'))
+                    ->orWhereHas('educations', fn (Builder $education) => $matchCity($education, 'education_city'));
             }
         });
     }

@@ -147,8 +147,9 @@ const STEPS = [
       F("language", "Other Languages", "text", 3),
       F("specialCases", "Special Cases", "text", 3, 0, { p: "If any" }),
       F("knowAboutMyself", "About Myself", "textarea", 9, 0, { p: "Write a short introduction about yourself..." }),
-      F("permanent_address", "Permanent Address", "textarea", 6, 1),
+      F("current_address_pincode", "Current Address PIN Code", "text", 3, 0, { max: 6 }),
       F("address", "Current Address", "textarea", 6, 1),
+      F("permanent_address", "Permanent Address", "textarea", 6, 1),
     ],
   },
   {
@@ -285,6 +286,7 @@ const INITIAL_FORM = STEPS.reduce(
     return form;
   },
   {
+    height: "",
     height_ft: "",
     height_in: "0",
     birth_hour: "",
@@ -294,10 +296,20 @@ const INITIAL_FORM = STEPS.reduce(
     privacyPolicyCheck: false,
     termsCheck: false,
     disclaimer: false,
+    current_address_city: "",
+    current_address_district: "",
+    current_address_state: "",
+    current_address_country: "India",
   },
 );
 
-const RESTORE_KEYS = STEPS.flatMap((step) => step.f.filter((field) => !isVirtualField(field)).map((field) => field.n));
+const RESTORE_KEYS = [
+  ...STEPS.flatMap((step) => step.f.filter((field) => !isVirtualField(field)).map((field) => field.n)),
+  "current_address_city",
+  "current_address_district",
+  "current_address_state",
+  "current_address_country",
+];
 
 const EMPTY_FILES = { profilePhoto: null, full_body_photo: null, half_body_photo: null, selfie_photo: null, candidatePhotos: [], additionalPhotos: [] };
 const EMPTY_DOCUMENTS = { identificationProof: null, birthDateProof: null, educationProof: null };
@@ -428,6 +440,9 @@ const getValueError = (field, form) => {
   if (field.t === "select" && !optionList(field, form).some(([optionValue]) => String(optionValue) === value)) {
     return "Choose a valid option.";
   }
+  if (field.n.endsWith("_address_pincode") && !/^\d{6}$/.test(value)) {
+    return "Enter a valid 6-digit PIN code.";
+  }
   if (field.t === "number") {
     const number = Number(value);
     if (field.n === "weight") {
@@ -542,9 +557,15 @@ export default function MelavaRegistration() {
   const [adminEditLoading, setAdminEditLoading] = useState(Boolean(adminEditId));
   const [adminEditLoadError, setAdminEditLoadError] = useState("");
   const objectUrls = useRef([]);
+  const postalAutofill = useRef({});
+  const [postalLookup, setPostalLookup] = useState({
+    current: { loading: false, message: "" },
+    permanent: { loading: false, message: "" },
+  });
 
-  const heightText = composeHeight(form.height_ft, form.height_in);
+  const heightText = form.height || composeHeight(form.height_ft, form.height_in);
   const timeText = composeTime(form.birth_hour, form.birth_minute, form.birthTime_ampm);
+  const currentAddressPin = form.current_address_pincode;
   const total = Number(settings.fee) + (form.booklet_required ? Number(settings.booklet_fee) : 0);
   const selectedCampaign = campaigns.find((item) => String(item.id) === selectedCampaignId);
 
@@ -587,6 +608,79 @@ export default function MelavaRegistration() {
     [],
   );
 
+  useEffect(() => {
+    const controllers = [];
+    const type = "current";
+    const prefix = "current_address";
+    const pin = String(currentAddressPin || "").trim();
+    if (!/^\d{6}$/.test(pin)) {
+      setPostalLookup((previous) => ({
+        ...previous,
+        current: { loading: false, message: pin ? "Enter a valid 6-digit PIN code." : "" },
+      }));
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    controllers.push(controller);
+    setPostalLookup((previous) => ({ ...previous, [type]: { loading: true, message: "" } }));
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`https://api.postalpincode.in/pincode/${pin}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("PIN code lookup is unavailable right now.");
+
+        const [result] = await response.json();
+        const office = result?.Status === "Success" ? result.PostOffice?.[0] : null;
+        if (!office) throw new Error("No address was found for this PIN code.");
+
+        const values = {
+          [`${prefix}_city`]: office.Block && office.Block !== "NA" ? office.Block : office.District,
+          [`${prefix}_district`]: office.District,
+          [`${prefix}_state`]: office.State,
+          [`${prefix}_country`]: office.Country || "India",
+        };
+        const addressLine = [
+          values.current_address_city,
+          values.current_address_district,
+          values.current_address_state,
+          values.current_address_country,
+          pin,
+        ].filter(Boolean).join(", ");
+
+        setForm((previous) => {
+          const next = { ...previous };
+          Object.entries(values).forEach(([key, value]) => {
+            const lastAutofilledValue = postalAutofill.current[key];
+            if (!previous[key] || previous[key] === lastAutofilledValue) {
+              next[key] = value || "";
+              postalAutofill.current[key] = value || "";
+            }
+          });
+          const previousGeneratedAddress = postalAutofill.current.address;
+          if (!previous.address || previous.address === previousGeneratedAddress) {
+            next.address = addressLine;
+            postalAutofill.current.address = addressLine;
+          }
+          return next;
+        });
+        setPostalLookup((previous) => ({ ...previous, [type]: { loading: false, message: "" } }));
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        setPostalLookup((previous) => ({
+          ...previous,
+          [type]: { loading: false, message: error.message || "Unable to look up this PIN code." },
+        }));
+      }
+    }, 400);
+
+    controller.signal.addEventListener("abort", () => window.clearTimeout(timeout), { once: true });
+
+    return () => controllers.forEach((controller) => controller.abort());
+  }, [currentAddressPin]);
+
   const focusField = (name) => {
     window.setTimeout(() => {
       const wrapper = document.querySelector(`[data-field="${name}"]`);
@@ -622,18 +716,13 @@ export default function MelavaRegistration() {
         }
 
         if (field.t === "height") {
-          const feet = String(values.height_ft ?? "").trim();
-          const inches = String(values.height_in ?? "").trim();
-          if (!feet) {
-            if (field.r || inches !== "0") nextErrors.height = "Select the candidate's height.";
+          const height = String(values.height ?? "").trim();
+          if (!height) {
+            if (field.r) nextErrors.height = "Enter the candidate's height.";
             return;
           }
-          const feetValue = Number(feet);
-          const inchesValue = inches === "" ? 0 : Number(inches);
-          if (!Number.isInteger(feetValue) || feetValue < 3 || feetValue > 8) {
-            nextErrors.height = "Height must be between 3 and 8 feet.";
-          } else if (!Number.isInteger(inchesValue) || inchesValue < 0 || inchesValue > 11) {
-            nextErrors.height = "Inches must be a whole number from 0 to 11.";
+          if (heightInches(height) === null) {
+            nextErrors.height = "Enter height from 3ft to 8ft, for example 5ft 8in.";
           }
           return;
         }
@@ -693,6 +782,14 @@ export default function MelavaRegistration() {
   };
 
   const update = (name, value) => {
+    if (
+      (name.startsWith("current_address_") || name.startsWith("permanent_address_"))
+      && postalAutofill.current[name]
+      && value !== postalAutofill.current[name]
+    ) {
+      delete postalAutofill.current[name];
+    }
+
     let nextValue = value;
     if (name === "username") nextValue = cleanMobile(value);
     else if (CONTACT_FIELDS.includes(name)) nextValue = digitsOnly(value);
@@ -776,6 +873,9 @@ export default function MelavaRegistration() {
         if (height.feet) {
           next.height_ft = height.feet;
           next.height_in = height.inches;
+          next.height = composeHeight(height.feet, height.inches);
+        } else {
+          next.height = String(source.height);
         }
       }
       if (source.timeOfBirth) {
@@ -1251,7 +1351,7 @@ export default function MelavaRegistration() {
 
     payload.append("melava_campaign_id", selectedCampaignId);
     Object.entries(form).forEach(([key, value]) => {
-      if (["height_ft", "height_in", "is_existing_website_user"].includes(key)) return;
+      if (["height_ft", "height_in", "height", "is_existing_website_user"].includes(key)) return;
       if (typeof value === "boolean") payload.append(key, value ? "1" : "0");
       else if (value !== null && value !== undefined) payload.append(key, value);
     });
@@ -1399,6 +1499,11 @@ export default function MelavaRegistration() {
     setPaymentFile(null);
     setSubmitting(false);
     setResult(null);
+    postalAutofill.current = {};
+    setPostalLookup({
+      current: { loading: false, message: "" },
+      permanent: { loading: false, message: "" },
+    });
   };
 
   const selectCampaign = (id) => {
@@ -1466,11 +1571,14 @@ export default function MelavaRegistration() {
       return (
         <div className="f w3" key={key} data-field="height">
           <label>{field.l}<b>*</b></label>
-          <div className="r2">
-            <input type="number" min="3" max="8" step="1" placeholder="Feet" aria-label="Feet" value={form.height_ft} onChange={(event) => update("height_ft", event.target.value)} />
-            <input type="number" min="0" max="11" step="1" placeholder="Inches" aria-label="Inches" value={form.height_in} onChange={(event) => update("height_in", event.target.value)} />
-          </div>
-          <small>Feet and inches</small>
+          <input
+            type="text"
+            name="height"
+            placeholder="e.g., 5ft 8in"
+            value={form.height}
+            onChange={(event) => update("height", event.target.value)}
+          />
+          <small>Enter feet and inches in one field</small>
           <FieldError message={errors.height} />
         </div>
       );
@@ -1517,15 +1625,16 @@ export default function MelavaRegistration() {
       return (
         <div className={`f w${field.w}`} key={key} data-field={key}>
           {label}
-          {key === "address" ? (
+          {key === "permanent_address" ? (
             <button
               type="button"
-              className="mini address-copy"
-              aria-label="Copy permanent address to current address"
-              title="Copy permanent address to current address"
-              onClick={() => update("address", form.permanent_address || "")}
+              className="mini address-copy same-current-address"
+              aria-label="Use current address as permanent address"
+              title="Use current address as permanent address"
+              onClick={() => update("permanent_address", form.address || "")}
             >
               <Copy size={16} aria-hidden="true" />
+              <span>Same as current address</span>
             </button>
           ) : null}
           <textarea id={id} name={key} rows="3" placeholder={placeholder} value={form[key] ?? ""} onChange={(event) => update(key, event.target.value)} />
@@ -1562,6 +1671,13 @@ export default function MelavaRegistration() {
           step={field.n === "weight" ? "any" : field.t === "number" ? "1" : undefined}
           onChange={(event) => update(key, event.target.value)}
         />
+        {key === "current_address_pincode" ? (
+          <small aria-live="polite">
+            {postalLookup.current.loading
+              ? "Looking up PIN code..."
+              : postalLookup.current.message}
+          </small>
+        ) : null}
         {field.h ? <small>{field.h}</small> : null}
         <FieldError message={errors[key]} />
       </div>

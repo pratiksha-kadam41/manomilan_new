@@ -142,8 +142,19 @@ class ProfileController extends Controller
         $user = $request->user();
 
         $query = Profile::query()
-            ->with(['user', 'paymentScreenshots', 'melavaRegistrations'])
-            ->where('active', 'active');
+            ->with([
+                'user',
+                'paymentScreenshots',
+                'melavaRegistrations',
+                'familyDetails',
+                'educations',
+                'employments',
+                'religionDetails',
+                'profileDocuments',
+                'partnerPreferences',
+                'profileMelavaRegistrations.campaign',
+            ])
+            ->where('status', 'active');
 
         if ($user && $user->profile_id) {
             $query->where('id', '!=', $user->profile_id);
@@ -152,26 +163,33 @@ class ProfileController extends Controller
         if ($request->filled('q')) {
             $term = trim((string) $request->input('q'));
             $query->where(function ($q) use ($term) {
-                $q->where('fullName', 'like', "%{$term}%")
-                    ->orWhere('profile_id', 'like', "%{$term}%")
-                    ->orWhere('registration_number', 'like', "%{$term}%")
-                    ->orWhere('caste', 'like', "%{$term}%")
-                    ->orWhere('education', 'like', "%{$term}%")
-                    ->orWhere('profession', 'like', "%{$term}%");
+                $q->where('full_name', 'like', "%{$term}%")
+                    ->orWhere('reg_id', 'like', "%{$term}%")
+                    ->orWhere('phone', 'like', "%{$term}%")
+                    ->orWhere('email', 'like', "%{$term}%")
+                    ->orWhereHas('religionDetails', fn ($religion) => $religion
+                        ->where('religion', 'like', "%{$term}%")
+                        ->orWhere('caste', 'like', "%{$term}%"))
+                    ->orWhereHas('educations', fn ($education) => $education
+                        ->where('degree_name', 'like', "%{$term}%"))
+                    ->orWhereHas('employments', fn ($employment) => $employment
+                        ->where('profession', 'like', "%{$term}%"));
             });
         }
 
         $gender = strtolower(trim((string) $request->input('groomOrBride', '')));
         if ($gender !== '' && $gender !== 'all') {
-            $query->whereRaw('LOWER(groomOrBride) = ?', [$gender]);
+            $query->where('groomorbride', ucfirst($gender));
         }
 
         if ($request->filled('religion')) {
-            $query->where('religion', $request->input('religion'));
+            $query->whereHas('religionDetails', fn ($religion) => $religion
+                ->where('religion', $request->input('religion')));
         }
 
         if ($request->filled('caste')) {
-            $query->where('caste', $request->input('caste'));
+            $query->whereHas('religionDetails', fn ($religion) => $religion
+                ->where('caste', $request->input('caste')));
         }
 
         $profiles = $query->latest()->paginate((int) $request->input('per_page', 20));
@@ -211,7 +229,7 @@ class ProfileController extends Controller
         }
 
         $sortBy = $request->input('sort_by', 'registration_date');
-        if (! in_array($sortBy, ['registration_number', 'registration_date', 'serial_no'], true)) {
+        if (! in_array($sortBy, ['registration_number', 'registration_date'], true)) {
             $sortBy = 'registration_date';
         }
 
@@ -223,94 +241,109 @@ class ProfileController extends Controller
             return $query
                 ->when($q !== '', function ($query) use ($q) {
                     $query->where(function ($sub) use ($q) {
-                        $sub->where('profiles.profile_id', 'like', "%{$q}%")
-                            ->orWhere('profiles.registration_number', 'like', "%{$q}%")
-                            ->orWhere('profiles.serial_no', 'like', "%{$q}%")
-                            ->orWhere('profiles.fullName', 'like', "%{$q}%")
-                            ->orWhere('profiles.profileVerificationStatus', 'like', "%{$q}%")
+                        $sub->where('profiles.reg_id', 'like', "%{$q}%")
+                            ->orWhere('profiles.full_name', 'like', "%{$q}%")
+                            ->orWhere('profiles.verification_status', 'like', "%{$q}%")
+                            ->orWhere('profiles.phone', 'like', "%{$q}%")
+                            ->orWhere('profiles.email', 'like', "%{$q}%")
+                            ->orWhereHas('religionDetails', fn ($detail) => $detail
+                                ->where('religion', 'like', "%{$q}%")
+                                ->orWhere('caste', 'like', "%{$q}%")
+                                ->orWhere('sub_caste', 'like', "%{$q}%"))
+                            ->orWhereHas('educations', fn ($education) => $education
+                                ->where('degree_name', 'like', "%{$q}%")
+                                ->orWhere('education_level', 'like', "%{$q}%"))
+                            ->orWhereHas('employments', fn ($employment) => $employment
+                                ->where('profession', 'like', "%{$q}%")
+                                ->orWhere('working_field', 'like', "%{$q}%"))
                             ->orWhereRaw('DATE_FORMAT(profiles.created_at, "%d-%m-%Y") like ?', ["%{$q}%"])
                             ->orWhereHas('user', fn ($userQuery) => $userQuery->where('username', 'like', "%{$q}%"));
                     });
                 })
-                ->when($gender && $gender !== 'all', fn ($query) => $query->where('profiles.groomOrBride', $gender))
+                ->when($gender && $gender !== 'all', fn ($query) => $query->where('profiles.groomorbride', ucfirst(strtolower($gender))))
                 ->when($regType && $regType !== 'all', function ($query) use ($regType) {
                     if ($regType === 'melava_existing') {
-                        $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
-                            ->whereIn('profiles.registration_type', ['melava', 'existing'])
-                            ->where(function ($sub) {
-                                $sub->where('profiles.registration_number', 'like', 'MM3%')
-                                    ->orWhere('profiles.profile_id', 'like', 'MM3%');
-                            });
+                        $query->whereHas('profileMelavaRegistrations')
+                            ->where('profiles.reg_id', 'like', 'MM3%');
                     } elseif ($regType === 'melava') {
-                        $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
-                            ->where('profiles.registration_type', 'melava')
-                            ->where(function ($sub) {
-                                $sub->where('profiles.registration_number', 'like', 'MM3%')
-                                    ->orWhere('profiles.profile_id', 'like', 'MM3%');
-                            });
+                        $query->whereHas('profileMelavaRegistrations')
+                            ->where('profiles.reg_id', 'like', 'MM3%');
                     } else {
-                        $query->where('profiles.registration_type', $regType);
+                        $query->whereDoesntHave('profileMelavaRegistrations');
                     }
                 })
                 ->when($verificationStatus === 'verified', function ($query) {
-                    $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) = 'completed'");
+                    $query->where('profiles.verification_status', 'Completed');
                 })
                 ->when($verificationStatus === 'unverified', function ($query) {
-                    $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) != 'completed'");
+                    $query->where('profiles.verification_status', 'Pending');
                 })
                 ->when($ageFrom !== null, function ($query) use ($ageFrom, $today) {
-                    $query->whereNotNull('profiles.birthDate')
-                        ->whereDate('profiles.birthDate', '<=', $today->copy()->subYears($ageFrom)->toDateString());
+                    $query->whereNotNull('profiles.birth_date')
+                        ->whereDate('profiles.birth_date', '<=', $today->copy()->subYears($ageFrom)->toDateString());
                 })
                 ->when($ageTo !== null, function ($query) use ($ageTo, $today) {
-                    $query->whereNotNull('profiles.birthDate')
-                        ->whereDate('profiles.birthDate', '>', $today->copy()->subYears($ageTo + 1)->toDateString());
+                    $query->whereNotNull('profiles.birth_date')
+                        ->whereDate('profiles.birth_date', '>', $today->copy()->subYears($ageTo + 1)->toDateString());
                 })
                 ->when($nri, fn ($query) => NriProfileScope::apply($query));
         };
 
         $baseAll = $applyFilters(Profile::query());
-        $base = (clone $baseAll)->where('profiles.active', 'active');
+        $base = (clone $baseAll)->where('profiles.status', 'active');
 
         $stats = (clone $base)
             ->selectRaw('COUNT(*) AS total')
-            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) = 'completed' THEN 1 ELSE 0 END) AS verified")
-            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) != 'completed' THEN 1 ELSE 0 END) AS unverified")
+            ->selectRaw("SUM(CASE WHEN profiles.verification_status = 'Completed' THEN 1 ELSE 0 END) AS verified")
+            ->selectRaw("SUM(CASE WHEN profiles.verification_status = 'Pending' THEN 1 ELSE 0 END) AS unverified")
             ->first();
 
         $inactiveTotal = (clone $baseAll)
-            ->where('profiles.active', '!=', 'active')
+            ->where('profiles.status', '!=', 'active')
             ->count();
 
         $query = (clone $base)
             ->select([
                 'profiles.id',
-                'profiles.registration_number',
-                'profiles.profile_id',
-                'profiles.serial_no',
-                'profiles.profilePhoto',
-                'profiles.fullName',
+                'profiles.reg_id',
+                'profiles.groomorbride',
+                'profiles.full_name',
+                'profiles.birth_date',
+                'profiles.height_cm',
+                'profiles.weight_kg',
+                'profiles.has_spectacles',
+                'profiles.blood_group',
+                'profiles.mother_tongue',
+                'profiles.languages',
+                'profiles.special_cases',
+                'profiles.about_me',
+                'profiles.photos',
+                'profiles.monthly_income',
+                'profiles.annual_income',
+                'profiles.personal_medical_history',
+                'profiles.current_medical_problems',
+                'profiles.medications',
+                'profiles.birth_place',
+                'profiles.birth_time',
+                'profiles.creator_relation',
+                'profiles.addresses',
+                'profiles.verification_status',
+                'profiles.status',
                 'profiles.phone',
                 'profiles.email',
                 'profiles.created_at',
-                'profiles.profileVerificationStatus',
-                'profiles.groomOrBride',
-                'profiles.registration_type',
-                'profiles.professionalCity',
-                'profiles.cityOfEducation',
-                'profiles.education',
-                'profiles.profession',
-                'profiles.birthDate',
-                'profiles.identificationProof',
-                'profiles.birthDateProof',
-                'profiles.addressProof',
-                'profiles.educationProof',
-                'profiles.professionProof',
-                'profiles.incomeProof',
-                'profiles.casteCertificate',
-                'profiles.medicalFitnessCertificate',
             ])
-            ->with(['user:profile_id,username,email', 'documentVerification'])
+            ->with([
+                'user:profile_id,username,email',
+                'documentVerification',
+                'familyDetails',
+                'educations',
+                'employments',
+                'religionDetails',
+                'profileDocuments',
+                'partnerPreferences',
+                'profileMelavaRegistrations.campaign',
+            ])
             ->withExists([
                 'paymentScreenshots as has_verified_payment_screenshot' => fn ($paymentQuery) => $paymentQuery
                     ->where('payment_verified', true),
@@ -320,9 +353,7 @@ class ProfileController extends Controller
             ]);
 
         if ($sortBy === 'registration_number') {
-            $query->orderByRaw("COALESCE(NULLIF(profiles.registration_number, ''), profiles.profile_id) {$sortOrder}");
-        } elseif ($sortBy === 'serial_no') {
-            $query->orderBy('profiles.serial_no', $sortOrder);
+            $query->orderBy('profiles.reg_id', $sortOrder);
         } else {
             $query->orderBy('profiles.created_at', $sortOrder);
         }
@@ -332,7 +363,7 @@ class ProfileController extends Controller
         $total = (int) ($stats->total ?? 0);
 
         return response()->json([
-            'data' => $profiles->getCollection()->map(fn (Profile $profile) => $this->presentProfile($profile))->values(),
+            'data' => $profiles->getCollection()->map(fn (Profile $profile) => $this->presentProfile($profile, true))->values(),
             'current_page' => $profiles->currentPage(),
             'last_page' => $profiles->lastPage(),
             'per_page' => $profiles->perPage(),
@@ -370,7 +401,7 @@ class ProfileController extends Controller
         $ageTo = $request->filled('age_to') ? (int) $request->input('age_to') : null;
         $today = Carbon::today();
         $sortBy = $request->input('sort_by', 'registration_date');
-        if (! in_array($sortBy, ['registration_number', 'registration_date', 'serial_no'], true)) {
+        if (! in_array($sortBy, ['registration_number', 'registration_date'], true)) {
             $sortBy = 'registration_date';
         }
 
@@ -379,56 +410,55 @@ class ProfileController extends Controller
         $query = Profile::query()
             ->with([
                 'user',
-                'melavaRegistrations' => function ($registrationQuery) {
-                    $registrationQuery->where('melava_batch', 'october_2026')
-                        ->orderBy('melava_registered_at', 'desc');
-                },
+                'familyDetails',
+                'educations',
+                'employments',
+                'religionDetails',
+                'profileDocuments',
+                'partnerPreferences',
+                'profileMelavaRegistrations.campaign',
             ])
-            ->where('profiles.active', 'active')
+            ->where('profiles.status', 'active')
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($sub) use ($q) {
-                    $sub->where('profiles.profile_id', 'like', "%{$q}%")
-                        ->orWhere('profiles.registration_number', 'like', "%{$q}%")
-                        ->orWhere('profiles.serial_no', 'like', "%{$q}%")
-                        ->orWhere('profiles.fullName', 'like', "%{$q}%")
-                        ->orWhere('profiles.profileVerificationStatus', 'like', "%{$q}%")
+                    $sub->where('profiles.reg_id', 'like', "%{$q}%")
+                        ->orWhere('profiles.full_name', 'like', "%{$q}%")
+                        ->orWhere('profiles.verification_status', 'like', "%{$q}%")
+                        ->orWhere('profiles.phone', 'like', "%{$q}%")
+                        ->orWhere('profiles.email', 'like', "%{$q}%")
+                        ->orWhereHas('religionDetails', fn ($religion) => $religion
+                            ->where('religion', 'like', "%{$q}%")
+                            ->orWhere('caste', 'like', "%{$q}%"))
+                        ->orWhereHas('educations', fn ($education) => $education
+                            ->where('degree_name', 'like', "%{$q}%"))
+                        ->orWhereHas('employments', fn ($employment) => $employment
+                            ->where('profession', 'like', "%{$q}%"))
                         ->orWhereRaw('DATE_FORMAT(profiles.created_at, "%d-%m-%Y") like ?', ["%{$q}%"])
                         ->orWhereHas('user', fn ($userQuery) => $userQuery->where('username', 'like', "%{$q}%"));
                 });
             })
-            ->when($gender && $gender !== 'all', fn ($query) => $query->where('profiles.groomOrBride', $gender))
+            ->when($gender && $gender !== 'all', fn ($query) => $query->where('profiles.groomorbride', ucfirst(strtolower($gender))))
             ->when($regType && $regType !== 'all', function ($query) use ($regType) {
-                if ($regType === 'melava_existing') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
-                        ->whereIn('profiles.registration_type', ['melava', 'existing'])
-                        ->where(function ($sub) {
-                            $sub->where('profiles.registration_number', 'like', 'MM3%')
-                                ->orWhere('profiles.profile_id', 'like', 'MM3%');
-                        });
-                } elseif ($regType === 'melava') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
-                        ->where('profiles.registration_type', 'melava')
-                        ->where(function ($sub) {
-                            $sub->where('profiles.registration_number', 'like', 'MM3%')
-                                ->orWhere('profiles.profile_id', 'like', 'MM3%');
-                        });
+                if (in_array($regType, ['melava_existing', 'melava'], true)) {
+                    $query->whereHas('profileMelavaRegistrations')
+                        ->where('profiles.reg_id', 'like', 'MM3%');
                 } else {
-                    $query->where('profiles.registration_type', $regType);
+                    $query->whereDoesntHave('profileMelavaRegistrations');
                 }
             })
             ->when($verificationStatus === 'verified', function ($query) {
-                $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) = 'completed'");
+                $query->where('profiles.verification_status', 'Completed');
             })
             ->when($verificationStatus === 'unverified', function ($query) {
-                $query->whereRaw("LOWER(TRIM(COALESCE(profiles.profileVerificationStatus, ''))) != 'completed'");
+                $query->where('profiles.verification_status', 'Pending');
             })
             ->when($ageFrom !== null, function ($query) use ($ageFrom, $today) {
-                $query->whereNotNull('profiles.birthDate')
-                    ->whereDate('profiles.birthDate', '<=', $today->copy()->subYears($ageFrom)->toDateString());
+                $query->whereNotNull('profiles.birth_date')
+                    ->whereDate('profiles.birth_date', '<=', $today->copy()->subYears($ageFrom)->toDateString());
             })
             ->when($ageTo !== null, function ($query) use ($ageTo, $today) {
-                $query->whereNotNull('profiles.birthDate')
-                    ->whereDate('profiles.birthDate', '>', $today->copy()->subYears($ageTo + 1)->toDateString());
+                $query->whereNotNull('profiles.birth_date')
+                    ->whereDate('profiles.birth_date', '>', $today->copy()->subYears($ageTo + 1)->toDateString());
             });
 
         if ($nri) {
@@ -436,12 +466,9 @@ class ProfileController extends Controller
         }
 
         if ($sortBy === 'registration_number') {
-            $query->orderByRaw("COALESCE(NULLIF(profiles.registration_number, ''), profiles.profile_id) {$sortOrder}");
-        } elseif ($sortBy === 'serial_no') {
-            $query->orderBy('profiles.serial_no', $sortOrder);
+            $query->orderBy('profiles.reg_id', $sortOrder);
         } else {
-            $query->orderByRaw("COALESCE((SELECT MAX(mr.melava_registered_at) FROM melava_registrations AS mr WHERE mr.profile_id = profiles.id AND mr.melava_batch = 'october_2026'), profiles.created_at) IS NULL ASC")
-                ->orderByRaw("COALESCE((SELECT MAX(mr.melava_registered_at) FROM melava_registrations AS mr WHERE mr.profile_id = profiles.id AND mr.melava_batch = 'october_2026'), profiles.created_at) {$sortOrder}");
+            $query->orderBy('profiles.created_at', $sortOrder);
         }
 
         $filename = 'profiles_export_'.now()->format('Y-m-d_H-i-s').'.csv';
@@ -481,45 +508,38 @@ class ProfileController extends Controller
 
             $query->chunk(500, function ($profiles) use ($out, $missing, $formatDate) {
                 foreach ($profiles as $profile) {
-                    $latestMelavaRegistration = $profile->melavaRegistrations->first();
-                    $registeredMelavaRegistration = $profile->melavaRegistrations
-                        ->first(fn ($registration) => $registration->melava_registered_at !== null);
-                    $registrationDate = $registeredMelavaRegistration?->melava_registered_at
-                        ?: $profile->created_at;
-
-                    $registrationType = match ($profile->registration_type) {
-                        'melava' => 'Melava Registration',
-                        'existing' => 'Existing Registration',
-                        'quick' => 'Quick Registration',
-                        default => $missing($profile->registration_type),
-                    };
-
-                    $bookletRequired = $latestMelavaRegistration
-                        ? ((int) $latestMelavaRegistration->is_booklet_req === 1 ? 'Yes' : 'No')
+                    $registration = $profile->profileMelavaRegistrations->sortByDesc('id')->first();
+                    $family = $profile->familyDetails;
+                    $education = $profile->educations->sortByDesc('id')->first();
+                    $employment = $profile->employments->sortByDesc('id')->first();
+                    $religion = $profile->religionDetails;
+                    $registrationType = $registration ? 'Melava Registration' : 'Profile Registration';
+                    $bookletRequired = $registration
+                        ? ($registration->is_booklet_req ? 'Yes' : 'No')
                         : 'N/A';
 
                     fputcsv($out, [
-                        $missing($profile->serial_no),
-                        $missing($profile->registration_number ?? $profile->profile_id),
-                        $missing($profile->fullName),
+                        'N/A',
+                        $missing($profile->reg_id),
+                        $missing($profile->full_name),
                         $missing($profile->phone ?? $profile->user?->username),
                         $missing($profile->email),
-                        $formatDate($profile->birthDate),
-                        $formatDate($registrationDate),
-                        $missing($profile->groomOrBride === null ? null : ucfirst($profile->groomOrBride)),
+                        $formatDate($profile->birth_date),
+                        $formatDate($profile->created_at),
+                        $missing($profile->groomorbride),
                         $registrationType,
                         $bookletRequired,
-                        $missing($profile->maritalStatus),
-                        $missing($profile->caste),
-                        $missing($profile->education),
-                        $missing($profile->profession),
-                        $missing($profile->professionalCity),
-                        $profile->mothersName ?? 'N/A',
-                        $profile->motherContactNumber ?? 'N/A',
-                        $profile->fathersName ?? 'N/A',
-                        $profile->fatherContactNumber ?? 'N/A',
-                        $registeredMelavaRegistration?->source_of_information ?? 'N/A',
-                        $missing($profile->profileVerificationStatus),
+                        'N/A',
+                        $missing($religion?->caste),
+                        $missing($education?->degree_name),
+                        $missing($employment?->profession),
+                        $missing($employment?->employment_city ?? $education?->education_city),
+                        $family?->mother_name ?? 'N/A',
+                        $family?->mother_contact ?? 'N/A',
+                        $family?->father_name ?? 'N/A',
+                        $family?->father_contact ?? 'N/A',
+                        'N/A',
+                        $missing($profile->verification_status),
                     ]);
                 }
             });
@@ -544,6 +564,13 @@ class ProfileController extends Controller
                 'documentVerification',
                 'paymentScreenshots',
                 'melavaRegistrations',
+                'profileDocuments',
+                'familyDetails',
+                'educations',
+                'employments',
+                'religionDetails',
+                'partnerPreferences',
+                'profileMelavaRegistrations',
             ])->find((int) $id);
 
             if (! $profile) {
@@ -554,10 +581,39 @@ class ProfileController extends Controller
             $verification = $profile->documentVerification;
             $verificationSummary = $profile->verificationSummary();
             $registrationSummary = $profile->registrationSummary();
+            $family = $profile->familyDetails;
+            $educationRows = $profile->educations->sortBy('id')->values();
+            $employment = $profile->employments->sortBy('id')->first();
+            $religion = $profile->religionDetails;
+            $partnerPreference = $profile->partnerPreferences;
+            $addresses = is_array($profile->addresses) ? $profile->addresses : [];
+            $currentAddress = $addresses['current'] ?? [];
+            $permanentAddress = $addresses['permanent'] ?? [];
+            $referenceAddress = $addresses['reference'] ?? [];
+            $latestMelava = $profile->melavaRegistrations->sortByDesc('id')->first();
+            $heightInches = $profile->height_cm
+                ? (int) round((float) $profile->height_cm / 2.54)
+                : null;
             $documents = [];
+            $documentColumns = [
+                'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
+                'birthDateProof' => ['birth_certificate'],
+                'addressProof' => ['address_proof'],
+                'educationProof' => ['education_certificate'],
+                'professionProof' => ['profession_proof'],
+                'incomeProof' => ['income_proof'],
+                'casteCertificate' => ['caste_certificate'],
+                'medicalFitnessCertificate' => ['medical_fitness_certificate'],
+                'selfieVerification' => [],
+            ];
 
             foreach (self::DOCUMENT_KEYS as $key) {
                 $path = $profile->{$key};
+                if (! filled($path)) {
+                    $path = collect($documentColumns[$key] ?? [])
+                        ->map(fn (string $column) => $profile->profileDocuments?->{$column})
+                        ->first(fn ($documentPath) => filled($documentPath));
+                }
                 if (! is_string($path) || trim($path) === '') {
                     continue;
                 }
@@ -591,21 +647,26 @@ class ProfileController extends Controller
                 ];
             };
 
+            $storedPhotos = is_array($profile->photos) ? $profile->photos : [];
             foreach ([
-                'Profile Photo' => $profile->profilePhoto,
-                'Full Body Photo' => $profile->full_body_photo,
-                'Half Body Photo' => $profile->half_body_photo,
-                'Selfie Photo' => $profile->selfie_photo,
+                'Profile Photo' => $storedPhotos['profile_photo'] ?? $profile->profilePhoto,
+                'Full Body Photo' => $storedPhotos['full_body_photo'] ?? $profile->full_body_photo,
+                'Half Body Photo' => $storedPhotos['half_body_photo'] ?? $profile->half_body_photo,
+                'Selfie Photo' => $storedPhotos['selfie_photo'] ?? $profile->selfie_photo,
             ] as $label => $path) {
                 $addPhoto($label, $path);
             }
 
-            $additionalPhotos = $profile->additional_photos;
+            $additionalPhotos = $storedPhotos['additional_photos'] ?? $profile->additional_photos;
             if (is_string($additionalPhotos)) {
                 $additionalPhotos = json_decode($additionalPhotos, true) ?: [];
             }
             foreach (array_values(is_array($additionalPhotos) ? $additionalPhotos : []) as $index => $path) {
                 $addPhoto('Additional Photo '.($index + 1), $path);
+            }
+
+            foreach (array_values($storedPhotos['candidate_photos'] ?? []) as $index => $path) {
+                $addPhoto('Candidate Photo '.($index + 1), $path);
             }
 
             if (Schema::hasTable('melava_registrations')) {
@@ -627,143 +688,156 @@ class ProfileController extends Controller
 
             $data = [
                 'id' => $profile->id,
-                'registration_no' => $profile->registration_number ?: $profile->profile_id,
-                'registration_number' => $profile->registration_number ?: $profile->profile_id,
-                'profile_id' => $profile->profile_id,
-                'serial_no' => $profile->serial_no,
-                'full_name' => $profile->fullName,
-                'profile_photo' => $profile->profilePhoto,
-                'photo' => $profile->profilePhoto,
+                'registration_no' => $profile->reg_id,
+                'registration_number' => $profile->reg_id,
+                'profile_id' => $profile->reg_id,
+                'serial_no' => null,
+                'full_name' => $profile->full_name,
+                'profile_photo' => $storedPhotos['profile_photo'] ?? $profile->profilePhoto,
+                'photo' => $storedPhotos['profile_photo'] ?? $profile->profilePhoto,
                 'photos' => $photos,
                 'mobile' => $profile->user?->username ?? $profile->phone,
                 'email' => $profile->email ?? $profile->user?->email,
-                'gender' => $profile->groomOrBride,
-                'dob' => $profile->birthDate,
-                'birth_date' => $profile->birthDate,
-                'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
-                'height' => $profile->height,
-                'weight' => $profile->weight,
-                'city' => $profile->professionalCity ?: $profile->cityOfEducation,
-                'address' => $profile->address,
-                'permanent_address' => $profile->permanent_address,
-                'country' => $profile->country,
-                'state' => $profile->state,
-                'district' => $profile->district,
-                'taluka' => $profile->taluka,
-                'village' => $profile->village,
-                'pincode' => $profile->pincode,
-                'source_of_information' => $profile->source_of_information,
-                'registration_type' => $profile->registration_type,
+                'gender' => $profile->groomorbride,
+                'dob' => $profile->birth_date,
+                'birth_date' => $profile->birth_date,
+                'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
+                'height' => $heightInches
+                    ? intdiv($heightInches, 12).'ft '.($heightInches % 12).'in'
+                    : null,
+                'weight' => $profile->weight_kg,
+                'city' => $employment?->employment_city ?: ($educationRows->first()?->education_city),
+                'address' => $currentAddress['address'] ?? null,
+                'permanent_address' => $permanentAddress['address'] ?? null,
+                'country' => $currentAddress['country'] ?? null,
+                'state' => $currentAddress['state'] ?? null,
+                'district' => $currentAddress['district'] ?? null,
+                'taluka' => null,
+                'village' => null,
+                'pincode' => $currentAddress['pincode'] ?? null,
+                'source_of_information' => $latestMelava?->source_of_information,
+                'registration_type' => $registrationSummary['is_melava'] ? 'melava' : 'profile',
                 'registration_label' => $registrationSummary['label'],
                 'registration_is_profile' => $registrationSummary['is_profile'],
                 'registration_is_melava' => $registrationSummary['is_melava'],
                 'status' => $verificationSummary['display_status'],
                 'verification_status' => $verificationSummary['display_status'],
-                'stored_verification_status' => $profile->profileVerificationStatus,
+                'stored_verification_status' => $profile->verification_status,
                 'is_verified' => $verificationSummary['is_verified'],
                 'payment_verified' => $verificationSummary['payment_verified'],
                 'documents_verified' => $verificationSummary['documents_verified'],
                 'documents_total' => $verificationSummary['documents_total'],
                 'documents_pending' => $verificationSummary['documents_pending'],
                 'verification' => $verificationSummary,
-                'active' => $profile->active,
-                'melava_batch' => $profile->melava_batch,
+                'active' => $profile->status,
+                'melava_batch' => $latestMelava?->melava_batch,
                 'created_at' => $profile->created_at,
-                'profile_completion' => $profile->profile_completion,
+                'profile_completion' => null,
 
-                'marital_status' => $profile->maritalStatus,
-                'caste' => $profile->caste,
-                'sub_caste' => $profile->subCaste,
-                'mother_tongue' => $profile->motherTongue,
-                'languages_known' => $profile->language,
-                'special_cases' => $profile->specialCases,
-                'about' => $profile->knowAboutMyself,
-                'religion' => $profile->religion,
-                'father_phone' => $profile->fatherContactNumber,
-                'mother_phone' => $profile->motherContactNumber,
-                'reference_phone' => $profile->referenceContactNumber,
-                'blood_group' => $profile->bloodGroup,
-                'spectacles' => $profile->havingSpecsLenses,
-                'has_medical_history' => $profile->hasMedicalHistory,
-                'personal_medical_history' => $profile->personalMedicalHistory,
-                'current_medical_problems' => $profile->currentMedicalProblems,
+                'marital_status' => $latestMelava?->maritalStatus,
+                'caste' => $religion?->caste,
+                'sub_caste' => $religion?->sub_caste,
+                'mother_tongue' => $profile->mother_tongue,
+                'languages_known' => implode(', ', $profile->languages ?? []),
+                'special_cases' => $profile->special_cases,
+                'about' => $profile->about_me,
+                'religion' => $religion?->religion,
+                'father_phone' => $family?->father_contact,
+                'mother_phone' => $family?->mother_contact,
+                'reference_phone' => $referenceAddress['phone'] ?? null,
+                'blood_group' => $profile->blood_group,
+                'spectacles' => $profile->has_spectacles ? 'Yes' : 'None',
+                'has_medical_history' => collect([
+                    $profile->personal_medical_history,
+                    $profile->current_medical_problems,
+                    $profile->medications,
+                ])->filter(fn ($value) => filled($value))->isNotEmpty() ? 'Yes' : 'No',
+                'personal_medical_history' => $profile->personal_medical_history,
+                'current_medical_problems' => $profile->current_medical_problems,
                 'medications' => $profile->medications,
 
-                'education' => $profile->education,
-                'degree_diploma_name_1' => $profile->degreeDiplomaName1,
-                'degree_diploma_name_2' => $profile->degreeDiplomaName2,
-                'specialisation_1' => $profile->specialisation1,
-                'specialisation_2' => $profile->specialisation2,
-                'university' => $profile->universityBoardCollege,
-                'additional_education_1' => $profile->additionalEducation1,
-                'additional_education_2' => $profile->additionalEducation2,
-                'city_of_education' => $profile->cityOfEducation,
-                'profession' => $profile->profession,
-                'designation' => $profile->designation,
-                'organisation' => $profile->organisationWorkingIn,
-                'field_of_working' => $profile->fieldOfWorking,
-                'length_of_employment' => $profile->lengthOfEmployment,
-                'monthly_income' => $profile->monthlyIncome,
-                'annual_income' => $profile->annualIncome,
-                'income_currency' => $profile->income_currency,
-                'original_monthly_income' => $profile->original_monthly_income,
-                'original_annual_income' => $profile->original_annual_income,
+                'education' => $educationRows->first()?->education_level,
+                'degree_diploma_name_1' => $educationRows->get(0)?->degree_name,
+                'degree_diploma_name_2' => $educationRows->get(1)?->degree_name,
+                'specialisation_1' => $educationRows->get(0)?->specialization,
+                'specialisation_2' => $educationRows->get(1)?->specialization,
+                'university' => $educationRows->first()?->university_name,
+                'additional_education_1' => $educationRows->get(0)?->additional_qualification,
+                'additional_education_2' => $educationRows->get(1)?->additional_qualification,
+                'city_of_education' => $educationRows->first()?->education_city,
+                'profession' => $employment?->profession,
+                'designation' => $employment?->designation,
+                'organisation' => $employment?->organisation_name,
+                'field_of_working' => $employment?->working_field,
+                'length_of_employment' => $employment?->employment_duration,
+                'monthly_income' => $employment?->monthly_income,
+                'annual_income' => $employment?->annual_income,
+                'income_currency' => $employment?->income_currency,
+                'original_monthly_income' => $employment?->original_monthly_income,
+                'original_annual_income' => $employment?->original_annual_income,
 
-                'father_name' => $profile->fathersName,
-                'father_living' => $profile->fatherAlive,
-                'father_occupation' => $profile->fathersOccupation,
-                'father_native_place' => $profile->fathersNativePlace,
-                'mother_name' => $profile->mothersName,
-                'mother_living' => $profile->motherAlive,
-                'mother_occupation' => $profile->mothersOccupation,
-                'mother_native_place' => $profile->mothersNativePlace,
-                'brothers' => $profile->noOfBrothers,
-                'brothers_married' => $profile->brothersMarried,
-                'sisters' => $profile->noOfSisters,
-                'sisters_married' => $profile->sistersMarried,
-                'parents_intercaste' => $profile->parentsIntercasteMarriage,
-                'parents_different_caste' => $profile->parentsDifferentCaste,
-                'family_financial_status' => $profile->familyFinancialStatus,
-                'family_income' => $profile->familyAnnualIncome,
-                'family_values' => $profile->familyValues,
-                'parents_intercaste_marriage' => $profile->parentsIntercasteMarriage,
-                'parents_different_caste' => $profile->parentsDifferentCaste,
-                'profile_creator_name' => $profile->profileCreatorName,
-                'profile_creator_relation' => $profile->profileCreatorRelation,
-                'reference_name' => $profile->referenceName,
-                'reference_relation' => $profile->referenceRelation,
-                'reference_address' => $profile->referenceAddress,
-                'reference_email' => $profile->referenceEmail,
+                'father_name' => $family?->father_name,
+                'father_living' => $family?->father_status,
+                'father_occupation' => $family?->father_occupation,
+                'father_native_place' => $family?->father_native_place,
+                'mother_name' => $family?->mother_name,
+                'mother_living' => $family?->mother_status,
+                'mother_occupation' => $family?->mother_occupation,
+                'mother_native_place' => $family?->mother_native_place,
+                'brothers' => $family?->brothers_count,
+                'brothers_married' => $family?->married_brothers_count,
+                'sisters' => $family?->sisters_count,
+                'sisters_married' => $family?->married_sisters_count,
+                'parents_intercaste' => $family?->parents_intercaste_marriage,
+                'parents_different_caste' => $family?->parents_different_caste_details,
+                'family_financial_status' => $family?->family_financial_status,
+                'family_income' => $family?->family_annual_income,
+                'family_values' => $family?->family_values,
+                'parents_intercaste_marriage' => $family?->parents_intercaste_marriage,
+                'profile_creator_name' => null,
+                'profile_creator_relation' => $profile->creator_relation,
+                'reference_name' => $referenceAddress['name'] ?? null,
+                'reference_relation' => $referenceAddress['relation'] ?? null,
+                'reference_address' => $referenceAddress['address'] ?? null,
+                'reference_email' => $referenceAddress['email'] ?? null,
 
-                'horoscope_dob' => $profile->horoscopeDob,
-                'birth_time' => $profile->timeOfBirth,
-                'birth_time_ampm' => $profile->birthTime_ampm,
-                'birth_place' => $profile->placeOfBirth,
-                'horoscope_caste' => $profile->horoscopeCaste,
-                'horoscope_sub_caste' => $profile->horoscopeSubCaste,
+                'horoscope_dob' => null,
+                'birth_time' => $profile->birth_time,
+                'birth_time_ampm' => $profile->birth_time
+                    ? (Carbon::parse($profile->birth_time)->format('A'))
+                    : null,
+                'birth_place' => $profile->birth_place,
+                'horoscope_caste' => $religion?->horoscope,
+                'horoscope_sub_caste' => $religion?->sub_caste,
 
-                'pref_age_range' => $this->rangeText($preference?->age_from, $preference?->age_to),
-                'pref_age_from' => $preference?->age_from,
-                'pref_age_to' => $preference?->age_to,
-                'pref_height_range' => $this->rangeText($preference?->height_from, $preference?->height_to),
-                'pref_height_from' => $preference?->height_from,
-                'pref_height_to' => $preference?->height_to,
+                'pref_age_range' => $this->rangeText(
+                    $partnerPreference?->age_from ?? $preference?->age_from,
+                    $partnerPreference?->age_to ?? $preference?->age_to
+                ),
+                'pref_age_from' => $partnerPreference?->age_from ?? $preference?->age_from,
+                'pref_age_to' => $partnerPreference?->age_to ?? $preference?->age_to,
+                'pref_height_range' => $this->rangeText(
+                    $partnerPreference?->height_from ?? $preference?->height_from,
+                    $partnerPreference?->height_to ?? $preference?->height_to
+                ),
+                'pref_height_from' => $partnerPreference?->height_from ?? $preference?->height_from,
+                'pref_height_to' => $partnerPreference?->height_to ?? $preference?->height_to,
                 'pref_religion' => $preference?->preferred_religion,
-                'pref_caste' => $preference?->preferred_caste,
+                'pref_caste' => $partnerPreference?->preferred_caste ?? $preference?->preferred_caste,
                 'pref_sub_caste' => $preference?->preferred_sub_caste,
-                'pref_education' => $preference?->preferred_education,
+                'pref_education' => $partnerPreference?->preferred_education ?? $preference?->preferred_education,
                 'pref_working_partner' => $preference?->working_partner,
-                'pref_working_field' => $preference?->preferred_working_field,
+                'pref_working_field' => $partnerPreference?->preferred_working_field ?? $preference?->preferred_working_field,
                 'pref_income' => $preference?->expected_income,
                 'pref_family_type' => $preference?->family_type,
                 'pref_financial_background' => $preference?->financial_background,
                 'pref_family_values' => $preference?->family_values,
                 'pref_body_type' => $preference?->preferred_body_type,
-                'pref_location' => $preference?->preferred_location,
+                'pref_location' => $partnerPreference?->preferred_location ?? $preference?->preferred_location,
                 'pref_country' => $preference?->preferred_country,
                 'pref_state' => $preference?->preferred_state,
                 'pref_city' => $preference?->preferred_city,
-                'other_expectations' => $preference?->other_expectations,
+                'other_expectations' => $partnerPreference?->other_expectations ?? $preference?->other_expectations,
                 'documents' => $documents,
             ];
 
@@ -1415,40 +1489,88 @@ class ProfileController extends Controller
         $user = $profile->user;
         $verificationSummary = $profile->verificationSummary();
         $registrationSummary = $profile->registrationSummary();
+        $family = $profile->familyDetails;
+        $education = $profile->educations->sortByDesc('id')->first();
+        $employment = $profile->employments->sortByDesc('id')->first();
+        $religion = $profile->religionDetails;
+        $preference = $profile->partnerPreferences;
+        $photoPaths = is_array($profile->photos) ? $profile->photos : [];
+        $addresses = is_array($profile->addresses) ? $profile->addresses : [];
+        $profilePhoto = $photoPaths['profile_photo'] ?? $photoPaths[0] ?? null;
 
         $data = [
             'id' => $profile->id,
-            'registration_number' => $profile->registration_number ?: $profile->profile_id,
-            'profile_id' => $profile->profile_id,
-            'serial_no' => $profile->serial_no,
-            'photo_url' => $this->fileUrl($profile->profilePhoto),
-            'full_name' => $profile->fullName,
+            'registration_number' => $profile->reg_id,
+            'profile_id' => $profile->reg_id,
+            'serial_no' => null,
+            'photo_url' => $this->fileUrl(is_string($profilePhoto) ? $profilePhoto : null),
+            'full_name' => $profile->full_name,
             'mobile' => $user->username ?? $profile->phone,
             'email' => $profile->email ?? $user->email ?? null,
             'registration_date' => optional($profile->created_at)->format('d-m-Y'),
-            'status' => $verificationSummary['display_status'],
-            'is_verified' => $verificationSummary['is_verified'],
+            'status' => $profile->verification_status === 'Completed' ? 'Verified' : 'Pending',
+            'is_verified' => $profile->verification_status === 'Completed',
             'payment_verified' => $verificationSummary['payment_verified'],
             'documents_verified' => $verificationSummary['documents_verified'],
             'documents_total' => $verificationSummary['documents_total'],
-            'gender' => $profile->groomOrBride,
-            'reg_type' => $profile->registration_type,
+            'gender' => $profile->groomorbride,
+            'reg_type' => $registrationSummary['is_melava'] ? 'melava' : 'profile',
             'registration_label' => $registrationSummary['label'],
             'registration_is_profile' => $registrationSummary['is_profile'],
             'registration_is_melava' => $registrationSummary['is_melava'],
-            'city' => $profile->professionalCity ?: $profile->cityOfEducation,
-            'education' => $profile->education,
-            'profession' => $profile->profession,
-            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
+            'city' => $employment?->employment_city ?: $education?->education_city ?: ($addresses['city'] ?? null),
+            'education' => $education?->degree_name ?: $education?->education_level,
+            'profession' => $employment?->profession,
+            'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
         ];
 
         if ($detailed) {
-            $data['profile_completion'] = (int) $profile->profile_completion;
-            $data['caste'] = $profile->caste;
-            $data['marital_status'] = $profile->maritalStatus;
-            $data['religion'] = $profile->religion;
-            $data['height'] = $profile->height;
-            $data['about'] = $profile->knowAboutMyself;
+            $data['profile_completion'] = null;
+            $data['caste'] = $religion?->caste;
+            $data['marital_status'] = null;
+            $data['religion'] = $religion?->religion;
+            $data['height'] = $profile->height_cm;
+            $data['about'] = $profile->about_me;
+            $data['family_details'] = $family?->only([
+                'father_name', 'father_status', 'father_native_place', 'father_occupation',
+                'father_contact', 'mother_name', 'mother_status', 'mother_native_place',
+                'mother_occupation', 'mother_contact', 'brothers_count', 'married_brothers_count',
+                'sisters_count', 'married_sisters_count', 'parents_intercaste_marriage',
+                'parents_different_caste_details', 'family_values', 'family_financial_status',
+                'family_annual_income',
+            ]);
+            $data['education_records'] = $profile->educations->map(fn ($record) => $record->only([
+                'education_level', 'degree_name', 'specialization', 'university_name', 'college_name',
+                'passing_year', 'percentage', 'grade', 'education_city', 'additional_qualification',
+                'education_certificate',
+            ]))->values();
+            $data['employment_records'] = $profile->employments->map(fn ($record) => $record->only([
+                'employment_type', 'profession', 'working_field', 'organisation_name', 'designation',
+                'employment_city', 'employment_duration', 'monthly_income', 'annual_income',
+                'income_currency', 'original_monthly_income', 'original_annual_income',
+            ]))->values();
+            $data['religion_details'] = $religion?->only([
+                'religion', 'caste', 'sub_caste', 'community', 'horoscope',
+                'horoscope_match_required', 'manglik_status', 'rashi', 'nakshatra',
+                'charan', 'nadi', 'gan', 'gotra',
+            ]);
+            $data['documents'] = $profile->profileDocuments?->only([
+                'aadhaar_card', 'pan_card', 'passport', 'birth_certificate', 'address_proof',
+                'education_certificate', 'profession_proof', 'income_proof', 'caste_certificate',
+                'medical_fitness_certificate',
+            ]);
+            $data['partner_preferences'] = $preference?->only([
+                'age_from', 'age_to', 'height_from', 'height_to', 'preferred_education',
+                'preferred_working_field', 'preferred_caste', 'preferred_location',
+                'other_expectations',
+            ]);
+            $data['melava_registrations'] = $profile->profileMelavaRegistrations
+                ->map(fn ($registration) => [
+                    'melava_campaign_id' => $registration->melava_campaign_id,
+                    'campaign_title' => $registration->campaign?->title,
+                    'is_booklet_req' => (bool) $registration->is_booklet_req,
+                    'payment_verified' => (bool) $registration->payment_verified,
+                ])->values();
         }
 
         return $data;

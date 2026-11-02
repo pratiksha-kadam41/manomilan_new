@@ -650,11 +650,11 @@
 .melava-page .address-copy {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 38px;
+  justify-content: flex-start;
+  gap: 6px;
   height: 34px;
   margin: 0 0 8px;
-  padding: 6px;
+  padding: 6px 10px;
 }
 
 .melava-page .note {

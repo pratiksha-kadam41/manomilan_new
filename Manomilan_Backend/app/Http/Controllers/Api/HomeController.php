@@ -48,7 +48,7 @@ class HomeController extends Controller
                     }
                 };
 
-                $profileQuery = Profile::where('active', 'active');
+                $profileQuery = Profile::where('status', 'active');
                 $datedProfileQuery = clone $profileQuery;
                 $userQuery = User::query();
                 $campaignQuery = DB::table('melava_campaigns');
@@ -67,22 +67,31 @@ class HomeController extends Controller
                     $day = now()->subDays($offset)->startOfDay();
                     $trendLabels[] = $day->format('M d');
                     $trendUsers[] = User::whereDate('created_at', $day->toDateString())->count();
-                    $trendProfiles[] = Profile::where('active', 'active')
+                    $trendProfiles[] = Profile::where('status', 'active')
                         ->whereDate('created_at', $day->toDateString())->count();
                 }
-                $recentProfiles = Profile::where('active', 'active')
+                $recentProfiles = Profile::where('status', 'active')
                     ->orderByDesc('created_at')
                     ->limit(8)
-                    ->get(['id', 'fullName', 'groomOrBride', 'professionalCity', 'cityOfEducation', 'created_at', 'registration_number', 'profileVerificationStatus'])
-                    ->map(fn ($profile) => [
-                        'id' => $profile->id,
-                        'name' => $profile->fullName ?: 'Candidate',
-                        'type' => ucfirst((string) $profile->groomOrBride),
-                        'location' => $profile->professionalCity ?: $profile->cityOfEducation ?: 'Not set',
-                        'registration_number' => $profile->registration_number ?: '',
-                        'status' => strtolower((string) $profile->profileVerificationStatus) === 'completed' ? 'Verified' : 'Pending',
-                        'created_at' => $profile->created_at?->toDateTimeString(),
-                    ]);
+                    ->with(['educations', 'employments'])
+                    ->get()
+                    ->map(function (Profile $profile): array {
+                        $employment = $profile->employments->sortByDesc('id')->first();
+                        $education = $profile->educations->sortByDesc('id')->first();
+
+                        return [
+                            'id' => $profile->id,
+                            'name' => $profile->full_name ?: 'Candidate',
+                            'type' => ucfirst((string) $profile->groomorbride),
+                            'location' => $employment?->employment_city
+                                ?: $education?->education_city
+                                ?: $this->profileAddressCity($profile)
+                                ?: 'Not set',
+                            'registration_number' => $profile->reg_id ?: '',
+                            'status' => $profile->verification_status === 'Completed' ? 'Verified' : 'Pending',
+                            'created_at' => $profile->created_at?->toDateTimeString(),
+                        ];
+                    });
                 $upcomingEvents = DB::table('melava_campaigns')
                     ->where('status', 'active')
                     ->where(function ($query) {
@@ -122,18 +131,15 @@ class HomeController extends Controller
                         'total_users' => $datedUserQuery->count(),
                         'total_profiles' => $datedProfileQuery->count(),
                         'verified_profiles' => (clone $datedProfileQuery)
-                            ->where('profileVerificationStatus', 'Completed')
+                            ->where('verification_status', 'Completed')
                             ->count(),
                         'pending_profiles' => (clone $datedProfileQuery)
-                            ->where(function ($query) {
-                                $query->where('profileVerificationStatus', 'Pending')
-                                    ->orWhere('profileVerificationStatus', 'pending');
-                            })
+                            ->where('verification_status', 'Pending')
                             ->count(),
                         'groom_profiles' => (clone $datedProfileQuery)
-                            ->whereIn('groomOrBride', ['Groom', 'groom'])->count(),
+                            ->where('groomorbride', 'Groom')->count(),
                         'bride_profiles' => (clone $datedProfileQuery)
-                            ->whereIn('groomOrBride', ['Bride', 'bride'])->count(),
+                            ->where('groomorbride', 'Bride')->count(),
                         'melava_campaigns' => $datedCampaignQuery->count(),
                         'upcoming_melava_campaigns' => (clone $datedCampaignQuery)
                             ->where('status', 'active')
@@ -208,21 +214,28 @@ class HomeController extends Controller
                     ],
                     'profile' => $profile ? [
                         'id' => $profile->id,
-                        'registration_number' => $profile->registration_number ?: $profile->profile_id,
-                        'profile_id' => $profile->profile_id,
-                        'full_name' => $profile->fullName,
-                        'gender' => $profile->groomOrBride,
-                        'photo_url' => $profile->profilePhoto ? $this->profilePhotoUrl($profile->profilePhoto) : '',
-                        'profile_completion' => (int) $profile->profile_completion,
-                        'verification_status' => $profile->profileVerificationStatus,
-                        'birth_date' => $profile->birthDate,
-                        'city' => $profile->professionalCity ?: $profile->cityOfEducation,
-                        'education' => $profile->education,
-                        'profession' => $profile->profession,
-                        'has_family' => filled($profile->fathersName) && filled($profile->mothersName),
-                        'has_education' => filled($profile->education) && filled($profile->profession),
-                        'has_photos' => filled($profile->profilePhoto),
-                        'has_preferences' => $user->preference()->exists(),
+                        'registration_number' => $profile->reg_id,
+                        'profile_id' => $profile->reg_id,
+                        'full_name' => $profile->full_name,
+                        'gender' => $profile->groomorbride,
+                        'photo_url' => $this->profilePhotoUrl(
+                            is_array($profile->photos)
+                                ? ($profile->photos['profile_photo'] ?? $profile->photos[0] ?? null)
+                                : null
+                        ),
+                        'profile_completion' => null,
+                        'verification_status' => $profile->verification_status,
+                        'birth_date' => $profile->birth_date,
+                        'city' => $profile->employments()->latest('id')->value('employment_city')
+                            ?: $profile->educations()->latest('id')->value('education_city')
+                            ?: $this->profileAddressCity($profile),
+                        'education' => $profile->educations()->latest('id')->value('degree_name'),
+                        'profession' => $profile->employments()->latest('id')->value('profession'),
+                        'has_family' => $profile->familyDetails()->exists(),
+                        'has_education' => $profile->educations()->exists(),
+                        'has_photos' => ! empty($profile->photos),
+                        'has_preferences' => $profile->partnerPreferences()->exists()
+                            || $user->preference()->exists(),
                     ] : null,
                 ],
             ]);
@@ -236,8 +249,12 @@ class HomeController extends Controller
         }
     }
 
-    private function profilePhotoUrl(string $path): string
+    private function profilePhotoUrl(?string $path): string
     {
+        if (! $path) {
+            return '';
+        }
+
         $path = trim($path);
 
         if (preg_match('#^https?://#i', $path)) {
@@ -255,5 +272,25 @@ class HomeController extends Controller
         }
 
         return url($path);
+    }
+
+    private function profileAddressCity(Profile $profile): ?string
+    {
+        $addresses = $profile->addresses;
+        if (! is_array($addresses)) {
+            return null;
+        }
+
+        if (filled($addresses['city'] ?? null)) {
+            return $addresses['city'];
+        }
+
+        foreach ($addresses as $address) {
+            if (is_array($address) && filled($address['city'] ?? null)) {
+                return $address['city'];
+            }
+        }
+
+        return null;
     }
 }

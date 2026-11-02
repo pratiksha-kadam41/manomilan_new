@@ -9,6 +9,13 @@ use App\Models\User;
 use App\PaymentScreenshot;
 use App\Preference;
 use App\Profile;
+use App\ProfileDocument;
+use App\ProfileEducation;
+use App\ProfileEmployment;
+use App\ProfileFamilyDetail;
+use App\ProfileMelavaRegistration;
+use App\ProfilePartnerPreference;
+use App\ProfileReligionDetail;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -95,7 +102,7 @@ class MelavaRegistrationController extends Controller
                             : ['like', $term.'%'];
                         $search->where('username', $numberMatch[0], $numberMatch[1])
                             ->orWhereHas('profile', function ($profile) use ($numberMatch) {
-                                $profile->where('serial_no', $numberMatch[0], $numberMatch[1])
+                                $profile->where('reg_id', $numberMatch[0], $numberMatch[1])
                                     ->orWhere('phone', $numberMatch[0], $numberMatch[1]);
                             });
 
@@ -108,8 +115,9 @@ class MelavaRegistrationController extends Controller
                         ->orWhere('melava_title', 'like', '%' . $term . '%')
                         ->orWhere('melava_number', 'like', '%' . $term . '%')
                         ->orWhereHas('profile', function ($profile) use ($term) {
-                            $profile->where('serial_no', 'like', '%' . $term . '%')
-                                ->orWhere('professionalCity', 'like', '%' . $term . '%');
+                            $profile->where('reg_id', 'like', '%' . $term . '%')
+                                ->orWhereHas('employments', fn ($employment) => $employment
+                                    ->where('employment_city', 'like', '%' . $term . '%'));
                         });
                 });
             })
@@ -236,6 +244,15 @@ class MelavaRegistrationController extends Controller
                 }
                 $registration->{$verifiedField} = (bool) $data['payment_verified'];
                 $registration->save();
+
+                if ($data['payment_type'] === 'registration' && $registration->profile_id && $registration->melava_campaign_id) {
+                    ProfileMelavaRegistration::where('profile_id', $registration->profile_id)
+                        ->where('melava_campaign_id', $registration->melava_campaign_id)
+                        ->update([
+                            'payment_screenshot' => $registration->payment_screenshot,
+                            'payment_verified' => (bool) $data['payment_verified'],
+                        ]);
+                }
             });
 
             return response()->json([
@@ -300,6 +317,12 @@ class MelavaRegistrationController extends Controller
                 if ($registration->profile_id) {
                     PaymentScreenshot::where('profile_id', $registration->profile_id)
                         ->update(['payment_verified' => (bool) $data['payment_verified']]);
+
+                    if ($registration->melava_campaign_id) {
+                        ProfileMelavaRegistration::where('profile_id', $registration->profile_id)
+                            ->where('melava_campaign_id', $registration->melava_campaign_id)
+                            ->update(['payment_verified' => (bool) $data['payment_verified']]);
+                    }
                 }
             });
 
@@ -434,18 +457,22 @@ class MelavaRegistrationController extends Controller
             ],
             'profile' => $profile ? $this->profileForRestore($profile) : [],
             'melava_registration' => $registration ? $registration->toArray() : null,
-            'profile_photo_url' => $this->fileUrl($profile->profilePhoto),
-            'full_body_photo_url' => $this->fileUrl($profile->full_body_photo),
-            'half_body_photo_url' => $this->fileUrl($profile->half_body_photo),
-            'selfie_photo_url' => $this->fileUrl($profile->selfie_photo),
-            'identification_proof_url' => $this->fileUrl($profile->identificationProof),
+            'profile_photo_url' => $this->fileUrl($this->profilePhotoPath($profile, 'profile_photo')),
+            'full_body_photo_url' => $this->fileUrl($this->profilePhotoPath($profile, 'full_body_photo')),
+            'half_body_photo_url' => $this->fileUrl($this->profilePhotoPath($profile, 'half_body_photo')),
+            'selfie_photo_url' => $this->fileUrl($this->profilePhotoPath($profile, 'selfie_photo')),
+            'identification_proof_url' => $this->fileUrl($this->profileDocumentPath($profile, 'aadhaar_card')),
             'birth_date_proof_url' => $this->fileUrl(
-                $profile->birthDateProof ?: ($registration?->birth_verification_doc ?: null)
+                $this->profileDocumentPath($profile, 'birth_certificate')
+                    ?: ($registration?->birth_verification_doc ?: null)
             ),
-            'education_proof_url' => $this->fileUrl($profile->educationProof),
-            'candidate_photos_urls' => collect($this->normalizePathList($registration?->getRawOriginal('candidate_photos')))
+            'education_proof_url' => $this->fileUrl($this->profileDocumentPath($profile, 'education_certificate')),
+            'candidate_photos_urls' => collect(
+                $this->profilePhotoList($profile, 'candidate_photos')
+                    ?: $this->normalizePathList($registration?->getRawOriginal('candidate_photos'))
+            )
                 ->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
-            'additional_photos_urls' => collect($this->normalizePathList($profile->getRawOriginal('additional_photos')))
+            'additional_photos_urls' => collect($this->profilePhotoList($profile, 'additional_photos'))
                 ->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
             'preference' => $user->preference,
             'has_registration' => (bool) $registration,
@@ -606,6 +633,11 @@ class MelavaRegistrationController extends Controller
             'source_of_information' => ['required', 'string', 'max:255'],
             'address' => ['required', 'string', 'max:5000'],
             'permanent_address' => ['nullable', 'string', 'max:5000'],
+            'current_address_pincode' => ['nullable', 'digits:6'],
+            'current_address_city' => ['nullable', 'string', 'max:191'],
+            'current_address_district' => ['nullable', 'string', 'max:191'],
+            'current_address_state' => ['nullable', 'string', 'max:191'],
+            'current_address_country' => ['nullable', 'string', 'max:191'],
             'timeOfBirth' => ['nullable', 'date_format:H:i'],
             'birthTime_ampm' => ['nullable', Rule::in(['AM', 'PM'])],
             'placeOfBirth' => ['nullable', 'string', 'max:5000'],
@@ -625,8 +657,8 @@ class MelavaRegistrationController extends Controller
             'city' => ['nullable', 'string', 'max:5000'],
             'designation' => ['nullable', 'string', 'max:5000'],
             'lengthOfEmployment' => ['nullable', 'string', 'max:255'],
-            'monthlyIncome' => ['nullable', 'string', 'max:255'],
-            'annualIncome' => ['nullable', 'string', 'max:255'],
+            'monthlyIncome' => ['nullable', 'numeric', 'min:0'],
+            'annualIncome' => ['nullable', 'numeric', 'min:0'],
             'income_currency' => ['nullable', 'string', 'max:10'],
             'hasMedicalHistory' => ['nullable', 'string', 'max:20'],
             'personalMedicalHistory' => ['nullable', 'string', 'max:5000'],
@@ -651,7 +683,7 @@ class MelavaRegistrationController extends Controller
             'parentsDifferentCaste' => ['nullable', 'string', 'max:5000'],
             'familyValues' => ['nullable', 'string', 'max:255'],
             'familyFinancialStatus' => ['nullable', 'string', 'max:255'],
-            'familyAnnualIncome' => ['nullable', 'string', 'max:255'],
+            'familyAnnualIncome' => ['nullable', 'numeric', 'min:0'],
             'profileCreatorName' => ['nullable', 'string', 'max:255'],
             'profileCreatorRelation' => ['nullable', 'string', 'max:255'],
             'referenceName' => ['nullable', 'string', 'max:255'],
@@ -816,51 +848,28 @@ class MelavaRegistrationController extends Controller
                     $user->save();
                 }
 
-                $profileData = $this->profilePayload($request);
-                $profileData['phone'] = $mobile;
-                $profileData['email'] = $data['email'] ?? $user->email;
-                $profileData['source_of_information'] = $data['source_of_information'];
-                $profileData['professionalCity'] = $data['professionalCity'] ?: ($data['city'] ?? '');
-                $profileData['income_currency'] = $data['income_currency'] ?? 'INR';
-                $profileData['profilePhoto'] = $profilePhoto
-                    ?: ($profile?->profilePhoto ?: 'default.png');
-                $profileData['full_body_photo'] = $fullBodyPhoto ?: ($profile?->full_body_photo ?: null);
-                $profileData['half_body_photo'] = $halfBodyPhoto ?: ($profile?->half_body_photo ?: null);
-                $profileData['selfie_photo'] = $selfiePhoto ?: ($profile?->selfie_photo ?: null);
-
-                if ($identificationProof) {
-                    $profileData['identificationProof'] = $identificationProof;
-                }
-                if ($birthDateProof) {
-                    $profileData['birthDateProof'] = $birthDateProof;
-                }
-                if ($educationProof) {
-                    $profileData['educationProof'] = $educationProof;
-                }
-                if ($additionalPhotos) {
-                    $profileData['additional_photos'] = $additionalPhotos;
-                }
-
-                if (! $profile) {
-                    $profileData['registration_type'] = 'melava';
-                    $profileData['melava_batch'] = self::CURRENT_MELAVA_BATCH;
-                    $profileData['profileVerificationStatus'] = 'Pending';
-                    $profile = Profile::create($profileData);
-
+                $profile = $this->persistNormalizedProfile(
+                    $profile,
+                    $request,
+                    $user,
+                    [
+                        'profile_photo' => $profilePhoto,
+                        'full_body_photo' => $fullBodyPhoto,
+                        'half_body_photo' => $halfBodyPhoto,
+                        'selfie_photo' => $selfiePhoto,
+                        'additional_photos' => $additionalPhotos,
+                        'candidate_photos' => $candidatePhotos,
+                    ],
+                    [
+                        'identificationProof' => $identificationProof,
+                        'birthDateProof' => $birthDateProof,
+                        'educationProof' => $educationProof,
+                        'biodata' => $biodata,
+                    ],
+                );
+                if ((int) $user->profile_id !== (int) $profile->id) {
                     $user->profile_id = $profile->id;
                     $user->save();
-                } else {
-                    $profileData['melava_batch'] = self::CURRENT_MELAVA_BATCH;
-
-                    if (! in_array($profile->registration_type, ['melava', 'existing'], true)) {
-                        $profileData['registration_type'] = 'existing';
-                        $profileData['serial_no'] = null;
-                    } elseif (! Profile::hasCurrentMelavaSerial($profile->serial_no, $profile->melava_batch)) {
-                        $profileData['serial_no'] = null;
-                    }
-
-                    $profile->fill($profileData);
-                    $profile->save();
                 }
 
                 $preferenceData = $this->preferencePayload($request);
@@ -929,6 +938,18 @@ class MelavaRegistrationController extends Controller
                 ]);
                 $registration->save();
 
+                ProfileMelavaRegistration::updateOrCreate(
+                    [
+                        'profile_id' => $profile->id,
+                        'melava_campaign_id' => $campaign->id,
+                    ],
+                    [
+                        'is_booklet_req' => $request->boolean('booklet_required'),
+                        'payment_screenshot' => $paymentScreenshot,
+                        'payment_verified' => false,
+                    ]
+                );
+
                 PaymentScreenshot::updateOrCreate(
                     ['profile_id' => $profile->id],
                     [
@@ -963,8 +984,8 @@ class MelavaRegistrationController extends Controller
                     'registration_id' => $registration->id,
                     'user_id' => $result['user']->id,
                     'profile_id' => $profile->id,
-                    'registration_number' => $profile->profile_id,
-                    'serial_no' => $profile->serial_no,
+                    'registration_number' => $profile->reg_id,
+                    'serial_no' => null,
                     'melava_batch' => $registration->melava_batch,
                     'melava_title' => $registration->melava_title,
                     'melava_number' => $registration->melava_number,
@@ -1044,6 +1065,8 @@ class MelavaRegistrationController extends Controller
         $profileFields = [
             'weight', 'havingSpecsLenses', 'bloodGroup', 'motherTongue', 'language',
             'specialCases', 'knowAboutMyself', 'permanent_address', 'placeOfBirth',
+            'current_address_pincode', 'current_address_city', 'current_address_district',
+            'current_address_state', 'current_address_country',
             'degreeDiplomaName1', 'degreeDiplomaName2', 'specialisation1', 'specialisation2',
             'universityBoardCollege', 'additionalEducation1', 'additionalEducation2',
             'cityOfEducation', 'fieldOfWorking', 'organisationWorkingIn', 'designation',
@@ -1111,6 +1134,12 @@ class MelavaRegistrationController extends Controller
         foreach (array_merge($profileFields, $preferenceFields) as $field) {
             $rules[$field] = ['nullable', 'string', 'max:5000'];
         }
+        foreach (['current_address_pincode'] as $field) {
+            $rules[$field] = ['nullable', 'digits:6'];
+        }
+        foreach (['monthlyIncome', 'annualIncome', 'familyAnnualIncome'] as $field) {
+            $rules[$field] = ['nullable', 'numeric', 'min:0'];
+        }
         foreach (['noOfBrothers', 'brothersMarried', 'noOfSisters', 'sistersMarried'] as $field) {
             $rules[$field] = ['nullable', 'integer', 'min:0', 'max:20'];
         }
@@ -1130,7 +1159,7 @@ class MelavaRegistrationController extends Controller
                     $request->input('existing_candidate_photos', [])
                 ));
                 $existingAdditionalPhotos = array_values(array_intersect(
-                    $this->normalizePathList($profile->getRawOriginal('additional_photos')),
+                    $this->profilePhotoList($profile, 'additional_photos'),
                     $request->input('existing_additional_photos', [])
                 ));
                 $candidateUploadCount = count((array) $request->file('candidate_photos', []));
@@ -1147,36 +1176,47 @@ class MelavaRegistrationController extends Controller
                     ]);
                 }
 
-                $profileData = $this->profilePayload($request);
-                $profileData['phone'] = $registration->username;
-                $profileData['source_of_information'] = $data['source_of_information'];
-                $profileData['professionalCity'] = $data['professionalCity'];
-
                 $uploads = [
-                    'profilePhoto' => ['profilePhoto', 'profile_photos'],
+                    'profile_photo' => ['profilePhoto', 'profile_photos'],
                     'full_body_photo' => ['full_body_photo', 'full_body_photos'],
                     'half_body_photo' => ['half_body_photo', 'half_body_photos'],
                     'selfie_photo' => ['selfie_photo', 'selfie_photos'],
-                    'identificationProof' => ['identificationProof', 'melava_documents'],
-                    'birthDateProof' => ['birthDateProof', 'melava_documents'],
-                    'educationProof' => ['educationProof', 'melava_documents'],
                 ];
+                $photoPaths = [];
                 foreach ($uploads as $field => [$input, $directory]) {
                     if ($request->hasFile($input)) {
-                        $path = $this->storeUpload($request->file($input), $directory);
-                        $profileData[$field] = $path;
-                    } elseif (in_array($field, $removedFiles, true)) {
-                        $profileData[$field] = $field === 'profilePhoto' ? 'default.png' : null;
+                        $photoPaths[$field] = $this->storeUpload($request->file($input), $directory);
+                    } elseif (in_array($input, $removedFiles, true)) {
+                        $photoPaths[$field] = null;
                     }
                 }
 
                 $additionalPhotos = $this->storeUploads($request->file('additionalPhotos', []), 'melava_additional_photos');
-                if ($additionalPhotos || in_array('additional_photos', $removedFiles, true)) {
-                    $profileData['additional_photos'] = array_merge($existingAdditionalPhotos, $additionalPhotos);
+                if ($request->exists('existing_additional_photos') || $additionalPhotos || in_array('additional_photos', $removedFiles, true)) {
+                    $photoPaths['additional_photos'] = array_merge($existingAdditionalPhotos, $additionalPhotos);
+                }
+                $newCandidatePhotos = $this->storeUploads($request->file('candidate_photos', []), 'melava_candidate_photos');
+                if ($request->exists('existing_candidate_photos') || $newCandidatePhotos || in_array('candidate_photos', $removedFiles, true)) {
+                    $photoPaths['candidate_photos'] = array_merge($existingCandidatePhotos, $newCandidatePhotos);
                 }
 
-                $profile->fill($profileData);
-                $profile->save();
+                $documentPaths = [];
+                foreach ([
+                    'identificationProof' => 'identificationProof',
+                    'birthDateProof' => 'birthDateProof',
+                    'educationProof' => 'educationProof',
+                ] as $field => $input) {
+                    if ($request->hasFile($input)) {
+                        $documentPaths[$field] = $this->storeUpload($request->file($input), 'melava_documents');
+                    } elseif (in_array($input, $removedFiles, true)) {
+                        $documentPaths[$field] = null;
+                    }
+                }
+                if ($request->hasFile('biodata')) {
+                    $documentPaths['biodata'] = $this->storeUpload($request->file('biodata'), 'melava_biodata');
+                }
+
+                $this->persistNormalizedProfile($profile, $request, $user, $photoPaths, $documentPaths);
                 $user->name = $data['fullName'];
                 $user->save();
 
@@ -1217,7 +1257,7 @@ class MelavaRegistrationController extends Controller
                     'other_expectations' => $data['other_expectations'] ?? '',
                     'source_of_information' => $data['source_of_information'],
                     'birth_verification_doc' => $request->hasFile('birthDateProof')
-                        ? $profile->birthDateProof
+                        ? $this->profileDocumentPath($profile, 'birth_certificate')
                         : $registration->birth_verification_doc,
                     'candidate_photos' => $request->exists('existing_candidate_photos')
                         || $request->hasFile('candidate_photos')
@@ -1236,6 +1276,18 @@ class MelavaRegistrationController extends Controller
                     'updated_by' => $request->user()->id,
                 ]);
                 $registration->save();
+
+                $normalizedRegistration = ProfileMelavaRegistration::firstOrNew([
+                    'profile_id' => $profile->id,
+                    'melava_campaign_id' => $registration->melava_campaign_id,
+                ]);
+                $normalizedRegistration->fill([
+                    'is_booklet_req' => $request->boolean('booklet_required'),
+                    'payment_screenshot' => $registration->payment_screenshot
+                        ?: $normalizedRegistration->payment_screenshot,
+                    'payment_verified' => (bool) $registration->payment_verified,
+                ]);
+                $normalizedRegistration->save();
             });
 
             return response()->json([
@@ -1264,36 +1316,40 @@ class MelavaRegistrationController extends Controller
         $data = array_merge($registration->toArray(), [
             'payment_screenshot_url' => $this->fileUrl($registration->payment_screenshot),
             'booklet_payment_screenshot_url' => $this->fileUrl($registration->booklet_payment_screenshot),
-            'profile_photo_url' => $this->fileUrl($registration->profile?->getRawOriginal('profilePhoto')),
+            'profile_photo_url' => $this->fileUrl($this->profilePhotoPath($registration->profile, 'profile_photo')),
         ]);
 
         if ($includeFormData) {
             $profile = $registration->profile;
             $user = User::with('preference')->find($registration->user_id);
             $campaign = DB::table('melava_campaigns')->where('id', $registration->melava_campaign_id)->first();
-            $profilePhoto = $profile?->getRawOriginal('profilePhoto');
+            $profilePhoto = $this->profilePhotoPath($profile, 'profile_photo');
             $candidatePhotos = $this->normalizePathList($registration->getRawOriginal('candidate_photos'));
-            $additionalPhotos = $this->normalizePathList($profile?->getRawOriginal('additional_photos'));
+            $candidatePhotos = $this->profilePhotoList($profile, 'candidate_photos') ?: $candidatePhotos;
+            $additionalPhotos = $this->profilePhotoList($profile, 'additional_photos');
+            $documents = $profile?->profileDocuments;
+            $identificationProof = $documents?->aadhaar_card;
+            $birthDateProof = $documents?->birth_certificate ?: $registration->birth_verification_doc;
+            $educationProof = $documents?->education_certificate;
+            $photos = $profile?->photos ?? [];
 
             $data['edit_form'] = [
                 'profile' => $profile ? $this->profileForRestore($profile) : [],
                 'preference' => $user?->preference?->toArray() ?? [],
                 'profile_photo_url' => $this->fileUrl($profilePhoto),
                 'profile_photo_path' => $profilePhoto,
-                'full_body_photo_url' => $this->fileUrl($profile?->getRawOriginal('full_body_photo')),
-                'full_body_photo_path' => $profile?->getRawOriginal('full_body_photo'),
-                'half_body_photo_url' => $this->fileUrl($profile?->getRawOriginal('half_body_photo')),
-                'half_body_photo_path' => $profile?->getRawOriginal('half_body_photo'),
-                'selfie_photo_url' => $this->fileUrl($profile?->getRawOriginal('selfie_photo')),
-                'selfie_photo_path' => $profile?->getRawOriginal('selfie_photo'),
-                'identification_proof_url' => $this->fileUrl($profile?->getRawOriginal('identificationProof')),
-                'identification_proof_path' => $profile?->getRawOriginal('identificationProof'),
-                'birth_date_proof_url' => $this->fileUrl(
-                    $profile?->getRawOriginal('birthDateProof') ?: $registration->birth_verification_doc
-                ),
-                'birth_date_proof_path' => $profile?->getRawOriginal('birthDateProof') ?: $registration->birth_verification_doc,
-                'education_proof_url' => $this->fileUrl($profile?->getRawOriginal('educationProof')),
-                'education_proof_path' => $profile?->getRawOriginal('educationProof'),
+                'full_body_photo_url' => $this->fileUrl($photos['full_body_photo'] ?? null),
+                'full_body_photo_path' => $photos['full_body_photo'] ?? null,
+                'half_body_photo_url' => $this->fileUrl($photos['half_body_photo'] ?? null),
+                'half_body_photo_path' => $photos['half_body_photo'] ?? null,
+                'selfie_photo_url' => $this->fileUrl($photos['selfie_photo'] ?? null),
+                'selfie_photo_path' => $photos['selfie_photo'] ?? null,
+                'identification_proof_url' => $this->fileUrl($identificationProof),
+                'identification_proof_path' => $identificationProof,
+                'birth_date_proof_url' => $this->fileUrl($birthDateProof),
+                'birth_date_proof_path' => $birthDateProof,
+                'education_proof_url' => $this->fileUrl($educationProof),
+                'education_proof_path' => $educationProof,
                 'candidate_photos_urls' => array_map(fn ($path) => $this->fileUrl($path), $candidatePhotos),
                 'candidate_photos_paths' => $candidatePhotos,
                 'additional_photos_urls' => array_map(fn ($path) => $this->fileUrl($path), $additionalPhotos),
@@ -1434,37 +1490,236 @@ class MelavaRegistrationController extends Controller
         return $digits;
     }
 
-    private function profilePayload(Request $request): array
-    {
-        $fields = [
-            'fullName', 'groomOrBride', 'caste', 'subCaste', 'maritalStatus', 'birthDate',
-            'height', 'weight', 'havingSpecsLenses', 'bloodGroup', 'motherTongue', 'language',
-            'specialCases', 'knowAboutMyself', 'religion', 'address', 'permanent_address',
-            'education', 'degreeDiplomaName1', 'degreeDiplomaName2', 'specialisation1',
-            'specialisation2', 'universityBoardCollege', 'additionalEducation1',
-            'additionalEducation2', 'cityOfEducation', 'profession', 'fieldOfWorking',
-            'organisationWorkingIn', 'designation', 'lengthOfEmployment', 'monthlyIncome',
-            'annualIncome', 'personalMedicalHistory', 'currentMedicalProblems',
-            'medications', 'fathersName', 'fatherAlive', 'fatherContactNumber',
-            'fathersOccupation', 'fathersNativePlace', 'mothersName', 'motherAlive',
-            'motherContactNumber', 'mothersOccupation', 'mothersNativePlace', 'noOfBrothers',
-            'brothersMarried', 'noOfSisters', 'sistersMarried', 'parentsIntercasteMarriage',
-            'parentsDifferentCaste', 'familyValues', 'familyFinancialStatus',
-            'familyAnnualIncome', 'profileCreatorName', 'profileCreatorRelation',
-            'referenceName', 'referenceRelation', 'referenceAddress', 'referenceContactNumber',
-            'referenceEmail', 'timeOfBirth', 'birthTime_ampm', 'placeOfBirth',
+    private function persistNormalizedProfile(
+        ?Profile $profile,
+        Request $request,
+        User $user,
+        array $photoUploads = [],
+        array $documentUploads = [],
+    ): Profile {
+        $profile ??= new Profile();
+        $addresses = $profile->addresses ?? [];
+        $addresses = is_array($addresses) ? $addresses : [];
+        $addresses['current'] = [
+            'address' => $request->input('address'),
+            'pincode' => $request->input('current_address_pincode'),
+            'city' => $request->input('current_address_city'),
+            'district' => $request->input('current_address_district'),
+            'state' => $request->input('current_address_state'),
+            'country' => $request->input('current_address_country'),
+        ];
+        $addresses['permanent'] = [
+            'address' => $request->input('permanent_address'),
+        ];
+        $addresses['reference'] = [
+            'name' => $request->input('referenceName'),
+            'relation' => $request->input('referenceRelation'),
+            'address' => $request->input('referenceAddress'),
+            'phone' => $request->input('referenceContactNumber'),
+            'email' => $request->input('referenceEmail'),
         ];
 
-        $data = [];
-
-        foreach ($fields as $field) {
-            if ($request->exists($field)) {
-                $value = $request->input($field);
-                $data[$field] = $value === '' ? null : $value;
+        $photos = $profile->photos ?? [];
+        $photos = is_array($photos) ? $photos : [];
+        foreach (['profile_photo', 'full_body_photo', 'half_body_photo', 'selfie_photo'] as $key) {
+            if (array_key_exists($key, $photoUploads)) {
+                if ($photoUploads[$key]) {
+                    $photos[$key] = $photoUploads[$key];
+                } else {
+                    unset($photos[$key]);
+                }
+            }
+        }
+        foreach (['additional_photos', 'candidate_photos'] as $key) {
+            if (array_key_exists($key, $photoUploads)) {
+                $photos[$key] = array_values(array_filter((array) $photoUploads[$key]));
+            } elseif (! isset($photos[$key])) {
+                $photos[$key] = [];
             }
         }
 
-        return $data;
+        $profile->fill([
+            'full_name' => $request->input('fullName'),
+            'groomorbride' => ucfirst((string) $request->input('groomOrBride')),
+            'email' => $request->input('email') ?: $user->email,
+            'phone' => $request->input('username'),
+            'birth_date' => $request->input('birthDate'),
+            'height_cm' => $this->heightInCentimeters($request->input('height')),
+            'weight_kg' => $this->numericInput($request->input('weight')),
+            'has_spectacles' => $request->input('havingSpecsLenses') === 'Yes'
+                ? true
+                : ($request->input('havingSpecsLenses') === 'No' ? false : null),
+            'blood_group' => $request->input('bloodGroup'),
+            'mother_tongue' => $request->input('motherTongue'),
+            'languages' => collect(explode(',', (string) $request->input('language', '')))
+                ->map(fn ($language) => trim($language))
+                ->filter()
+                ->values()
+                ->all(),
+            'special_cases' => $request->input('specialCases'),
+            'about_me' => $request->input('knowAboutMyself'),
+            'photos' => $photos,
+            'monthly_income' => $this->numericInput($request->input('monthlyIncome')),
+            'annual_income' => $this->numericInput($request->input('annualIncome')),
+            'personal_medical_history' => $request->input('personalMedicalHistory'),
+            'current_medical_problems' => $request->input('currentMedicalProblems'),
+            'medications' => $request->input('medications'),
+            'birth_place' => $request->input('placeOfBirth'),
+            'birth_time' => $request->input('timeOfBirth'),
+            'created_by' => $profile->created_by ?: $user->id,
+            'creator_relation' => $request->input('profileCreatorRelation'),
+            'addresses' => $addresses,
+            'verification_status' => $profile->verification_status ?: 'Pending',
+            'status' => $profile->status ?: 'active',
+        ]);
+        $profile->save();
+
+        ProfileFamilyDetail::updateOrCreate(
+            ['profile_id' => $profile->id],
+            [
+                'father_name' => $request->input('fathersName'),
+                'father_status' => $this->aliveStatus($request->input('fatherAlive')),
+                'father_native_place' => $request->input('fathersNativePlace'),
+                'father_occupation' => $request->input('fathersOccupation'),
+                'father_contact' => $request->input('fatherContactNumber'),
+                'mother_name' => $request->input('mothersName'),
+                'mother_status' => $this->aliveStatus($request->input('motherAlive')),
+                'mother_native_place' => $request->input('mothersNativePlace'),
+                'mother_occupation' => $request->input('mothersOccupation'),
+                'mother_contact' => $request->input('motherContactNumber'),
+                'brothers_count' => $request->input('noOfBrothers'),
+                'married_brothers_count' => $request->input('brothersMarried'),
+                'sisters_count' => $request->input('noOfSisters'),
+                'married_sisters_count' => $request->input('sistersMarried'),
+                'parents_intercaste_marriage' => $this->yesNoBoolean($request->input('parentsIntercasteMarriage')),
+                'parents_different_caste_details' => $request->input('parentsDifferentCaste'),
+                'family_values' => $request->input('familyValues'),
+                'family_financial_status' => $request->input('familyFinancialStatus'),
+                'family_annual_income' => $this->numericInput($request->input('familyAnnualIncome')),
+            ]
+        );
+
+        $educationRows = $profile->educations()->orderBy('id')->get();
+        foreach ([1, 2] as $index => $slot) {
+            $degreeName = $request->input('degreeDiplomaName'.$slot);
+            if (! filled($degreeName)) {
+                continue;
+            }
+
+            $education = $educationRows->get($index) ?? new ProfileEducation();
+            $education->fill([
+                'profile_id' => $profile->id,
+                'education_level' => $request->input('education'),
+                'degree_name' => $degreeName,
+                'specialization' => $request->input('specialisation'.$slot),
+                'university_name' => $request->input('universityBoardCollege'),
+                'education_city' => $request->input('cityOfEducation'),
+                'additional_qualification' => $request->input('additionalEducation'.$slot),
+            ]);
+            $education->save();
+        }
+
+        $employment = $profile->employments()->orderBy('id')->first() ?? new ProfileEmployment();
+        $employment->fill([
+            'profile_id' => $profile->id,
+            'employment_type' => $request->input('profession'),
+            'profession' => $request->input('profession'),
+            'working_field' => $request->input('fieldOfWorking'),
+            'organisation_name' => $request->input('organisationWorkingIn'),
+            'designation' => $request->input('designation'),
+            'employment_city' => $request->input('professionalCity') ?: $request->input('city'),
+            'employment_duration' => $request->input('lengthOfEmployment'),
+            'monthly_income' => $this->numericInput($request->input('monthlyIncome')),
+            'annual_income' => $this->numericInput($request->input('annualIncome')),
+            'income_currency' => $request->input('income_currency') ?: 'INR',
+        ]);
+        $employment->save();
+
+        ProfileReligionDetail::updateOrCreate(
+            ['profile_id' => $profile->id],
+            [
+                'religion' => $request->input('religion'),
+                'caste' => $request->input('caste'),
+                'sub_caste' => $request->input('subCaste'),
+            ]
+        );
+
+        $documentColumns = [
+            'identificationProof' => 'aadhaar_card',
+            'birthDateProof' => 'birth_certificate',
+            'educationProof' => 'education_certificate',
+            'biodata' => 'profession_proof',
+        ];
+        $documentData = [];
+        foreach ($documentColumns as $input => $column) {
+            if (array_key_exists($input, $documentUploads)) {
+                $documentData[$column] = $documentUploads[$input];
+            }
+        }
+        if ($documentData) {
+            $documents = $profile->profileDocuments()->firstOrNew([]);
+            $documents->fill($documentData);
+            $documents->profile_id = $profile->id;
+            $documents->save();
+        }
+
+        $preferredCaste = trim(implode(' / ', array_filter([
+            $request->input('preferred_caste'),
+            $request->input('preferred_sub_caste'),
+        ])));
+        $preferredLocation = trim(implode(', ', array_filter([
+            $request->input('preferred_city'),
+            $request->input('preferred_state'),
+            $request->input('preferred_country'),
+        ])));
+        ProfilePartnerPreference::updateOrCreate(
+            ['profile_id' => $profile->id],
+            [
+                'age_from' => $request->input('age_from'),
+                'age_to' => $request->input('age_to'),
+                'height_from' => $request->input('height_from'),
+                'height_to' => $request->input('height_to'),
+                'preferred_education' => $request->input('preferred_education'),
+                'preferred_working_field' => $request->input('preferred_working_field'),
+                'preferred_caste' => $preferredCaste ?: null,
+                'preferred_location' => $preferredLocation ?: $request->input('preferred_location'),
+                'other_expectations' => $request->input('other_expectations'),
+            ]
+        );
+
+        return $profile;
+    }
+
+    private function heightInCentimeters($height): ?float
+    {
+        if (! preg_match('/^\s*(\d{1,2})\s*ft\s*(\d{1,2})?\s*in\s*$/i', (string) $height, $matches)) {
+            return null;
+        }
+
+        return round((((int) $matches[1] * 12) + (int) ($matches[2] ?? 0)) * 2.54, 2);
+    }
+
+    private function numericInput($value): ?float
+    {
+        return is_numeric($value) && $value !== '' ? (float) $value : null;
+    }
+
+    private function aliveStatus($value): ?string
+    {
+        return match (strtolower(trim((string) $value))) {
+            'yes', 'alive' => 'Alive',
+            'no', 'deceased' => 'Deceased',
+            default => null,
+        };
+    }
+
+    private function yesNoBoolean($value): ?bool
+    {
+        return match (strtolower(trim((string) $value))) {
+            'yes', '1', 'true' => true,
+            'no', '0', 'false' => false,
+            default => null,
+        };
     }
 
     private function preferencePayload(Request $request): array
@@ -1506,38 +1761,145 @@ class MelavaRegistrationController extends Controller
 
     private function profileForRestore(Profile $profile): array
     {
-        $fields = [
-            'fullName', 'groomOrBride', 'birthDate', 'maritalStatus', 'religion', 'caste',
-            'subCaste', 'height', 'weight', 'havingSpecsLenses', 'bloodGroup', 'motherTongue',
-            'language', 'specialCases', 'knowAboutMyself', 'address', 'permanent_address',
-            'timeOfBirth', 'birthTime_ampm', 'placeOfBirth', 'education', 'degreeDiplomaName1',
-            'degreeDiplomaName2', 'specialisation1', 'specialisation2', 'universityBoardCollege',
-            'additionalEducation1', 'additionalEducation2', 'cityOfEducation', 'profession',
-            'fieldOfWorking', 'organisationWorkingIn', 'professionalCity', 'designation',
-            'lengthOfEmployment', 'monthlyIncome', 'annualIncome', 'income_currency',
-            'personalMedicalHistory', 'currentMedicalProblems', 'medications', 'fathersName',
-            'fatherAlive', 'fatherContactNumber', 'fathersOccupation', 'fathersNativePlace',
-            'mothersName', 'motherAlive', 'motherContactNumber', 'mothersOccupation',
-            'mothersNativePlace', 'noOfBrothers', 'brothersMarried', 'noOfSisters',
-            'sistersMarried', 'parentsIntercasteMarriage', 'parentsDifferentCaste',
-            'familyValues', 'familyFinancialStatus', 'familyAnnualIncome', 'profileCreatorName',
-            'profileCreatorRelation', 'referenceName', 'referenceRelation', 'referenceAddress',
-            'referenceContactNumber', 'referenceEmail', 'source_of_information', 'phone',
-            'profilePhoto', 'profile_id', 'serial_no', 'melava_batch',
+        $family = $profile->familyDetails;
+        $education = $profile->educations()->orderBy('id')->get();
+        $employment = $profile->employments()->orderBy('id')->first();
+        $religion = $profile->religionDetails;
+        $preference = $profile->partnerPreferences;
+        $addresses = is_array($profile->addresses) ? $profile->addresses : [];
+        $currentAddress = $addresses['current'] ?? [];
+        $permanentAddress = $addresses['permanent'] ?? [];
+        $reference = $addresses['reference'] ?? [];
+        $employmentIncome = $employment?->monthly_income;
+        $heightInches = $profile->height_cm
+            ? (int) round((float) $profile->height_cm / 2.54)
+            : null;
+
+        $data = [
+            'fullName' => $profile->full_name,
+            'groomOrBride' => strtolower((string) $profile->groomorbride),
+            'birthDate' => $profile->birth_date,
+            'religion' => $religion?->religion,
+            'caste' => $religion?->caste,
+            'subCaste' => $religion?->sub_caste,
+            'height' => $heightInches
+                ? intdiv($heightInches, 12).'ft '.($heightInches % 12).'in'
+                : null,
+            'weight' => $profile->weight_kg,
+            'havingSpecsLenses' => $profile->has_spectacles ? 'Yes' : 'None',
+            'bloodGroup' => $profile->blood_group,
+            'motherTongue' => $profile->mother_tongue,
+            'language' => implode(', ', $profile->languages ?? []),
+            'specialCases' => $profile->special_cases,
+            'knowAboutMyself' => $profile->about_me,
+            'address' => $currentAddress['address'] ?? null,
+            'current_address_pincode' => $currentAddress['pincode'] ?? null,
+            'current_address_city' => $currentAddress['city'] ?? null,
+            'current_address_district' => $currentAddress['district'] ?? null,
+            'current_address_state' => $currentAddress['state'] ?? null,
+            'current_address_country' => $currentAddress['country'] ?? null,
+            'permanent_address' => $permanentAddress['address'] ?? null,
+            'timeOfBirth' => $profile->birth_time,
+            'placeOfBirth' => $profile->birth_place,
+            'education' => $education->first()?->education_level,
+            'degreeDiplomaName1' => $education->get(0)?->degree_name,
+            'degreeDiplomaName2' => $education->get(1)?->degree_name,
+            'specialisation1' => $education->get(0)?->specialization,
+            'specialisation2' => $education->get(1)?->specialization,
+            'universityBoardCollege' => $education->first()?->university_name,
+            'additionalEducation1' => $education->get(0)?->additional_qualification,
+            'additionalEducation2' => $education->get(1)?->additional_qualification,
+            'cityOfEducation' => $education->first()?->education_city,
+            'profession' => $employment?->profession,
+            'fieldOfWorking' => $employment?->working_field,
+            'organisationWorkingIn' => $employment?->organisation_name,
+            'professionalCity' => $employment?->employment_city,
+            'designation' => $employment?->designation,
+            'lengthOfEmployment' => $employment?->employment_duration,
+            'monthlyIncome' => $employmentIncome,
+            'annualIncome' => $employment?->annual_income,
+            'income_currency' => $employment?->income_currency,
+            'personalMedicalHistory' => $profile->personal_medical_history,
+            'currentMedicalProblems' => $profile->current_medical_problems,
+            'medications' => $profile->medications,
+            'fathersName' => $family?->father_name,
+            'fatherAlive' => $family?->father_status === null
+                ? null
+                : ($family->father_status === 'Alive' ? 'Yes' : 'No'),
+            'fatherContactNumber' => $family?->father_contact,
+            'fathersOccupation' => $family?->father_occupation,
+            'fathersNativePlace' => $family?->father_native_place,
+            'mothersName' => $family?->mother_name,
+            'motherAlive' => $family?->mother_status === null
+                ? null
+                : ($family->mother_status === 'Alive' ? 'Yes' : 'No'),
+            'motherContactNumber' => $family?->mother_contact,
+            'mothersOccupation' => $family?->mother_occupation,
+            'mothersNativePlace' => $family?->mother_native_place,
+            'noOfBrothers' => $family?->brothers_count,
+            'brothersMarried' => $family?->married_brothers_count,
+            'noOfSisters' => $family?->sisters_count,
+            'sistersMarried' => $family?->married_sisters_count,
+            'parentsIntercasteMarriage' => $family?->parents_intercaste_marriage === null
+                ? null
+                : ($family->parents_intercaste_marriage ? 'Yes' : 'No'),
+            'parentsDifferentCaste' => $family?->parents_different_caste_details,
+            'familyValues' => $family?->family_values,
+            'familyFinancialStatus' => $family?->family_financial_status,
+            'familyAnnualIncome' => $family?->family_annual_income,
+            'profileCreatorRelation' => $profile->creator_relation,
+            'referenceName' => $reference['name'] ?? null,
+            'referenceRelation' => $reference['relation'] ?? null,
+            'referenceAddress' => $reference['address'] ?? null,
+            'referenceContactNumber' => $reference['phone'] ?? null,
+            'referenceEmail' => $reference['email'] ?? null,
+            'phone' => $profile->phone,
+            'profile_id' => $profile->id,
+            'reg_id' => $profile->reg_id,
+            'age_from' => $preference?->age_from,
+            'age_to' => $preference?->age_to,
+            'height_from' => $preference?->height_from,
+            'height_to' => $preference?->height_to,
+            'preferred_education' => $preference?->preferred_education,
+            'preferred_working_field' => $preference?->preferred_working_field,
+            'preferred_caste' => $preference?->preferred_caste,
+            'preferred_location' => $preference?->preferred_location,
+            'other_expectations' => $preference?->other_expectations,
         ];
 
-        $data = [];
-        foreach ($fields as $field) {
-            $data[$field] = $profile->getAttribute($field);
-        }
-
         $data['hasMedicalHistory'] = collect([
-            $profile->personalMedicalHistory,
-            $profile->currentMedicalProblems,
+            $profile->personal_medical_history,
+            $profile->current_medical_problems,
             $profile->medications,
         ])->filter(fn ($value) => filled($value))->isNotEmpty() ? 'Yes' : null;
 
         return $data;
+    }
+
+    private function profilePhotos(?Profile $profile): array
+    {
+        $photos = $profile?->photos;
+
+        return is_array($photos) ? $photos : [];
+    }
+
+    private function profilePhotoPath(?Profile $profile, string $key): ?string
+    {
+        $path = $this->profilePhotos($profile)[$key] ?? null;
+
+        return is_string($path) && trim($path) !== '' ? $path : null;
+    }
+
+    private function profilePhotoList(?Profile $profile, string $key): array
+    {
+        return $this->normalizePathList($this->profilePhotos($profile)[$key] ?? null);
+    }
+
+    private function profileDocumentPath(?Profile $profile, string $column): ?string
+    {
+        $path = $profile?->profileDocuments?->{$column};
+
+        return is_string($path) && trim($path) !== '' ? $path : null;
     }
 
     private function storeUpload(UploadedFile $file, string $directory): string

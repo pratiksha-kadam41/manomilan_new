@@ -5,10 +5,8 @@ namespace Tests\Feature;
 use App\Http\Controllers\Api\ProfileController;
 use App\Models\User;
 use App\Profile;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class ProfileVerificationTest extends TestCase
@@ -23,34 +21,7 @@ class ProfileVerificationTest extends TestCase
             'database.connections.sqlite.foreign_key_constraints' => false,
         ]);
         DB::purge('sqlite');
-
-        Schema::create('profiles', function (Blueprint $table) {
-            $table->id();
-            $table->string('profileVerificationStatus')->default('Pending');
-            $table->timestamps();
-        });
-
-        Schema::create('document_verifications', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('profile_id')->unique();
-
-            foreach ([
-                'identificationProof',
-                'birthDateProof',
-                'addressProof',
-                'educationProof',
-                'professionProof',
-                'incomeProof',
-                'casteCertificate',
-                'medicalFitnessCertificate',
-                'selfieVerification',
-            ] as $key) {
-                $table->string($key.'_status')->default('pending');
-                $table->text($key.'_remarks')->nullable();
-            }
-
-            $table->timestamps();
-        });
+        $this->artisan('migrate', ['--force' => true])->assertExitCode(0);
     }
 
     protected function tearDown(): void
@@ -63,7 +34,23 @@ class ProfileVerificationTest extends TestCase
     public function test_saving_verified_required_documents_completes_the_profile(): void
     {
         $profileId = DB::table('profiles')->insertGetId([
-            'profileVerificationStatus' => 'Pending',
+            'groomorbride' => 'Groom',
+            'full_name' => 'Test Profile',
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('profile_documents')->insert([
+            'profile_id' => $profileId,
+            'aadhaar_card' => 'uploads/identity.jpg',
+            'birth_certificate' => 'uploads/birth.jpg',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('payment_screenshots')->insert([
+            'profile_id' => $profileId,
+            'screenshot_path' => 'uploads/payment.jpg',
+            'payment_verified' => true,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
@@ -89,7 +76,7 @@ class ProfileVerificationTest extends TestCase
         $this->assertSame(200, $response->getStatusCode(), $response->getContent());
         $this->assertSame(
             'Completed',
-            Profile::findOrFail($profileId)->profileVerificationStatus,
+            Profile::findOrFail($profileId)->verification_status,
         );
     }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\MelavaRegistration;
 use App\PaymentScreenshot;
 use App\Profile;
+use App\ProfileMelavaRegistration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -159,10 +160,12 @@ class PaymentController extends Controller
                 if ($data['type'] === 'combined') {
                     $combinedRegistration->payment_verified = true;
                     $combinedRegistration->save();
+                    $this->syncNormalizedMelavaPayment($combinedRegistration);
                 } elseif ($data['type'] === 'melava') {
                     PaymentScreenshot::where('profile_id', $profileId)
                         ->where('screenshot_path', $payment->payment_screenshot)
                         ->update(['payment_verified' => true]);
+                    $this->syncNormalizedMelavaPayment($payment);
                 }
             });
 
@@ -383,6 +386,17 @@ class PaymentController extends Controller
     private function isAdmin($user): bool
     {
         return $user && $user->isAdmin();
+    }
+
+    private function syncNormalizedMelavaPayment(MelavaRegistration $registration): void
+    {
+        if (! $registration->profile_id || ! $registration->melava_campaign_id) {
+            return;
+        }
+
+        ProfileMelavaRegistration::where('profile_id', $registration->profile_id)
+            ->where('melava_campaign_id', $registration->melava_campaign_id)
+            ->update(['payment_verified' => (bool) $registration->payment_verified]);
     }
 
     private function forbidden()
