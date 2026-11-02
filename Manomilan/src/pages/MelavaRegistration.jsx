@@ -153,7 +153,7 @@ const STEPS = [
     ],
   },
   {
-    t: "Birth & Education",
+    t: "Education & Work",
     i: ICONS.education,
     h: "Birth & Education",
     s: "Birth time is used for horoscope matching.",
@@ -239,8 +239,15 @@ const STEPS = [
       F("referenceEmail", "Email", "email", 3),
       { sec: "Documents" },
       F("identificationProof", "Identification Proof (Aadhar / PAN)", "file", 4, 1, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("pan_card", "PAN Card", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("passport", "Passport", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
       F("birthDateProof", "Birth Date Proof (Birth Certificate)", "file", 4, 1, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("address_proof", "Address Proof", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
       F("educationProof", "Education Proof", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("profession_proof", "Profession Proof", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("income_proof", "Income Proof", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("caste_certificate", "Caste Certificate", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
+      F("medical_fitness_certificate", "Medical Fitness Certificate", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
       F("additionalPhotos[]", "Additional Photos (max 4)", "file", 6, 0, { acc: "image/*", id: "additionalPhotos", h: "Select up to 4 photos" }),
       F("candidate_photos[]", "Your Photos (max 5)", "file", 6, 0, { acc: "image/*", id: "candidate_photos", h: "Select up to 5 photos" }),
     ],
@@ -312,7 +319,28 @@ const RESTORE_KEYS = [
 ];
 
 const EMPTY_FILES = { profilePhoto: null, full_body_photo: null, half_body_photo: null, selfie_photo: null, candidatePhotos: [], additionalPhotos: [] };
-const EMPTY_DOCUMENTS = { identificationProof: null, birthDateProof: null, educationProof: null };
+const EMPTY_DOCUMENTS = {
+  identificationProof: null,
+  pan_card: null,
+  passport: null,
+  birthDateProof: null,
+  address_proof: null,
+  educationProof: null,
+  profession_proof: null,
+  income_proof: null,
+  caste_certificate: null,
+  medical_fitness_certificate: null,
+};
+const EMPTY_EDUCATION = {
+  education_level: "", degree_name: "", specialization: "", university_name: "",
+  college_name: "", passing_year: "", percentage: "", grade: "", education_city: "",
+  additional_qualification: "",
+};
+const EMPTY_EMPLOYMENT = {
+  employment_type: "", profession: "", working_field: "", organisation_name: "",
+  designation: "", employment_city: "", employment_duration: "", monthly_income: "",
+  annual_income: "", income_currency: "INR",
+};
 const CONTACT_FIELDS = ["fatherContactNumber", "motherContactNumber", "referenceContactNumber"];
 
 const cleanMobile = (value) => {
@@ -537,6 +565,8 @@ export default function MelavaRegistration() {
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [files, setFiles] = useState({ ...EMPTY_FILES });
   const [documents, setDocuments] = useState({ ...EMPTY_DOCUMENTS });
+  const [educations, setEducations] = useState([{ ...EMPTY_EDUCATION }]);
+  const [employments, setEmployments] = useState([{ ...EMPTY_EMPLOYMENT }]);
   const [meta, setMeta] = useState({ ...EMPTY_META });
   const [removedFiles, setRemovedFiles] = useState([]);
   const [settings, setSettings] = useState({ ...EMPTY_SETTINGS });
@@ -721,8 +751,8 @@ export default function MelavaRegistration() {
             if (field.r) nextErrors.height = "Enter the candidate's height.";
             return;
           }
-          if (heightInches(height) === null) {
-            nextErrors.height = "Enter height from 3ft to 8ft, for example 5ft 8in.";
+          if (!/^\d+$/.test(height) || Number(height) < 3 || Number(height) > 8) {
+            nextErrors.height = "Enter height as a digit from 3 to 8.";
           }
           return;
         }
@@ -1018,7 +1048,6 @@ export default function MelavaRegistration() {
         hydrate(
           {
             ...(data.profile || {}),
-            ...(data.melava_registration || {}),
             ...(data.preference || {}),
             is_booklet_req: data.registration?.is_booklet_req,
           },
@@ -1078,6 +1107,12 @@ export default function MelavaRegistration() {
           existing: Boolean(pending.is_existing_website_user),
           username: pendingData.username || mobile,
         });
+        if (Array.isArray(pendingData.educations)) {
+          setEducations(pendingData.educations.length ? pendingData.educations : [{ ...EMPTY_EDUCATION }]);
+        }
+        if (Array.isArray(pendingData.employments)) {
+          setEmployments(pendingData.employments.length ? pendingData.employments : [{ ...EMPTY_EMPLOYMENT }]);
+        }
         if (pending.profile_photo_url) {
           setFiles((previous) => ({
             ...previous,
@@ -1098,15 +1133,36 @@ export default function MelavaRegistration() {
         }));
         setDocuments((previous) => ({
           ...previous,
+          pan_card: pending.pan_card_url
+            ? { preview: pending.pan_card_url, existing: true }
+            : previous.pan_card,
+          passport: pending.passport_url
+            ? { preview: pending.passport_url, existing: true }
+            : previous.passport,
           identificationProof: pending.identification_proof_url
             ? { preview: pending.identification_proof_url, existing: true }
             : previous.identificationProof,
           birthDateProof: pending.birth_date_proof_url
             ? { preview: pending.birth_date_proof_url, existing: true }
             : previous.birthDateProof,
+          address_proof: pending.address_proof_url
+            ? { preview: pending.address_proof_url, existing: true }
+            : previous.address_proof,
           educationProof: pending.education_proof_url
             ? { preview: pending.education_proof_url, existing: true }
             : previous.educationProof,
+          profession_proof: pending.profession_proof_url
+            ? { preview: pending.profession_proof_url, existing: true }
+            : previous.profession_proof,
+          income_proof: pending.income_proof_url
+            ? { preview: pending.income_proof_url, existing: true }
+            : previous.income_proof,
+          caste_certificate: pending.caste_certificate_url
+            ? { preview: pending.caste_certificate_url, existing: true }
+            : previous.caste_certificate,
+          medical_fitness_certificate: pending.medical_fitness_certificate_url
+            ? { preview: pending.medical_fitness_certificate_url, existing: true }
+            : previous.medical_fitness_certificate,
         }));
         setFiles((previous) => ({
           ...previous,
@@ -1314,6 +1370,8 @@ export default function MelavaRegistration() {
     payload.append("registration_data", JSON.stringify({
       ...form,
       username: cleanMobile(form.username),
+      educations: educations.filter((row) => row.degree_name || row.education_level),
+      employments: employments.filter((row) => row.profession || row.organisation_name || row.designation),
       is_existing_website_user: meta.is_existing_website_user || "0",
       ...existingPaths,
     }));
@@ -1359,6 +1417,8 @@ export default function MelavaRegistration() {
     Object.entries(meta).forEach(([key, value]) => payload.append(key, value ?? ""));
     payload.append("height", heightText);
     if (timeText) payload.append("timeOfBirth", timeText);
+    payload.append("educations", JSON.stringify(educations.filter((row) => row.degree_name || row.education_level)));
+    payload.append("employments", JSON.stringify(employments.filter((row) => row.profession || row.organisation_name || row.designation)));
 
     if (files.profilePhoto?.file) payload.append("profilePhoto", files.profilePhoto.file);
     ["full_body_photo", "half_body_photo", "selfie_photo"].forEach((field) => {
@@ -1439,6 +1499,13 @@ export default function MelavaRegistration() {
 
     setSubmitting(true);
     try {
+      const pendingPayload = buildPendingPayload();
+      if (paymentFile?.file) pendingPayload.append("payment_screenshot", paymentFile.file);
+      await request("/melava-registrations/draft", {
+        method: "POST",
+        body: pendingPayload,
+        auth: false,
+      });
       const response = await request("/melava-registrations", { method: "POST", body: buildPayload(), auth: false });
       setResult(response);
       setStage("success");
@@ -1572,13 +1639,17 @@ export default function MelavaRegistration() {
         <div className="f w3" key={key} data-field="height">
           <label>{field.l}<b>*</b></label>
           <input
-            type="text"
+            type="number"
             name="height"
-            placeholder="e.g., 5ft 8in"
+            placeholder="e.g., 5"
+            min="3"
+            max="8"
+            step="1"
+            inputMode="numeric"
             value={form.height}
-            onChange={(event) => update("height", event.target.value)}
+            onChange={(event) => update("height", event.target.value.replace(/\D/g, "").slice(0, 1))}
           />
-          <small>Enter feet and inches in one field</small>
+          <small>Enter height in digits only</small>
           <FieldError message={errors.height} />
         </div>
       );
@@ -2006,6 +2077,36 @@ export default function MelavaRegistration() {
               <h2>{STEPS[step].h}</h2>
               <p className="sub">{STEPS[step].s}</p>
               <div className="grid">{STEPS[step].f.map(renderField)}</div>
+              {STEPS[step].t === "Education & Work" && (
+                <div className="repeatable-sections">
+                  <h3>Education records</h3>
+                  {educations.map((row, index) => (
+                    <div className="grid" key={`education-${index}`}>
+                      {Object.keys(EMPTY_EDUCATION).map((field) => (
+                        <label className="field" key={field}>
+                          <span>{field.replaceAll("_", " ")}</span>
+                          <input value={row[field]} onChange={(event) => setEducations((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))} />
+                        </label>
+                      ))}
+                      {educations.length > 1 && <button type="button" onClick={() => setEducations((items) => items.filter((_, itemIndex) => itemIndex !== index))}>Remove education</button>}
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setEducations((items) => [...items, { ...EMPTY_EDUCATION }])}>Add education</button>
+                  <h3>Employment records</h3>
+                  {employments.map((row, index) => (
+                    <div className="grid" key={`employment-${index}`}>
+                      {Object.keys(EMPTY_EMPLOYMENT).map((field) => (
+                        <label className="field" key={field}>
+                          <span>{field.replaceAll("_", " ")}</span>
+                          <input value={row[field]} onChange={(event) => setEmployments((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))} />
+                        </label>
+                      ))}
+                      {employments.length > 1 && <button type="button" onClick={() => setEmployments((items) => items.filter((_, itemIndex) => itemIndex !== index))}>Remove employment</button>}
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setEmployments((items) => [...items, { ...EMPTY_EMPLOYMENT }])}>Add employment</button>
+                </div>
+              )}
             </section>
           ) : (
             <section className="card">

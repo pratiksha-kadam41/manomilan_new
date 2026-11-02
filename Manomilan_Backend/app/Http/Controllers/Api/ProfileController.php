@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\DocumentVerification;
 use App\Http\Controllers\Controller;
-use App\MelavaRegistration;
+use App\ProfileMelavaRegistration;
 use App\Preference;
 use App\Profile;
 use App\Support\NriProfileScope;
@@ -347,7 +347,7 @@ class ProfileController extends Controller
             ->withExists([
                 'paymentScreenshots as has_verified_payment_screenshot' => fn ($paymentQuery) => $paymentQuery
                     ->where('payment_verified', true),
-                'melavaRegistrations as has_verified_melava_payment' => fn ($registrationQuery) => $registrationQuery
+                'profileMelavaRegistrations as has_verified_melava_payment' => fn ($registrationQuery) => $registrationQuery
                     ->where('payment_verified', true),
                 'melavaRegistrations as melava_registration_exists',
             ]);
@@ -563,7 +563,7 @@ class ProfileController extends Controller
                 'user.preference',
                 'documentVerification',
                 'paymentScreenshots',
-                'melavaRegistrations',
+                'profileMelavaRegistrations',
                 'profileDocuments',
                 'familyDetails',
                 'educations',
@@ -590,7 +590,7 @@ class ProfileController extends Controller
             $currentAddress = $addresses['current'] ?? [];
             $permanentAddress = $addresses['permanent'] ?? [];
             $referenceAddress = $addresses['reference'] ?? [];
-            $latestMelava = $profile->melavaRegistrations->sortByDesc('id')->first();
+            $latestMelava = $profile->profileMelavaRegistrations->sortByDesc('id')->first();
             $heightInches = $profile->height_cm
                 ? (int) round((float) $profile->height_cm / 2.54)
                 : null;
@@ -669,8 +669,8 @@ class ProfileController extends Controller
                 $addPhoto('Candidate Photo '.($index + 1), $path);
             }
 
-            if (Schema::hasTable('melava_registrations')) {
-                $candidatePhotos = MelavaRegistration::query()
+            if (Schema::hasTable('profile_melava_registrations')) {
+                $candidatePhotos = ProfileMelavaRegistration::query()
                     ->where('profile_id', $profile->id)
                     ->get(['candidate_photos']);
 
@@ -1267,7 +1267,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $path = \App\MelavaRegistration::where('profile_id', $profile->id)
+            $path = ProfileMelavaRegistration::where('profile_id', $profile->id)
                 ->whereNotNull('biodata')
                 ->where('biodata', '<>', '')
                 ->latest()

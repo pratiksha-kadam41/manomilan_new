@@ -58,19 +58,7 @@ class CombinedPaymentScreenshotTest extends TestCase
             'created_at' => now(),
             'updated_at' => now(),
         ]);
-        $melavaId = DB::table('melava_registrations')->insertGetId([
-            'profile_id' => $profileId,
-            'username' => '9876543210',
-            'profession' => 'Test Profession',
-            'city' => 'Pune',
-            'other_expectations' => '',
-            'melava_campaign_id' => $campaignId,
-            'payment_screenshot' => $path,
-            'payment_verified' => false,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        DB::table('profile_melava_registrations')->insert([
+        $melavaId = DB::table('profile_melava_registrations')->insertGetId([
             'profile_id' => $profileId,
             'melava_campaign_id' => $campaignId,
             'payment_screenshot' => $path,
@@ -99,10 +87,6 @@ class CombinedPaymentScreenshotTest extends TestCase
         $this->assertSame(200, $verifyResponse->getStatusCode());
         $this->assertDatabaseHas('payment_screenshots', [
             'id' => $paymentId,
-            'payment_verified' => true,
-        ]);
-        $this->assertDatabaseHas('melava_registrations', [
-            'id' => $melavaId,
             'payment_verified' => true,
         ]);
         $this->assertDatabaseHas('profile_melava_registrations', [

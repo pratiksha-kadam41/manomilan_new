@@ -18,7 +18,7 @@ use App\Meeting;
 use App\Mail\MeetingScheduled;
 use App\ProfileVisitor;
 use App\PaymentScreenshot;
-use App\MelavaRegistration;
+use App\ProfileMelavaRegistration;
 
 class ProfilesController extends Controller
 {
@@ -88,7 +88,7 @@ class ProfilesController extends Controller
         $profiles = Profile::with([
             'user',
             'paymentScreenshots',
-            'melavaRegistrations',
+            'profileMelavaRegistrations',
         ])
             ->where('profiles.active', 'active')
 
@@ -119,14 +119,14 @@ class ProfilesController extends Controller
             // REGISTRATION TYPE FILTER (URL parameter override for admins)
             ->when($reg_type && $reg_type !== 'all', function ($query) use ($reg_type) {
                 if ($reg_type === 'melava_existing') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', DB::table('profile_melava_registrations')->select('profile_id'))
                         ->whereIn('profiles.registration_type', ['melava', 'existing'])
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
                                 ->orWhere('profiles.profile_id', 'LIKE', 'MM3%');
                         });
                 } elseif ($reg_type === 'melava') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', DB::table('profile_melava_registrations')->select('profile_id'))
                         ->where('profiles.registration_type', 'melava')
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
@@ -234,7 +234,7 @@ class ProfilesController extends Controller
                     COALESCE(
                         (
                             SELECT MAX(mr.melava_registered_at)
-                            FROM melava_registrations AS mr
+                            FROM profile_melava_registrations AS mr
                             WHERE mr.profile_id = profiles.id
                             AND mr.melava_batch = 'october_2026'
                         ),
@@ -245,7 +245,7 @@ class ProfilesController extends Controller
                     COALESCE(
                         (
                             SELECT MAX(mr.melava_registered_at)
-                            FROM melava_registrations AS mr
+                            FROM profile_melava_registrations AS mr
                             WHERE mr.profile_id = profiles.id
                             AND mr.melava_batch = 'october_2026'
                         ),
@@ -323,14 +323,14 @@ class ProfilesController extends Controller
             })
             ->when($reg_type && $reg_type !== 'all', function ($query) use ($reg_type) {
                 if ($reg_type === 'melava_existing') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', DB::table('profile_melava_registrations')->select('profile_id'))
                         ->whereIn('profiles.registration_type', ['melava', 'existing'])
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
                                 ->orWhere('profiles.profile_id', 'LIKE', 'MM3%');
                         });
                 } elseif ($reg_type === 'melava') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', DB::table('profile_melava_registrations')->select('profile_id'))
                         ->where('profiles.registration_type', 'melava')
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
@@ -426,10 +426,8 @@ class ProfilesController extends Controller
         $profiles = Profile::with([
                 'user',
                 'paymentScreenshots',
-                'melavaRegistrations' => function ($query) {
-                    $query->where('melava_batch', 'october_2026')
-                        ->whereNotNull('melava_registered_at')
-                        ->orderBy('melava_registered_at', 'desc');
+                'profileMelavaRegistrations' => function ($query) {
+                    $query->latest('created_at');
                 },
             ])
             ->where('profiles.active', 'active')
@@ -456,14 +454,14 @@ class ProfilesController extends Controller
             })
             ->when($reg_type && $reg_type !== 'all', function ($query) use ($reg_type) {
                 if ($reg_type === 'melava_existing') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', DB::table('profile_melava_registrations')->select('profile_id'))
                         ->whereIn('profiles.registration_type', ['melava', 'existing'])
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
                                 ->orWhere('profiles.profile_id', 'LIKE', 'MM3%');
                         });
                 } elseif ($reg_type === 'melava') {
-                    $query->whereIn('profiles.id', DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', DB::table('profile_melava_registrations')->select('profile_id'))
                         ->where('profiles.registration_type', 'melava')
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
@@ -522,8 +520,8 @@ class ProfilesController extends Controller
                 );
             })
             ->when($sortBy === 'registration_date', function ($query) use ($sortOrder) {
-                $query->orderByRaw(" COALESCE( ( SELECT MAX(mr.melava_registered_at) FROM melava_registrations AS mr WHERE mr.profile_id = profiles.id AND mr.melava_batch = 'october_2026' ), profiles.created_at ) IS NULL ASC ") 
-                      ->orderByRaw(" COALESCE( ( SELECT MAX(mr.melava_registered_at) FROM melava_registrations AS mr WHERE mr.profile_id = profiles.id AND mr.melava_batch = 'october_2026' ), profiles.created_at ) {$sortOrder} ");
+                $query                ->orderByRaw(" COALESCE( ( SELECT MAX(mr.created_at) FROM profile_melava_registrations AS mr WHERE mr.profile_id = profiles.id ), profiles.created_at ) IS NULL ASC ")
+                ->orderByRaw(" COALESCE( ( SELECT MAX(mr.created_at) FROM profile_melava_registrations AS mr WHERE mr.profile_id = profiles.id ), profiles.created_at ) {$sortOrder} ");
             })
             ->when($sortBy === 'serial_no', function ($query) use ($sortOrder) {
                 $query->orderBy('serial_no', $sortOrder);
@@ -578,7 +576,7 @@ class ProfilesController extends Controller
                         ? date('d-m-Y', strtotime($profile->birthDate))
                         : 'N/A',
                     (function () use ($profile) {
-                        $melavaRegistration = $profile->melavaRegistrations->first();
+                        $melavaRegistration = $profile->profileMelavaRegistrations->first();
 
                         $registrationDate = $melavaRegistration
                             ? $melavaRegistration->melava_registered_at
@@ -605,13 +603,9 @@ class ProfilesController extends Controller
                     })(),
 
                     (function () use ($profile) {
-                        $melavaRegistration = \App\MelavaRegistration::where(
-                            'profile_id',
-                            $profile->id
-                        )
-                        ->where('melava_batch', 'october_2026')
-                        ->orderBy('melava_registered_at', 'desc')
-                        ->first();
+                        $melavaRegistration = ProfileMelavaRegistration::where('profile_id', $profile->id)
+                            ->latest('created_at')
+                            ->first();
 
                         if (!$melavaRegistration) {
                             return 'N/A';
@@ -637,8 +631,7 @@ class ProfilesController extends Controller
 
                 // Source of Information
                 (function () use ($profile) {
-                    $melavaRegistration = $profile->melavaRegistrations->first();
-                    return $melavaRegistration ? ($melavaRegistration->source_of_information ?? 'N/A') : 'N/A';
+                    return 'N/A';
                 })(),
 
                 // Status must remain last
@@ -752,7 +745,7 @@ class ProfilesController extends Controller
     {
         $profile = Profile::with([
             'user',
-            'melavaRegistrations' => function ($query) {
+            'profileMelavaRegistrations' => function ($query) {
                 $query->where('payment_verified', true);
             },
         ])->findOrFail($id);
@@ -770,9 +763,9 @@ class ProfilesController extends Controller
     {
         $profile = Profile::with([
             'paymentScreenshots',
-            'melavaRegistrations' => function ($query) {
+            'profileMelavaRegistrations' => function ($query) {
                 $query->whereNotNull('payment_screenshot')
-                    ->orWhereNotNull('booklet_payment_screenshot');
+                    ;
             },
         ])->findOrFail($id);
         return view('admin.profiles.payment_screenshot', compact('profile'));
@@ -818,7 +811,7 @@ class ProfilesController extends Controller
 
     public function verifyMelavaPayment($id)
     {
-        $registration = \App\MelavaRegistration::findOrFail($id);
+        $registration = ProfileMelavaRegistration::with(['profile', 'campaign'])->findOrFail($id);
         $registration->update(['payment_verified' => true]);
         Profile::find($registration->profile_id)?->syncDocumentVerificationStatus();
 
@@ -827,8 +820,8 @@ class ProfilesController extends Controller
 
     public function verifyMelavaBookletPayment($id)
     {
-        $registration = \App\MelavaRegistration::findOrFail($id);
-        $registration->update(['booklet_payment_verified' => true]);
+        $registration = ProfileMelavaRegistration::findOrFail($id);
+        $registration->update(['payment_verified' => true]);
 
         return redirect()->back()->with('success', 'Melava booklet payment verified successfully!');
     }
@@ -2161,7 +2154,7 @@ class ProfilesController extends Controller
             $profile = Profile::findOrFail($id);
 
             // Find the candidate's Melava registration
-            $registration = MelavaRegistration::where(
+            $registration = ProfileMelavaRegistration::where(
                 'profile_id',
                 $profile->id
             )
@@ -2201,7 +2194,7 @@ class ProfilesController extends Controller
     {
         $batch = 'october_2026';
 
-        $registrations = MelavaRegistration::with('profile')
+        $registrations = ProfileMelavaRegistration::with(['profile', 'campaign'])
             ->where('melava_batch', $batch)
             ->where('attendance_status', 'present')
             ->whereHas('profile')

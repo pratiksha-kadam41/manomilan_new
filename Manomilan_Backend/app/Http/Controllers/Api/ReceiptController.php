@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\MelavaRegistration;
 use App\PaymentScreenshot;
 use App\Profile;
+use App\ProfileMelavaRegistration;
 use Illuminate\Http\Request;
 use Throwable;
 
@@ -30,11 +30,9 @@ class ReceiptController extends Controller
                 ], 404);
             }
 
-            $verifiedMelava = MelavaRegistration::where('profile_id', $profile->id)
-                ->where(function ($query) {
-                    $query->where('payment_verified', true)
-                        ->orWhere('booklet_payment_verified', true);
-                })
+            $verifiedMelava = ProfileMelavaRegistration::with('campaign')
+                ->where('profile_id', $profile->id)
+                ->where('payment_verified', true)
                 ->latest()
                 ->first();
 
@@ -49,11 +47,13 @@ class ReceiptController extends Controller
                 ], 404);
             }
 
-            $registrationFee = $verifiedMelava?->registration_fee;
-            $bookletFee = $verifiedMelava?->booklet_fee;
-            $total = $verifiedMelava?->total_amount;
+            $registrationFee = $verifiedMelava?->campaign?->registration_fee;
+            $bookletFee = $verifiedMelava?->campaign?->booklet_fee;
+            $total = $registrationFee !== null
+                ? (float) $registrationFee + ($verifiedMelava->is_booklet_req ? (float) $bookletFee : 0)
+                : null;
 
-            if ($verifiedMelava && $verifiedMelava->melava_batch === config('melava.batch')) {
+            if ($verifiedMelava) {
                 $registrationFee = (float) ($registrationFee ?? config('melava.fee', 0));
                 $bookletFee = $verifiedMelava->is_booklet_req
                     ? (float) ($bookletFee ?: config('melava.booklet_fee', 0))
@@ -61,7 +61,7 @@ class ReceiptController extends Controller
                 $total = $registrationFee + $bookletFee;
             }
 
-            $gender = strtolower((string) $profile->groomOrBride);
+            $gender = strtolower((string) $profile->groomorbride);
             $issuedAt = now();
             return response()->json([
                 'success' => true,
@@ -69,16 +69,15 @@ class ReceiptController extends Controller
                     'receipt_no' => 'REC/'.$issuedAt->format('Y').'/'.$profile->id,
                     'receipt_date' => $issuedAt->format('d-m-Y'),
                     'registration_type' => $verifiedMelava ? 'Melava Registration' : 'Registration',
-                    'candidate_name' => $profile->fullName,
+                    'candidate_name' => $profile->full_name,
                     'mobile' => $profile->user?->username ?? $profile->phone,
                     'profile_for' => match ($gender) {
                         'groom' => 'Groom',
                         'bride' => 'Bride',
                         default => null,
                     },
-                    'city' => $verifiedMelava?->city
-                        ?: $profile->professionalCity
-                        ?: $profile->cityOfEducation,
+                    'city' => $profile->employments()->value('employment_city')
+                        ?: $profile->educations()->value('education_city'),
                     'registration_fee' => $registrationFee,
                     'booklet_fee' => $bookletFee,
                     'total' => $total,

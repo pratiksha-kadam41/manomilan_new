@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use App\PaymentScreenshot;
-use App\MelavaRegistration;
 use App\Http\Controllers\Controller;
 
 class Profile extends Model
@@ -189,6 +188,7 @@ class Profile extends Model
         'birth_time',
         'created_by',
         'creator_relation',
+        'profile_creator_name',
         'addresses',
         'verification_status',
         'status',
@@ -200,6 +200,8 @@ class Profile extends Model
         'email',
         'phone',
         'source_of_information',
+        'marital_status',
+        'has_medical_history',
         // Basic Details
         'groomOrBride',
         'fullName',
@@ -359,19 +361,14 @@ class Profile extends Model
         }
 
         $paymentsLoaded = $this->relationLoaded('paymentScreenshots');
-        $melavaLoaded = $this->relationLoaded('melavaRegistrations');
         $profileMelavaLoaded = $this->relationLoaded('profileMelavaRegistrations');
 
-        if ($paymentsLoaded && $melavaLoaded && $profileMelavaLoaded) {
+        if ($paymentsLoaded && $profileMelavaLoaded) {
             return $this->paymentScreenshots->contains(fn ($payment) => (bool) $payment->payment_verified)
-                || $this->melavaRegistrations->contains(fn ($registration) => (bool) $registration->payment_verified)
                 || $this->profileMelavaRegistrations->contains(fn ($registration) => (bool) $registration->payment_verified);
         }
 
         return PaymentScreenshot::where('profile_id', $this->id)
-                ->where('payment_verified', true)
-                ->exists()
-            || MelavaRegistration::where('profile_id', $this->id)
                 ->where('payment_verified', true)
                 ->exists()
             || $this->profileMelavaRegistrations()
@@ -448,9 +445,7 @@ class Profile extends Model
             : (($this->relationLoaded('profileMelavaRegistrations')
                 ? $this->profileMelavaRegistrations->isNotEmpty()
                 : $this->profileMelavaRegistrations()->exists())
-                || ($this->relationLoaded('melavaRegistrations')
-                    ? $this->melavaRegistrations->isNotEmpty()
-                    : $this->melavaRegistrations()->exists()));
+                );
         $hasMelava = $type === 'melava'
             || filled($this->melava_batch)
             || $hasMelavaRecord;
@@ -475,7 +470,7 @@ class Profile extends Model
     {
         $this->unsetRelation('documentVerification');
         $this->unsetRelation('paymentScreenshots');
-        $this->unsetRelation('melavaRegistrations');
+        $this->unsetRelation('profileMelavaRegistrations');
 
         $summary = $this->verificationSummary();
         $status = $summary['status'];
@@ -828,11 +823,6 @@ class Profile extends Model
     public function paymentScreenshots()
     {
         return $this->hasMany(PaymentScreenshot::class);
-    }
-
-    public function melavaRegistrations()
-    {
-        return $this->hasMany(MelavaRegistration::class, 'profile_id');
     }
 
     public function familyDetails(): HasOne

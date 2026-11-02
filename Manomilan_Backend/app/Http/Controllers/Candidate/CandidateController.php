@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Candidate;
 
 use App\DocumentVerification;
 use App\Http\Controllers\Controller;
-use App\MelavaRegistration;
+use App\ProfileMelavaRegistration;
 use App\Models\CandidateNotification;
 use App\Models\User;
 use App\Preference;
@@ -146,7 +146,7 @@ abstract class CandidateController extends Controller
     protected function presentPublicProfile(Profile $profile): array
     {
         $additionalPhotos = $this->normalizePathList($profile->additional_photos);
-        $melavaRegistration = MelavaRegistration::where('profile_id', $profile->id)->latest('id')->first();
+        $melavaRegistration = ProfileMelavaRegistration::where('profile_id', $profile->id)->latest('id')->first();
         $candidatePhotos = $this->normalizePathList($melavaRegistration?->getRawOriginal('candidate_photos'));
 
         $details = $this->profileDetails($profile);
@@ -211,8 +211,8 @@ abstract class CandidateController extends Controller
             'height_from' => $preference->height_from,
             'height_to' => $preference->height_to,
             'preferred_education' => $preference->preferred_education,
-            'working_partner' => $preference->working_partner,
             'preferred_working_field' => $preference->preferred_working_field,
+            'working_partner' => $preference->working_partner,
             'expected_income' => $preference->expected_income,
             'family_type' => $preference->family_type,
             'financial_background' => $preference->financial_background,

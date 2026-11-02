@@ -121,14 +121,14 @@ class NriController extends Controller
             });
             $profilesQuery->when($reg_type && $reg_type !== 'all', function ($query) use ($reg_type) {
                 if ($reg_type === 'melava_existing') {
-                    $query->whereIn('profiles.id', \DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', \DB::table('profile_melava_registrations')->select('profile_id'))
                         ->whereIn('profiles.registration_type', ['melava', 'existing'])
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
                                 ->orWhere('profiles.profile_id', 'LIKE', 'MM3%');
                         });
                 } elseif ($reg_type === 'melava') {
-                    $query->whereIn('profiles.id', \DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', \DB::table('profile_melava_registrations')->select('profile_id'))
                         ->where('profiles.registration_type', 'melava')
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
@@ -201,14 +201,14 @@ class NriController extends Controller
             })
             ->when($reg_type && $reg_type !== 'all', function ($query) use ($reg_type) {
                 if ($reg_type === 'melava_existing') {
-                    $query->whereIn('profiles.id', \DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', \DB::table('profile_melava_registrations')->select('profile_id'))
                         ->whereIn('profiles.registration_type', ['melava', 'existing'])
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')
                                 ->orWhere('profiles.profile_id', 'LIKE', 'MM3%');
                         });
                 } elseif ($reg_type === 'melava') {
-                    $query->whereIn('profiles.id', \DB::table('melava_registrations')->select('profile_id'))
+                    $query->whereIn('profiles.id', \DB::table('profile_melava_registrations')->select('profile_id'))
                         ->where('profiles.registration_type', 'melava')
                         ->where(function ($q) {
                             $q->where('profiles.registration_number', 'LIKE', 'MM3%')

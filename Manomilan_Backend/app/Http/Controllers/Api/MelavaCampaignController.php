@@ -222,7 +222,7 @@ class MelavaCampaignController extends Controller
             }
 
             DB::transaction(function () use ($id, $campaign, $updates, $request) {
-                DB::table('melava_registrations')
+                DB::table('profile_melava_registrations')
                     ->where('melava_campaign_id', $id)
                     ->update(['melava_number' => $updates['melava_code']]);
                 DB::table('melava_campaigns')->where('id', $id)->update($updates);
@@ -250,7 +250,7 @@ class MelavaCampaignController extends Controller
             return response()->json(['success' => false, 'message' => 'Melava event not found.'], 404);
         }
 
-        $registrationsCount = DB::table('melava_registrations')->where('melava_campaign_id', $id)->count();
+        $registrationsCount = DB::table('profile_melava_registrations')->where('melava_campaign_id', $id)->count();
         if ($registrationsCount > 0) {
             return response()->json([
                 'success' => false,

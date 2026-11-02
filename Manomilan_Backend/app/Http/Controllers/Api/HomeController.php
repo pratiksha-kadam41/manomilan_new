@@ -52,7 +52,7 @@ class HomeController extends Controller
                 $datedProfileQuery = clone $profileQuery;
                 $userQuery = User::query();
                 $campaignQuery = DB::table('melava_campaigns');
-                $registrationQuery = DB::table('melava_registrations');
+                $registrationQuery = DB::table('profile_melava_registrations');
                 $datedUserQuery = clone $userQuery;
                 $datedCampaignQuery = clone $campaignQuery;
                 $datedRegistrationQuery = clone $registrationQuery;
@@ -101,10 +101,10 @@ class HomeController extends Controller
                     ->orderBy('start_date')
                     ->get()
                     ->map(function ($campaign) use ($dated) {
-                        $campaign->registrations_count = DB::table('melava_registrations')
+                        $campaign->registrations_count = DB::table('profile_melava_registrations')
                             ->where('melava_campaign_id', $campaign->id)
                             ->count();
-                        $eventRegistrationQuery = DB::table('melava_registrations')
+                        $eventRegistrationQuery = DB::table('profile_melava_registrations')
                             ->where('melava_campaign_id', $campaign->id);
                         $dated($eventRegistrationQuery);
                         $campaign->registrations_count = (clone $eventRegistrationQuery)->count();
