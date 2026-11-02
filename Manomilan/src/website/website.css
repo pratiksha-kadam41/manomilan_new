@@ -348,8 +348,7 @@
   margin-top: 26px;
 }
 
-.maintenance-actions button,
-.maintenance-actions a {
+.maintenance-actions button {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -362,7 +361,6 @@
   font: inherit;
   font-size: 0.82rem;
   font-weight: 800;
-  text-decoration: none;
   cursor: pointer;
 }
 
@@ -372,8 +370,7 @@
   color: #fff;
 }
 
-.maintenance-actions button:hover,
-.maintenance-actions a:hover {
+.maintenance-actions button:hover {
   filter: brightness(0.97);
   transform: translateY(-1px);
 }

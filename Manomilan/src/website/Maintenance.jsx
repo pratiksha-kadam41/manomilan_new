@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, Settings2, ShieldCheck, TimerReset } from "lucide-react";
+import { RefreshCw, Settings2, TimerReset } from "lucide-react";
 import { formatRemaining, getPublicWebsiteSettings } from "./api.js";
 import "./website.css";
 
@@ -43,10 +43,6 @@ export default function Maintenance({ settings: initialSettings = null }) {
             <RefreshCw size={16} />
             Try again
           </button>
-          <a href="/login">
-            <ShieldCheck size={16} />
-            Admin login
-          </a>
         </div>
       </section>
     </main>
