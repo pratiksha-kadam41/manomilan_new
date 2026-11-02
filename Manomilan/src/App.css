@@ -114,6 +114,21 @@ button { background: none; border: 0; padding: 0; font: inherit; color: inherit;
   box-shadow: var(--shadow-lg); transition: all .3s;
 }
 .btn-melava:hover { color: #fff; transform: scale(1.05); filter: brightness(1.1); }
+.hero-cta-buttons { flex-wrap: wrap; gap: .75rem; }
+.btn-workshop {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: .5rem 1rem;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #fff;
+  color: #b70650;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform .2s, background .2s, color .2s;
+}
+.btn-workshop:hover { color: #fff; background: #8d0440; transform: scale(1.05); }
 @media (min-width: 640px) { .btn-melava { padding: .5rem 1.5rem; font-size: 1.125rem; line-height: 1.75rem; } }
 
 .fee { color: #ffd700; font-family: 'Playfair Display', serif; font-weight: 800; white-space: nowrap; text-align: center; font-size: .875rem; line-height: 1.25rem; }
@@ -129,6 +144,8 @@ button { background: none; border: 0; padding: 0; font: inherit; color: inherit;
   .hero-left { min-height: 300px; }
 }
 @media (max-width: 640px) {
+  .hero-cta-buttons { gap: .5rem; }
+  .btn-workshop { padding: .45rem .7rem; font-size: .82rem; }
   .hero-left h3:first-child { font-size: 20px !important; }
   .hero-left h3:nth-child(2) { font-size: 28px !important; }
   .hero-left h2 { font-size: 16px !important; line-height: 1.5 !important; }

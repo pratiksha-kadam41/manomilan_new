@@ -1,75 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import { createTicket, getTicketMeta } from "./api/ticketApi";
+import { TicketFileInput, TicketItemForm } from "./TicketFormFields";
+import { blankTicketItem } from "./ticketFormUtils";
 import { emptyTicketMeta, MAX_FILE_MB } from "./ticketOptions";
 import "./tickets.css";
-
-const blankItem = () => ({
-  title: "",
-  priority: "Medium",
-  severity: "Medium",
-  item_type: "Development",
-  description: "",
-  attachment: null,
-});
-
-const fileInput = (label, file, onChange) => (
-  <label className="tk-field tk-file-field">
-    <span>{label}</span>
-    <span className="tk-file-control">
-      <span>Choose File</span>
-      <strong>{file?.name || "No file chosen"}</strong>
-      <input type="file" onChange={onChange} />
-    </span>
-  </label>
-);
-
-function TicketItemForm({ item, index, options, onChange, onRemove, canRemove }) {
-  return (
-    <fieldset className="tk-item-card">
-      <div className="tk-item-topline">
-        <label className="tk-field tk-item-title">
-          <span>Title <em>*</em></span>
-          <input
-            value={item.title}
-            maxLength={255}
-            onChange={(event) => onChange(index, "title", event.target.value)}
-          />
-        </label>
-        <label className="tk-field tk-item-select">
-          <span>Priority</span>
-          <select value={item.priority} onChange={(event) => onChange(index, "priority", event.target.value)}>
-            {options.priorities.map((value) => <option key={value}>{value}</option>)}
-          </select>
-        </label>
-        <label className="tk-field tk-item-select">
-          <span>Severity</span>
-          <select value={item.severity} onChange={(event) => onChange(index, "severity", event.target.value)}>
-            {options.severities.map((value) => <option key={value}>{value}</option>)}
-          </select>
-        </label>
-        <label className="tk-field tk-item-select">
-          <span>Item Type</span>
-          <select value={item.item_type} onChange={(event) => onChange(index, "item_type", event.target.value)}>
-            {options.item_types.map((value) => <option key={value}>{value}</option>)}
-          </select>
-        </label>
-        <button type="button" className="tk-remove-item" disabled={!canRemove} onClick={() => onRemove(index)} aria-label="Remove item">
-          <Trash2 size={16} />
-        </button>
-      </div>
-      <div className="tk-item-bottomline">
-        <label className="tk-field tk-item-description">
-          <span>Description <em>*</em></span>
-          <textarea rows="3" value={item.description} onChange={(event) => onChange(index, "description", event.target.value)} />
-        </label>
-        {fileInput("Attachment (Optional)", item.attachment, (event) => onChange(index, "attachment", event.target.files?.[0] || null))}
-      </div>
-    </fieldset>
-  );
-}
 
 export default function CreateTicket() {
   const navigate = useNavigate();
@@ -81,7 +18,7 @@ export default function CreateTicket() {
   const [category, setCategory] = useState("");
   const [commonDescription, setCommonDescription] = useState("");
   const [commonAttachment, setCommonAttachment] = useState(null);
-  const [items, setItems] = useState([blankItem()]);
+  const [items, setItems] = useState([blankTicketItem()]);
   const [loadingMeta, setLoadingMeta] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -112,7 +49,7 @@ export default function CreateTicket() {
   };
 
   const addItem = () => {
-    setItems((current) => [...current, blankItem()]);
+    setItems((current) => [...current, blankTicketItem()]);
     window.setTimeout(() => {
       bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: "smooth" });
       itemRefs.current[itemRefs.current.length - 1]?.focus();
@@ -156,8 +93,8 @@ export default function CreateTicket() {
     formData.append("common_description", commonDescription);
     if (commonAttachment) formData.append("common_attachment", commonAttachment);
     items.forEach((item, index) => {
-      Object.entries(item).forEach(([key, value]) => {
-        if (value !== null) formData.append(`items[${index}][${key}]`, value);
+      ["title", "priority", "severity", "item_type", "description", "attachment"].forEach((key) => {
+        if (item[key] !== null) formData.append(`items[${index}][${key}]`, item[key]);
       });
     });
 
@@ -224,7 +161,11 @@ export default function CreateTicket() {
                 <span>Common Description (Optional)</span>
                 <textarea rows="3" value={commonDescription} onChange={(event) => setCommonDescription(event.target.value)} />
               </label>
-              {fileInput("Common Attachment (Optional)", commonAttachment, (event) => setCommonAttachment(event.target.files?.[0] || null))}
+              <TicketFileInput
+                label="Common Attachment (Optional)"
+                file={commonAttachment}
+                onChange={(event) => setCommonAttachment(event.target.files?.[0] || null)}
+              />
             </div>
           </div>
           <footer className="tk-create-footer">

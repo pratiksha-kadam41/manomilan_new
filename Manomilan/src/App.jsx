@@ -19,6 +19,7 @@ const ContactUs = lazy(() => import("./pages/ContactUs.jsx"));
 const Login = lazy(() => import("./pages/Login.jsx"));
 const ChangePassword = lazy(() => import("./pages/ChangePassword.jsx"));
 const MelavaRegistration = lazy(() => import("./pages/MelavaRegistration.jsx"));
+const WorkshopRegistration = lazy(() => import("./pages/WorkshopRegistration.jsx"));
 const Dashboard = lazy(() => import("./admin/pages/Dashboard"));
 const CandidateDashboard = lazy(() => import("./candidate/pages/Dashboard"));
 const CandidateMatches = lazy(() => import("./candidate/pages/Matches"));
@@ -39,6 +40,7 @@ const SystemManagement = lazy(() => import("./admin/pages/SystemManagement.jsx")
 const Tickets = lazy(() => import("./admin/pages/Tickets/Tickets.jsx"));
 const CreateTicket = lazy(() => import("./admin/pages/Tickets/CreateTicket.jsx"));
 const TicketDetail = lazy(() => import("./admin/pages/Tickets/TicketDetail.jsx"));
+const EditTicket = lazy(() => import("./admin/pages/Tickets/EditTicket.jsx"));
 const ProfileDetail = lazy(() => import("./pages/ProfileDetail.jsx"));
 const WebsiteOverview = lazy(() => import("./admin/pages/website/WebsiteOverview.jsx"));
 const UpcomingEventsSettings = lazy(() => import("./admin/pages/website/UpcomingEventsSettings.jsx"));
@@ -60,6 +62,7 @@ const ROUTES = {
   "/login": Login,
   "/register": Login,
   "/melava-registration": MelavaRegistration,
+  "/workshop-registration": WorkshopRegistration,
   "/candidate": CandidateDashboard,
   "/candidate/profile": CandidateProfile,
   "/candidate/matches": CandidateMatches,
@@ -95,6 +98,7 @@ const ROUTES = {
 
 // Pages whose URL contains an id (only digits are accepted)
 const DYNAMIC_ROUTES = [
+  { pattern: /^\/admin\/software-tickets\/(\d+)\/edit$/, Page: EditTicket },
   { pattern: /^\/admin\/software-tickets\/(\d+)$/, Page: TicketDetail },
   { pattern: /^\/admin\/melava-biodata\/(\d+)$/, Page: MelavaBioDataPage },
   { pattern: /^\/admin\/profiles\/(\d+)\/details$/, Page: ProfileDetail },
@@ -266,6 +270,7 @@ export default function App() {
   const isCandidatePath = path.startsWith("/candidate");
   const isLogin = path === "/login" || path === "/register";
   const isMelavaRegistration = path === "/melava-registration";
+  const isWorkshopRegistration = path === "/workshop-registration";
   const isMaintenancePath = path === "/maintenance";
   const isPublicPath = !isAdminPath && !isCandidatePath && path !== "/login" && !isMaintenancePath;
   const maintenanceActive = Boolean(websiteSettings?.maintenance?.active);
@@ -385,7 +390,7 @@ export default function App() {
   // CHANGED: find the page (and the id from the URL, if any)
   const { Page: Matched, params } = matchRoute(path);
   const Page = needsLogin ? Login : Matched;
-  const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration || isMaintenancePath;
+  const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration || isWorkshopRegistration || isMaintenancePath;
 
   if (maintenanceActive && isPublicPath) {
     return (

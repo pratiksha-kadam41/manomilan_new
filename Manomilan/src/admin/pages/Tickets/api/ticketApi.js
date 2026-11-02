@@ -17,6 +17,11 @@ export const getTicket = (id) => request(`/tickets/${id}`);
 export const createTicket = (formData) =>
   request("/tickets", { method: "POST", body: formData });
 
+export const updateTicket = (id, formData) => {
+  formData.append("_method", "PUT");
+  return request(`/tickets/${id}`, { method: "POST", body: formData });
+};
+
 export const deactivateTicket = (id) =>
   request(`/tickets/${id}`, { method: "DELETE" });
 

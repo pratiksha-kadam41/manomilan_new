@@ -705,6 +705,21 @@
   box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.15);
 }
 
+.tk-current-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #258f87;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.tk-current-attachment:hover {
+  color: #176f68;
+  text-decoration: underline;
+}
+
 .tk-common-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 316px;

@@ -152,6 +152,11 @@ Route::prefix('admin/success-stories')->group(function () {
     Route::get('/tickets/meta', [TicketController::class, 'meta']);
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::post('/tickets', [TicketController::class, 'store']);
+    Route::get('/tickets/{ticketId}/comments', [TicketController::class, 'indexComments']);
+    Route::post('/tickets/{ticketId}/comments', [TicketController::class, 'storeComment']);
+    Route::get('/tickets/{ticketId}/comments/{commentId}', [TicketController::class, 'showComment']);
+    Route::match(['put', 'patch'], '/tickets/{ticketId}/comments/{commentId}', [TicketController::class, 'updateComment']);
+    Route::delete('/tickets/{ticketId}/comments/{commentId}', [TicketController::class, 'destroyComment']);
     Route::patch('/tickets/{id}/activate', [TicketController::class, 'activate']);
     Route::delete('/tickets/{id}', [TicketController::class, 'destroy']);
     Route::get('/tickets/{id}', [TicketController::class, 'show']);

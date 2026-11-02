@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 const REGISTER_URL = "/melava-registration";
+const SHOW_WORKSHOP_REGISTRATION = true;
 
 const BACKGROUNDS = [
   "/website/bg_slider.jpg",
@@ -89,8 +90,13 @@ export default function Hero() {
             <h3 className="hero-h3" style={{ fontSize: 44 }}>नाती जुळतात…</h3>
 
             <div style={{ marginBottom: "2rem" }}>
-              <div className="d-flex align-items-center justify-content-center">
+              <div className="hero-cta-buttons d-flex align-items-center justify-content-center">
                 <a href={REGISTER_URL} className="btn-melava">Melava Registration</a>
+                {SHOW_WORKSHOP_REGISTRATION && (
+                  <a href="/workshop-registration" className="btn-workshop">
+                    Workshop Registration
+                  </a>
+                )}
               </div>
             </div>
 

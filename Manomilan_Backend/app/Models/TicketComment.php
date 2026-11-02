@@ -27,4 +27,9 @@ class TicketComment extends Model
     {
         return $this->belongsTo(TicketItem::class, 'ticket_item_id');
     }
+
+    public function user()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'user_id');
+    }
 }

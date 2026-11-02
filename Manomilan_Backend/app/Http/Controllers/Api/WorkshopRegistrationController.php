@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\WorkshopRegistration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 use Throwable;
 
 class WorkshopRegistrationController extends Controller
@@ -26,12 +28,16 @@ class WorkshopRegistrationController extends Controller
             'parent_contact_number' => ['required', 'digits:10'],
             'transaction_id' => ['required', 'string', 'max:255'],
             'consent' => ['required', 'boolean'],
-            'payment_screenshot' => ['required', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'payment_screenshot' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:4096'],
         ]);
 
+        $path = null;
         try {
-            $registration = DB::transaction(function () use ($request, $data) {
+            $registration = DB::transaction(function () use ($request, $data, &$path) {
                 $path = $request->file('payment_screenshot')->store('workshop_payments', 'public');
+                if (! $path) {
+                    throw new RuntimeException('Unable to store the workshop payment screenshot.');
+                }
 
                 return WorkshopRegistration::create([
                     'full_name' => $data['full_name'],
@@ -57,6 +63,13 @@ class WorkshopRegistrationController extends Controller
                 'data' => $registration,
             ], 201);
         } catch (Throwable $e) {
+            try {
+                if ($path && ! Storage::disk('public')->delete($path)) {
+                    report(new RuntimeException('Unable to remove the workshop payment upload after registration failed.'));
+                }
+            } catch (Throwable $cleanupException) {
+                report($cleanupException);
+            }
             report($e);
 
             return response()->json([

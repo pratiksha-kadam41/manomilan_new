@@ -133,6 +133,9 @@ export default function TicketDetail({ params = {} }) {
         <section className="tk-detail-card">
           <div className="tk-detail-body">
             {error ? <div className="tk-alert tk-alert-error" role="alert">{error}</div> : null}
+            {location.state?.notice ? (
+              <div className="tk-alert tk-alert-success" role="status">{location.state.notice}</div>
+            ) : null}
             {loading ? (
               <div className="tk-detail-state">Loading ticket details…</div>
             ) : error ? (

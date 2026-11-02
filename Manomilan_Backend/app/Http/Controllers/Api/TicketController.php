@@ -6,6 +6,7 @@ use App\Application;
 use App\Http\Controllers\Controller;
 use App\Module;
 use App\Ticket;
+use App\TicketComment;
 use App\TicketItem;
 use App\TicketStatusHistory;
 use Illuminate\Database\QueryException;
@@ -16,6 +17,7 @@ use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Throwable;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class TicketController extends Controller
 {
@@ -314,7 +316,12 @@ class TicketController extends Controller
             'application',
             'module',
             'items',
-            'comments',
+            'comments' => function ($comments) use ($request) {
+                if (! $request->user()->isAdmin()) {
+                    $comments->where('is_internal', false);
+                }
+                $comments->with('user:id,name')->orderBy('created_at')->orderBy('id');
+            },
             'statusHistory' => fn ($history) => $history->orderBy('created_at')->orderBy('id'),
         ])->find($id));
 
@@ -331,8 +338,248 @@ class TicketController extends Controller
         $ticket->items->each(
             fn (TicketItem $item) => $item->setAttribute('attachment_url', $item->attachment_url)
         );
+        $ticket->comments->each(
+            fn (TicketComment $comment) => $comment->setAttribute('attachment_url', $this->commentAttachmentUrl($comment))
+        );
 
         return response()->json(['success' => true, 'data' => $ticket]);
+    }
+
+    public function indexComments(Request $request, $ticketId)
+    {
+        $ticket = Ticket::find($ticketId);
+        if (! $ticket) {
+            return response()->json(['success' => false, 'message' => 'Ticket not found.'], 404);
+        }
+        if (! $this->canManageTicket($request, $ticket)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $perPage = min(100, max(1, (int) $request->input('per_page', 20)));
+        $comments = TicketComment::query()
+            ->where('ticket_id', $ticket->id)
+            ->when(
+                ! $request->user()->isAdmin(),
+                fn ($query) => $query->where('is_internal', false)
+            )
+            ->with('user:id,name')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->paginate($perPage);
+
+        $comments->getCollection()->transform(
+            fn (TicketComment $comment) => $this->commentPayload($comment, $request->user()->isAdmin())
+        );
+
+        return response()->json(['success' => true, 'data' => $comments]);
+    }
+
+    public function storeComment(Request $request, $ticketId)
+    {
+        $ticket = Ticket::find($ticketId);
+        if (! $ticket) {
+            return response()->json(['success' => false, 'message' => 'Ticket not found.'], 404);
+        }
+        if (! $this->canManageTicket($request, $ticket)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $data = $request->validate([
+            'comment' => ['required', 'string', 'max:50000'],
+            'ticket_item_id' => ['nullable', 'integer', 'min:1'],
+            'attachment' => ['nullable', 'file', 'max:10240'],
+            'is_internal' => ['sometimes', 'boolean'],
+        ]);
+        $isInternal = (bool) ($data['is_internal'] ?? false);
+        if ($isInternal && ! $request->user()->isAdmin()) {
+            throw ValidationException::withMessages([
+                'is_internal' => ['Only administrators can create internal comments.'],
+            ]);
+        }
+        $this->validateCommentItem($data['ticket_item_id'] ?? null, $ticket);
+
+        $savedFiles = [];
+        try {
+            $comment = DB::transaction(function () use ($data, $isInternal, $request, $ticket, &$savedFiles) {
+                $comment = new TicketComment();
+                $comment->ticket_id = $ticket->id;
+                $comment->ticket_item_id = $data['ticket_item_id'] ?? null;
+                $comment->comment_by = $request->user()->isAdmin() ? 'Admin' : 'Candidate';
+                $comment->user_id = $request->user()->id;
+                $comment->comment = $data['comment'];
+                $comment->is_internal = $isInternal;
+                if (! empty($data['attachment'])) {
+                    $comment->attachment = $this->storeAttachment($data['attachment'], $savedFiles);
+                }
+                $comment->save();
+
+                return $comment->load('user:id,name');
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Comment added successfully.',
+                'data' => $this->commentPayload($comment, $request->user()->isAdmin()),
+            ], 201);
+        } catch (Throwable $e) {
+            foreach ($savedFiles as $path) {
+                if (is_file($path)) {
+                    File::delete($path);
+                }
+            }
+
+            if ($e instanceof ValidationException) {
+                throw $e;
+            }
+
+            report($e);
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to add the comment right now.',
+            ], 500);
+        }
+    }
+
+    public function showComment(Request $request, $ticketId, $commentId)
+    {
+        $ticket = Ticket::find($ticketId);
+        if (! $ticket) {
+            return response()->json(['success' => false, 'message' => 'Ticket not found.'], 404);
+        }
+        if (! $this->canManageTicket($request, $ticket)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $comment = $this->findVisibleComment($request, $ticket, $commentId);
+        if (! $comment) {
+            return response()->json(['success' => false, 'message' => 'Comment not found.'], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $this->commentPayload($comment, $request->user()->isAdmin()),
+        ]);
+    }
+
+    public function updateComment(Request $request, $ticketId, $commentId)
+    {
+        $ticket = Ticket::find($ticketId);
+        if (! $ticket) {
+            return response()->json(['success' => false, 'message' => 'Ticket not found.'], 404);
+        }
+        if (! $this->canManageTicket($request, $ticket)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $comment = $this->findVisibleComment($request, $ticket, $commentId);
+        if (! $comment) {
+            return response()->json(['success' => false, 'message' => 'Comment not found.'], 404);
+        }
+        if (! $request->user()->isAdmin() && (int) $comment->user_id !== (int) $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $data = $request->validate([
+            'comment' => ['sometimes', 'required', 'string', 'max:50000'],
+            'ticket_item_id' => ['sometimes', 'nullable', 'integer', 'min:1'],
+            'attachment' => ['sometimes', 'nullable', 'file', 'max:10240'],
+            'remove_attachment' => ['sometimes', 'boolean'],
+            'is_internal' => ['sometimes', 'boolean'],
+        ]);
+        if (array_key_exists('is_internal', $data) && ! $request->user()->isAdmin()) {
+            throw ValidationException::withMessages([
+                'is_internal' => ['Only administrators can manage internal comments.'],
+            ]);
+        }
+        if (array_key_exists('ticket_item_id', $data)) {
+            $this->validateCommentItem($data['ticket_item_id'], $ticket);
+        }
+
+        $savedFiles = [];
+        $oldAttachment = null;
+        try {
+            $comment = DB::transaction(function () use (
+                $data,
+                $comment,
+                &$savedFiles,
+                &$oldAttachment,
+                $ticket
+            ) {
+                $comment = TicketComment::query()
+                    ->where('ticket_id', $ticket->id)
+                    ->lockForUpdate()
+                    ->findOrFail($comment->id);
+
+                if (array_key_exists('comment', $data)) {
+                    $comment->comment = $data['comment'];
+                }
+                if (array_key_exists('ticket_item_id', $data)) {
+                    $comment->ticket_item_id = $data['ticket_item_id'];
+                }
+                if (array_key_exists('is_internal', $data)) {
+                    $comment->is_internal = (bool) $data['is_internal'];
+                }
+                if (! empty($data['attachment'])) {
+                    $oldAttachment = $comment->attachment;
+                    $comment->attachment = $this->storeAttachment($data['attachment'], $savedFiles);
+                } elseif (! empty($data['remove_attachment']) && $comment->attachment) {
+                    $oldAttachment = $comment->attachment;
+                    $comment->attachment = null;
+                }
+                $comment->save();
+
+                return $comment->load('user:id,name');
+            });
+
+            $this->deleteCommentAttachment($oldAttachment);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Comment updated successfully.',
+                'data' => $this->commentPayload($comment, $request->user()->isAdmin()),
+            ]);
+        } catch (Throwable $e) {
+            foreach ($savedFiles as $path) {
+                if (is_file($path)) {
+                    File::delete($path);
+                }
+            }
+
+            if ($e instanceof ValidationException) {
+                throw $e;
+            }
+
+            report($e);
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update the comment right now.',
+            ], 500);
+        }
+    }
+
+    public function destroyComment(Request $request, $ticketId, $commentId)
+    {
+        $ticket = Ticket::find($ticketId);
+        if (! $ticket) {
+            return response()->json(['success' => false, 'message' => 'Ticket not found.'], 404);
+        }
+        if (! $this->canManageTicket($request, $ticket)) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $comment = $this->findVisibleComment($request, $ticket, $commentId);
+        if (! $comment) {
+            return response()->json(['success' => false, 'message' => 'Comment not found.'], 404);
+        }
+        if (! $request->user()->isAdmin() && (int) $comment->user_id !== (int) $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        $attachment = $comment->attachment;
+        $comment->delete();
+        $this->deleteCommentAttachment($attachment);
+
+        return response()->json(['success' => true, 'message' => 'Comment deleted successfully.']);
     }
 
     public function update(Request $request, $id)
@@ -345,6 +592,10 @@ class TicketController extends Controller
 
         if (! $this->canManageTicket($request, $ticket)) {
             return response()->json(['success' => false, 'message' => 'Unauthorized.'], 403);
+        }
+
+        if ($request->has('items')) {
+            return $this->updateWithItems($request, $ticket);
         }
 
         $data = $request->validate([
@@ -371,6 +622,190 @@ class TicketController extends Controller
         } catch (Throwable $e) {
             report($e);
 
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update the ticket right now.',
+            ], 500);
+        }
+    }
+
+    private function updateWithItems(Request $request, Ticket $ticket)
+    {
+        $data = $request->validate([
+            'module_id' => ['required', 'exists:modules,id'],
+            'subject' => ['required', 'string', 'max:255'],
+            'category' => ['required', 'string', 'max:50'],
+            'common_description' => ['nullable', 'string'],
+            'common_attachment' => ['nullable', 'file', 'max:10240'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.id' => ['nullable', 'integer', 'min:1'],
+            'items.*.title' => ['required', 'string', 'max:255'],
+            'items.*.description' => ['required', 'string'],
+            'items.*.item_type' => ['required', 'string', 'max:30'],
+            'items.*.priority' => ['required', 'string', 'max:20'],
+            'items.*.severity' => ['required', 'string', 'max:20'],
+            'items.*.attachment' => ['nullable', 'file', 'max:10240'],
+        ]);
+
+        if ($ticket->ticket_status !== 'Open' || (int) $ticket->status !== 1) {
+            throw ValidationException::withMessages([
+                'ticket' => ['Only active tickets with Open status can be edited.'],
+            ]);
+        }
+
+        $submittedItemIds = collect($data['items'])
+            ->pluck('id')
+            ->filter()
+            ->map(fn ($itemId) => (int) $itemId);
+        if ($submittedItemIds->count() !== $submittedItemIds->unique()->count()) {
+            throw ValidationException::withMessages([
+                'items' => ['A ticket item cannot be submitted more than once.'],
+            ]);
+        }
+
+        $savedFiles = [];
+        $oldAttachments = [];
+
+        try {
+            $updatedTicket = DB::transaction(function () use ($data, $ticket, &$savedFiles, &$oldAttachments) {
+                $lockedTicket = Ticket::withoutEvents(fn () => Ticket::query()
+                    ->lockForUpdate()
+                    ->findOrFail($ticket->id));
+                $existingItems = TicketItem::query()
+                    ->where('ticket_id', $lockedTicket->id)
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                if ($lockedTicket->ticket_status !== 'Open' || (int) $lockedTicket->status !== 1) {
+                    throw ValidationException::withMessages([
+                        'ticket' => ['Only active tickets with Open status can be edited.'],
+                    ]);
+                }
+
+                foreach ($data['items'] as $itemData) {
+                    if (! empty($itemData['id']) && ! $existingItems->has((int) $itemData['id'])) {
+                        throw ValidationException::withMessages([
+                            'items' => ['One or more ticket items do not belong to this ticket.'],
+                        ]);
+                    }
+                }
+
+                if (! empty($data['common_attachment'])) {
+                    if ($lockedTicket->attachment) {
+                        $oldAttachments[] = $lockedTicket->attachment;
+                    }
+                    $lockedTicket->attachment = $this->storeAttachment($data['common_attachment'], $savedFiles);
+                }
+
+                $lockedTicket->module_id = $data['module_id'];
+                $lockedTicket->subject = $data['subject'];
+                $lockedTicket->category = $data['category'];
+                $lockedTicket->description = $data['common_description'] ?? '';
+                $lockedTicket->save();
+
+                $submittedIds = [];
+                TicketItem::withoutEvents(function () use (
+                    $data,
+                    $existingItems,
+                    $lockedTicket,
+                    &$savedFiles,
+                    &$oldAttachments,
+                    &$submittedIds
+                ) {
+                    foreach ($data['items'] as $itemData) {
+                        $item = ! empty($itemData['id'])
+                            ? $existingItems->get((int) $itemData['id'])
+                            : null;
+
+                        if ($item) {
+                            $submittedIds[] = (int) $item->id;
+                            if (! empty($itemData['attachment'])) {
+                                if ($item->attachment) {
+                                    $oldAttachments[] = $item->attachment;
+                                }
+                                $item->attachment = $this->storeAttachment($itemData['attachment'], $savedFiles);
+                            }
+                        } else {
+                            $item = new TicketItem();
+                            $item->ticket_id = $lockedTicket->id;
+                            $item->ticket_status = 'Open';
+                            $item->status = 1;
+                            if (! empty($itemData['attachment'])) {
+                                $item->attachment = $this->storeAttachment($itemData['attachment'], $savedFiles);
+                            }
+                        }
+
+                        $item->title = $itemData['title'];
+                        $item->description = $itemData['description'];
+                        $item->item_type = $itemData['item_type'];
+                        $item->priority = $itemData['priority'];
+                        $item->severity = $itemData['severity'];
+                        $item->save();
+                    }
+
+                    $removedItems = $existingItems->except($submittedIds);
+                    foreach ($removedItems as $removedItem) {
+                        if ($removedItem->attachment) {
+                            $oldAttachments[] = $removedItem->attachment;
+                        }
+                    }
+                    if ($removedItems->isNotEmpty()) {
+                        TicketItem::query()->whereIn('id', $removedItems->keys())->delete();
+                    }
+                });
+
+                $this->recalculateTicketStatus($lockedTicket);
+
+                return $lockedTicket;
+            });
+
+            foreach (array_unique($oldAttachments) as $attachment) {
+                if (str_starts_with($attachment, 'uploads/tickets/')) {
+                    $path = public_path($attachment);
+                    if (is_file($path) && ! File::delete($path)) {
+                        report(new \RuntimeException('Unable to remove a replaced ticket attachment.'));
+                    }
+                }
+            }
+
+            $updatedTicket = Ticket::withoutEvents(fn () => Ticket::with([
+                'application',
+                'module',
+                'items',
+                'comments' => function ($comments) use ($request) {
+                    if (! $request->user()->isAdmin()) {
+                        $comments->where('is_internal', false);
+                    }
+                    $comments->with('user:id,name')->orderBy('created_at')->orderBy('id');
+                },
+                'statusHistory' => fn ($history) => $history->orderBy('created_at')->orderBy('id'),
+            ])->findOrFail($updatedTicket->id));
+            $updatedTicket->setAttribute('attachment_url', $updatedTicket->attachment_url);
+            $updatedTicket->items->each(
+                fn (TicketItem $item) => $item->setAttribute('attachment_url', $item->attachment_url)
+            );
+            $updatedTicket->comments->each(
+                fn (TicketComment $comment) => $comment->setAttribute('attachment_url', $this->commentAttachmentUrl($comment))
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Ticket updated successfully.',
+                'data' => $updatedTicket,
+            ]);
+        } catch (Throwable $e) {
+            foreach ($savedFiles as $path) {
+                if (is_file($path)) {
+                    File::delete($path);
+                }
+            }
+
+            if ($e instanceof ValidationException) {
+                throw $e;
+            }
+
+            report($e);
             return response()->json([
                 'success' => false,
                 'message' => 'Unable to update the ticket right now.',
@@ -414,6 +849,89 @@ class TicketController extends Controller
     {
         $user = $request->user();
         return $user->isAdmin() || (int) $ticket->user_id === (int) $user->id;
+    }
+
+    private function findVisibleComment(Request $request, Ticket $ticket, $commentId): ?TicketComment
+    {
+        return TicketComment::query()
+            ->where('ticket_id', $ticket->id)
+            ->when(
+                ! $request->user()->isAdmin(),
+                fn ($query) => $query->where('is_internal', false)
+            )
+            ->with('user:id,name')
+            ->find($commentId);
+    }
+
+    private function validateCommentItem($itemId, Ticket $ticket): void
+    {
+        if ($itemId === null) {
+            return;
+        }
+
+        $belongsToTicket = TicketItem::query()
+            ->where('ticket_id', $ticket->id)
+            ->whereKey($itemId)
+            ->exists();
+        if (! $belongsToTicket) {
+            throw ValidationException::withMessages([
+                'ticket_item_id' => ['The selected item does not belong to this ticket.'],
+            ]);
+        }
+    }
+
+    private function commentPayload(TicketComment $comment, bool $isAdmin): array
+    {
+        $payload = [
+            'id' => $comment->id,
+            'ticket_id' => $comment->ticket_id,
+            'ticket_item_id' => $comment->ticket_item_id,
+            'comment_by' => $comment->comment_by,
+            'user_id' => $comment->user_id,
+            'author' => $comment->user ? [
+                'id' => $comment->user->id,
+                'name' => $comment->user->name,
+            ] : null,
+            'comment' => $comment->comment,
+            'attachment' => $comment->attachment,
+            'attachment_url' => $this->commentAttachmentUrl($comment),
+            'created_at' => $comment->created_at,
+            'updated_at' => $comment->updated_at,
+        ];
+        if ($isAdmin) {
+            $payload['is_internal'] = (bool) $comment->is_internal;
+        }
+
+        return $payload;
+    }
+
+    private function commentAttachmentUrl(TicketComment $comment): ?string
+    {
+        return $comment->attachment ? asset($comment->attachment) : null;
+    }
+
+    private function deleteCommentAttachment(?string $attachment): void
+    {
+        if (! $attachment || ! str_starts_with($attachment, 'uploads/tickets/')) {
+            return;
+        }
+
+        $fileName = substr($attachment, strlen('uploads/tickets/'));
+        if ($fileName === '' || basename($fileName) !== $fileName) {
+            return;
+        }
+        if (
+            TicketComment::query()->where('attachment', $attachment)->exists()
+            || Ticket::query()->where('attachment', $attachment)->exists()
+            || TicketItem::query()->where('attachment', $attachment)->exists()
+        ) {
+            return;
+        }
+
+        $path = public_path($attachment);
+        if (is_file($path) && ! File::delete($path)) {
+            report(new \RuntimeException('Unable to remove a ticket comment attachment.'));
+        }
     }
 
     private function generateTicketNo(): string
