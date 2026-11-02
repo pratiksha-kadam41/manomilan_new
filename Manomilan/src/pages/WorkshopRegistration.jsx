@@ -41,7 +41,10 @@ export default function WorkshopRegistration() {
 
     requiredFields.forEach((name) => {
       const value = data.get(name);
-      if (typeof value !== "string" || !value.trim()) {
+      const isEmpty = value instanceof File
+        ? value.size === 0
+        : typeof value !== "string" || !value.trim();
+      if (isEmpty) {
         nextErrors[name] = "This field is required.";
       }
     });
