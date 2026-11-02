@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Throwable;
 
 class AdminUserController extends Controller
@@ -25,6 +26,11 @@ class AdminUserController extends Controller
         ]);
 
         $term = trim((string) ($filters['q'] ?? ''));
+        $profileColumns = Schema::getColumnListing('profiles');
+        $profileSearchColumns = array_values(array_intersect(
+            ['full_name', 'reg_id', 'registration_number', 'serial_no', 'profile_id'],
+            $profileColumns
+        ));
         $baseQuery = User::query()
             ->whereDoesntHave('role', fn ($query) => $query
                 ->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])
@@ -34,10 +40,13 @@ class AdminUserController extends Controller
                     $search->where('name', 'like', '%' . $term . '%')
                         ->orWhere('username', 'like', '%' . $term . '%')
                         ->orWhere('email', 'like', '%' . $term . '%')
-                        ->orWhereHas('profile', function ($profile) use ($term) {
-                            $profile->where('fullName', 'like', '%' . $term . '%')
-                                ->orWhere('serial_no', 'like', '%' . $term . '%')
-                                ->orWhere('registration_number', 'like', '%' . $term . '%');
+                        ->orWhereHas('profile', function ($profile) use ($term, $profileSearchColumns) {
+                            $profile->where(function ($profileSearch) use ($term, $profileSearchColumns) {
+                                foreach ($profileSearchColumns as $index => $column) {
+                                    $method = $index === 0 ? 'where' : 'orWhere';
+                                    $profileSearch->{$method}($column, 'like', '%' . $term . '%');
+                                }
+                            });
                         });
                 });
             });
@@ -50,8 +59,13 @@ class AdminUserController extends Controller
             ")
             ->first();
 
+        $profileSelect = array_values(array_unique(array_merge(
+            ['id'],
+            array_intersect(['full_name', 'serial_no', 'registration_number', 'reg_id', 'profile_id'], $profileColumns)
+        )));
+
         $users = (clone $baseQuery)
-            ->with(['profile:id,fullName,serial_no,registration_number'])
+            ->with(['profile:' . implode(',', $profileSelect)])
             ->latest('users.created_at')
             ->paginate((int) ($filters['per_page'] ?? 20))
             ->through(fn (User $user) => [
@@ -62,9 +76,10 @@ class AdminUserController extends Controller
                 'status' => $user->status,
                 'created_at' => $user->created_at,
                 'profile' => $user->profile ? [
-                    'full_name' => $user->profile->fullName,
-                    'serial_no' => $user->profile->serial_no,
-                    'registration_number' => $user->profile->registration_number,
+                    'full_name' => $user->profile->full_name ?: $user->name,
+                    'serial_no' => $user->profile->serial_no ?? null,
+                    'registration_number' => $user->profile->registration_number
+                        ?: ($user->profile->reg_id ?? $user->profile->profile_id),
                 ] : null,
             ]);
 

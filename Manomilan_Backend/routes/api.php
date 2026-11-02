@@ -132,6 +132,7 @@ Route::prefix('admin/success-stories')->group(function () {
     Route::get('/profiles/{id}/verification', [ProfileController::class, 'verification']);
     Route::post('/profiles/{id}/verify', [ProfileController::class, 'verify']);
     Route::patch('/profiles/deactivate/{id}', [ProfileController::class, 'deactivate']);
+    Route::patch('/profiles/activate/{id}', [ProfileController::class, 'activate']);
 
     Route::get('/profiles', [ProfileController::class, 'index']);
     Route::get('/profiles/{id}', [ProfileController::class, 'show']);

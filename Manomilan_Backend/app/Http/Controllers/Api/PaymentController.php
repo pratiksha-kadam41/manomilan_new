@@ -33,6 +33,7 @@ class PaymentController extends Controller
             $payments = PaymentScreenshot::where('profile_id', $profile->id)
                 ->latest()
                 ->get();
+            $payments = $payments->unique('screenshot_path')->values();
 
             $melavaRegistrations = ProfileMelavaRegistration::where('profile_id', $profile->id)
                 ->whereNotNull('payment_screenshot')
@@ -85,18 +86,25 @@ class PaymentController extends Controller
                     'image_url' => $this->screenshotUrl($request, $registration->payment_screenshot),
                 ]);
 
+            $screenshots = $screenshots
+                ->concat($melavaScreenshots)
+                ->unique('image_url')
+                ->sortByDesc('id')
+                ->take(1)
+                ->values();
+
             return response()->json([
                 'success' => true,
                 'profile' => [
                     'id' => $profile->id,
-                    'full_name' => $profile->fullName,
-                    'registration_number' => $profile->profile_id ?: $profile->serial_no,
+                    'full_name' => $profile->full_name
+                        ?: $profile->getRawOriginal('fullName')
+                        ?: $profile->user?->name
+                        ?: 'Unnamed profile',
+                    'registration_number' => $profile->reg_id ?: ($profile->profile_id ?: $profile->serial_no),
                     'mobile' => $profile->user?->username ?: $profile->phone,
                 ],
-                'screenshots' => $screenshots
-                    ->concat($melavaScreenshots)
-                    ->sortByDesc('id')
-                    ->values(),
+                'screenshots' => $screenshots,
             ]);
         } catch (Throwable $e) {
             report($e);

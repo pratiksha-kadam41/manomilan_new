@@ -4,7 +4,7 @@ import {
   Loader2, AlertTriangle, Phone, Check, Upload,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
-import { apiUrl } from "../../../api";
+import { apiMediaUrl, apiUrl } from "../../../api";
 import { getSession, clearSession } from "../../../auth";
 import "./payment.css";
 
@@ -87,8 +87,8 @@ async function uploadScreenshot(id, file) {
 }
 
 /* ---------- Small pieces ---------- */
-const initials = (name = "") =>
-  name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+const initials = (name) =>
+  String(name || "Profile").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
 
 const formatSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 
@@ -184,7 +184,7 @@ export default function PaymentScreenshot({ params }) {
             status: cleanStatus(s.status),
             payment_status: cleanStatus(s.payment_status),
             melava_status: cleanStatus(s.melava_status),
-            image_url: safeUrl(s.image_url),
+            image_url: safeUrl(apiMediaUrl(s.image_url)),
             melava_id: s.melava_id,
           })),
         );
@@ -301,7 +301,7 @@ export default function PaymentScreenshot({ params }) {
                 <>
                   <div className="ps-avatar">{initials(profile.full_name)}</div>
                   <div className="ps-who">
-                    <h2>{profile.full_name}</h2>
+                    <h2>{profile.full_name || "Unnamed profile"}</h2>
                     <p>
                       <span className="ps-regno">{profile.registration_number}</span>
                       <span className="ps-mobile"><Phone size={13} /> {profile.mobile}</span>

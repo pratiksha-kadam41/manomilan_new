@@ -82,8 +82,10 @@ async function saveVerification(id, form) {
 }
 
 /* ---------- Small helpers ---------- */
-const initials = (name = "") =>
-  name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+const initials = (name) =>
+  String(name ?? "").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+
+const isImageUrl = (url) => /\.(?:jpe?g|png|gif|webp|bmp|svg)(?:[?#].*)?$/i.test(url || "");
 
 function Photo({ profile }) {
   const [broken, setBroken] = useState(false);
@@ -108,6 +110,7 @@ export default function ProfileVerify({ params }) {
   const [files, setFiles] = useState({});             // key → uploaded file link
   const [form, setForm] = useState({});               // key → { status, remarks }
   const [savedSnapshot, setSavedSnapshot] = useState("");
+  const [preview, setPreview] = useState(null);
 
   const [loading, setLoading] = useState(idOk);
   const [loadError, setError] = useState("");
@@ -132,7 +135,18 @@ export default function ProfileVerify({ params }) {
       DOCUMENTS.forEach(({ key }) => {
         next[key] = { status: cleanStatus(docs[key]?.status), remarks: String(docs[key]?.remarks ?? "").slice(0, MAX_REMARKS) };
       });
-      setProfile({ ...data.profile, photo_url: safeUrl(data.profile?.photo_url) });
+      setProfile({
+        ...data.profile,
+        full_name: data.profile?.full_name || data.profile?.fullName || "Unnamed profile",
+        registration_number: data.profile?.registration_number || "N/A",
+        registration_date: data.profile?.registration_date || "N/A",
+        photo_url: safeUrl(
+          data.profile?.photo_url
+          || data.profile?.profile_photo
+          || data.profile?.photo
+          || data.profile?.photoUrl
+        ),
+      });
       setFiles(Object.fromEntries(DOCUMENTS.map(({ key }) => [key, safeUrl(docs[key]?.file_url)])));
       setForm(next);
       setSavedSnapshot(JSON.stringify(next));
@@ -261,10 +275,11 @@ export default function ProfileVerify({ params }) {
                     {/* View uploaded file */}
                     <div className="pv-view-cell" style={{ gridArea: "view" }}>
                       {files[d.key] ? (
-                        <a href={files[d.key]} target="_blank" rel="noopener noreferrer"
-                           className="pv-view" title="View document" aria-label={`View ${d.label}`}>
+                        <button type="button" className="pv-view" title="View document"
+                                aria-label={`View ${d.label}`}
+                                onClick={() => setPreview({ label: d.label, url: files[d.key] })}>
                           <Eye size={17} />
-                        </a>
+                        </button>
                       ) : (
                         <span className="pv-na" title="Nothing uploaded">N/A</span>
                       )}
@@ -315,6 +330,25 @@ export default function ProfileVerify({ params }) {
             ) : null}
           </div>
         </form>
+
+        {preview && (
+          <div className="pv-modal-backdrop" role="presentation" onClick={() => setPreview(null)}>
+            <section className="pv-modal" role="dialog" aria-modal="true" aria-label={preview.label}
+                     onClick={(event) => event.stopPropagation()}>
+              <div className="pv-modal-head">
+                <h2>{preview.label}</h2>
+                <button type="button" className="pv-modal-close" onClick={() => setPreview(null)} aria-label="Close document preview">×</button>
+              </div>
+              <div className="pv-document-stage">
+                {isImageUrl(preview.url) ? (
+                  <img className="pv-document-image" src={preview.url} alt={preview.label} />
+                ) : (
+                  <iframe className="pv-document-preview" src={preview.url} title={preview.label} />
+                )}
+              </div>
+            </section>
+          </div>
+        )}
 
         {toast && <div className={`pv-toast ${toast.type}`} role="status">{toast.text}</div>}
       </div>

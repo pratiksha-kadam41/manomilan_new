@@ -43,6 +43,7 @@ const PROFILE_VIEWS = {
   "/admin/nri-profiles": { title: "NRI Profiles", description: "Profiles matching the existing NRI location criteria.", totalLabel: "Total NRI Profiles" },
   "/admin/verified-profiles": { title: "Verified Profiles", description: "Profiles with completed identity and birth-date verification.", totalLabel: "Total Verified" },
   "/admin/unverified-profiles": { title: "Unverified Profiles", description: "Profiles still waiting for verification.", totalLabel: "Total Unverified" },
+  "/admin/inactive-profiles": { title: "Inactive Profiles", description: "Profiles deactivated by administrators.", totalLabel: "Total Inactive" },
 };
 
 async function getProfiles(params) {
@@ -116,6 +117,7 @@ export default function Profiles() {
         ? "unverified"
         : undefined;
   const isNriView = currentPath === "/admin/nri-profiles";
+  const isInactiveView = currentPath === "/admin/inactive-profiles";
 
   const [filters, setFilters] = useState({ gender: "all", reg_type: "all" });
   const [search, setSearch] = useState("");
@@ -200,6 +202,7 @@ export default function Profiles() {
         age_to: ageTo || undefined,
         verification_status: verificationStatus,
         nri: isNriView ? "1" : undefined,
+        inactive: isInactiveView ? "1" : undefined,
         sort_by: sort.by,
         sort_order: sort.order,
         page,
@@ -210,7 +213,7 @@ export default function Profiles() {
     } finally {
       if (id === reqId.current) setLoading(false);
     }
-  }, [filters, activeQuery, ageFrom, ageTo, ageError, sort, page, verificationStatus, isNriView]);
+  }, [filters, activeQuery, ageFrom, ageTo, ageError, sort, page, verificationStatus, isNriView, isInactiveView]);
 
   useEffect(() => {
     const timer = setTimeout(load, 0);
@@ -273,8 +276,8 @@ export default function Profiles() {
   const handleDeactivate = async () => {
     setBusy(true);
     try {
-      await deactivateProfile(confirm.id);
-      showToast("success", `${confirm.full_name} has been deactivated.`);
+      await request(`/profiles/${isInactiveView ? "activate" : "deactivate"}/${confirm.id}`, { method: "PATCH" });
+      showToast("success", `${confirm.full_name} has been ${isInactiveView ? "activated" : "deactivated"}.`);
       setConfirm(null);
       load();
     } catch (e) {
@@ -433,8 +436,8 @@ export default function Profiles() {
                               </button>
                             )}
 
-                            {canDeactivateProfiles ? <button type="button" className="ui-icon-btn red" onClick={() => setConfirm(p)} title="Deactivate" aria-label="Deactivate">
-                              <UserX size={15} />
+                            {canDeactivateProfiles ? <button type="button" className={`ui-icon-btn ${isInactiveView ? "green" : "red"}`} onClick={() => setConfirm(p)} title={isInactiveView ? "Activate" : "Deactivate"} aria-label={isInactiveView ? "Activate" : "Deactivate"}>
+                              {isInactiveView ? <UserCheck size={15} /> : <UserX size={15} />}
                             </button> : null}
                           </div>
                         </td>
@@ -483,12 +486,12 @@ export default function Profiles() {
           <div className="pf-modal" onClick={() => !busy && setConfirm(null)}>
             <div className="pf-dialog" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
               <div className="pf-dialog-icon"><AlertTriangle size={26} /></div>
-              <h3>Deactivate this profile?</h3>
-              <p><strong>{confirm.full_name}</strong> ({confirm.registration_number}) will be moved to the Inactive List.</p>
+              <h3>{isInactiveView ? "Activate" : "Deactivate"} this profile?</h3>
+              <p><strong>{confirm.full_name}</strong> ({confirm.registration_number}) will be {isInactiveView ? "moved to the active list." : "moved to the Inactive List."}</p>
               <div className="pf-dialog-btns">
                 <button type="button" className="pf-btn pf-btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
                 <button type="button" className="pf-btn pf-btn-red" disabled={busy} onClick={handleDeactivate}>
-                  {busy ? "Deactivating…" : "Yes, deactivate"}
+                  {busy ? (isInactiveView ? "Activating…" : "Deactivating…") : `Yes, ${isInactiveView ? "activate" : "deactivate"}`}
                 </button>
               </div>
             </div>

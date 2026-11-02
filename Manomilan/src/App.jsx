@@ -43,6 +43,7 @@ const CreateTicket = lazy(() => import("./admin/pages/Tickets/CreateTicket.jsx")
 const TicketDetail = lazy(() => import("./admin/pages/Tickets/TicketDetail.jsx"));
 const EditTicket = lazy(() => import("./admin/pages/Tickets/EditTicket.jsx"));
 const ProfileDetail = lazy(() => import("./pages/ProfileDetail.jsx"));
+const ProfileEdit = (props) => <ProfileDetail {...props} startInEdit />;
 const WebsiteOverview = lazy(() => import("./admin/pages/website/WebsiteOverview.jsx"));
 const UpcomingEventsSettings = lazy(() => import("./admin/pages/website/UpcomingEventsSettings.jsx"));
 const DowntimeManagement = lazy(() => import("./admin/pages/website/DowntimeManagement.jsx"));
@@ -78,6 +79,7 @@ const ROUTES = {
   "/admin": Dashboard,
   "/admin/change-password": ChangePassword,
   "/admin/profiles": Profiles,
+  "/admin/inactive-profiles": Profiles,
   "/admin/nri-profiles": Profiles,
   "/admin/verified-profiles": Profiles,
   "/admin/unverified-profiles": Profiles,
@@ -105,7 +107,7 @@ const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/software-tickets\/(\d+)$/, Page: TicketDetail },
   { pattern: /^\/admin\/melava-biodata\/(\d+)$/, Page: MelavaBioDataPage },
   { pattern: /^\/admin\/profiles\/(\d+)(?:\/details)?$/, Page: ProfileDetail },
-  { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileVerify },
+  { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileEdit },
   { pattern: /^\/admin\/profiles\/payment\/(\d+)$/, Page: PaymentScreenshot },
   { pattern: /^\/admin\/profiles\/receipt\/(\d+)$/, Page: Receipt },
   { pattern: /^\/candidate\/matches\/(\d+)$/, Page: CandidateProfileView },

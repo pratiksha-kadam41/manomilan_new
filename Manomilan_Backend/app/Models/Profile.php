@@ -740,8 +740,10 @@ class Profile extends Model
             $percentage = 100;
         }
 
-        $this->profile_completion = $percentage;
-        $this->save();
+        if (Schema::hasColumn($this->getTable(), 'profile_completion')) {
+            $this->profile_completion = $percentage;
+            $this->save();
+        }
 
         return $percentage;
     }

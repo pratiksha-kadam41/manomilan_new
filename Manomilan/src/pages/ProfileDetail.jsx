@@ -1056,7 +1056,7 @@ function StateCard({ title, message, onRetry }) {
 /* =====================================================================
    4. PAGE
    ===================================================================== */
-export default function ProfileDetail({ params }) {
+export default function ProfileDetail({ params, startInEdit = false }) {
   const routeParams = useParams();
   const id = params?.id ?? routeParams.id;
   const idOk = isValidId(id);
@@ -1102,6 +1102,14 @@ export default function ProfileDetail({ params }) {
   }, [notice]);
 
   const profile = state.profile;
+
+  useEffect(() => {
+    if (startInEdit && profile && !editing) {
+      setForm(buildEditForm(profile));
+      setDocumentFiles({});
+      setEditing(true);
+    }
+  }, [startInEdit, profile, editing]);
 
   const goToTab = (tabId) => {
     setTab(tabId);

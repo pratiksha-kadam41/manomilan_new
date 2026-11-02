@@ -5,6 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\DocumentVerification;
 use App\Http\Controllers\Controller;
 use App\ProfileMelavaRegistration;
+use App\ProfileDocument;
+use App\ProfileFamilyDetail;
+use App\ProfileEducation;
+use App\ProfileEmployment;
+use App\ProfileReligionDetail;
+use App\ProfilePartnerPreference;
 use App\Preference;
 use App\Profile;
 use App\Support\NriProfileScope;
@@ -33,6 +39,17 @@ class ProfileController extends Controller
     ];
 
     private const STATUSES = ['pending', 'verified', 'rejected', 'not_eligible'];
+
+    private const DOCUMENT_COLUMN_MAP = [
+        'identificationProof' => 'aadhaar_card',
+        'birthDateProof' => 'birth_certificate',
+        'addressProof' => 'address_proof',
+        'educationProof' => 'education_certificate',
+        'professionProof' => 'profession_proof',
+        'incomeProof' => 'income_proof',
+        'casteCertificate' => 'caste_certificate',
+        'medicalFitnessCertificate' => 'medical_fitness_certificate',
+    ];
 
     private const ADMIN_FIELD_MAP = [
         'full_name' => 'fullName',
@@ -290,7 +307,8 @@ class ProfileController extends Controller
         };
 
         $baseAll = $applyFilters(Profile::query());
-        $base = (clone $baseAll)->where('profiles.status', 'active');
+        $inactiveView = $request->boolean('inactive');
+        $base = (clone $baseAll)->where('profiles.status', $inactiveView ? 'deactive' : 'active');
 
         $stats = (clone $base)
             ->selectRaw('COUNT(*) AS total')
@@ -1064,12 +1082,81 @@ class ProfileController extends Controller
                 }
 
                 foreach ($storedDocuments as $key => $path) {
-                    $oldDocuments[$key] = $locked->{$key};
-                    $payload[$key] = $path;
+                    $column = self::DOCUMENT_COLUMN_MAP[$key] ?? null;
+                    if ($column) {
+                        $oldDocuments[$column] = $locked->profileDocuments?->{$column};
+                    }
                 }
 
                 $locked->fill($payload);
                 $locked->save();
+
+                if ($storedDocuments) {
+                    $documentPayload = [];
+                    foreach ($storedDocuments as $key => $path) {
+                        $column = self::DOCUMENT_COLUMN_MAP[$key] ?? null;
+                        if ($column) {
+                            $documentPayload[$column] = $path;
+                        }
+                    }
+                    if ($documentPayload) {
+                        ProfileDocument::updateOrCreate(
+                            ['profile_id' => $locked->id],
+                            $documentPayload
+                        );
+                    }
+                }
+
+                    $normalized = [
+                        ProfileFamilyDetail::class => [
+                            'father_name' => 'father_name', 'father_status' => 'father_living',
+                            'father_native_place' => 'father_native_place', 'father_occupation' => 'father_occupation',
+                            'father_contact' => 'father_phone', 'mother_name' => 'mother_name',
+                            'mother_status' => 'mother_living', 'mother_native_place' => 'mother_native_place',
+                            'mother_occupation' => 'mother_occupation', 'mother_contact' => 'mother_phone',
+                            'brothers_count' => 'brothers', 'married_brothers_count' => 'brothers_married',
+                            'sisters_count' => 'sisters', 'married_sisters_count' => 'sisters_married',
+                            'parents_intercaste_marriage' => 'parents_intercaste',
+                            'parents_different_caste_details' => 'parents_different_caste',
+                            'family_values' => 'family_values', 'family_financial_status' => 'family_financial_status',
+                            'family_annual_income' => 'family_income',
+                        ],
+                        ProfileEducation::class => [
+                            'education_level' => 'education', 'degree_name' => 'degree_diploma_name_1',
+                            'specialization' => 'specialisation_1', 'university_name' => 'university',
+                            'education_city' => 'city_of_education', 'additional_qualification' => 'additional_education_1',
+                        ],
+                        ProfileEmployment::class => [
+                            'profession' => 'profession', 'working_field' => 'field_of_working',
+                            'organisation_name' => 'organisation', 'designation' => 'designation',
+                            'employment_duration' => 'length_of_employment', 'monthly_income' => 'monthly_income',
+                            'annual_income' => 'annual_income', 'income_currency' => 'income_currency',
+                        ],
+                        ProfileReligionDetail::class => [
+                            'religion' => 'religion', 'caste' => 'caste', 'sub_caste' => 'sub_caste',
+                            'horoscope' => 'horoscope_caste', 'gotra' => 'horoscope_sub_caste',
+                        ],
+                    ];
+
+                    foreach ($normalized as $model => $mapping) {
+                        $attributes = [];
+                        foreach ($mapping as $column => $input) {
+                            if (array_key_exists($input, $data)) {
+                                $value = $data[$input];
+                                if ($column === 'parents_intercaste_marriage') {
+                                    $value = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                                } elseif (in_array($column, [
+                                    'brothers_count', 'married_brothers_count', 'sisters_count', 'married_sisters_count',
+                                ], true)) {
+                                    $value = $value === null || $value === '' ? null : (int) $value;
+                                }
+                                $attributes[$column] = $value;
+                            }
+                        }
+                        if ($attributes) {
+                            $model::updateOrCreate(['profile_id' => $locked->id], $attributes);
+                        }
+                    }
 
                 if ($storedDocuments) {
                     $verification = DocumentVerification::firstOrCreate(['profile_id' => $locked->id]);
@@ -1112,9 +1199,15 @@ class ProfileController extends Controller
                 }
                 if ($preferenceData) {
                     Preference::updateOrCreate(['user_id' => $user->id], $preferenceData);
+                    ProfilePartnerPreference::updateOrCreate(
+                        ['profile_id' => $locked->id],
+                        $preferenceData
+                    );
                 }
 
-                $locked->calculateCompletionPercentage();
+                if (Schema::hasColumn($locked->getTable(), 'profile_completion')) {
+                    $locked->calculateCompletionPercentage();
+                }
                 $locked->syncDocumentVerificationStatus();
             });
 
@@ -1439,13 +1532,13 @@ class ProfileController extends Controller
             return response()->json(['success' => false, 'message' => 'Profile not found.'], 404);
         }
 
-        if ($profile->active === 'deactive') {
+        if ($profile->status === 'deactive') {
             return response()->json(['success' => true, 'message' => 'Profile is already inactive.']);
         }
 
         try {
             DB::transaction(function () use ($profile) {
-                $profile->active = 'deactive';
+                $profile->status = 'deactive';
                 $profile->save();
             });
 
@@ -1463,6 +1556,37 @@ class ProfileController extends Controller
         }
     }
 
+    public function activate(Request $request, $id)
+    {
+        if (! $this->isAdmin($request->user())) {
+            return $this->forbidden();
+        }
+
+        $profile = Profile::find($id);
+        if (! $profile) {
+            return response()->json(['success' => false, 'message' => 'Profile not found.'], 404);
+        }
+
+        try {
+            DB::transaction(function () use ($profile) {
+                $profile->status = 'active';
+                $profile->save();
+            });
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Profile activated successfully.',
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to activate this profile right now.',
+            ], 500);
+        }
+    }
+
     public function verification(Request $request, $id)
     {
         if (! $this->isAdmin($request->user())) {
@@ -1475,12 +1599,33 @@ class ProfileController extends Controller
             return response()->json(['success' => false, 'message' => 'Profile not found.'], 404);
         }
 
+        $profile->loadMissing(['profileDocuments', 'user']);
+        $storedPhotos = is_array($profile->photos) ? $profile->photos : [];
+        $profilePhoto = $storedPhotos['profile_photo'] ?? $storedPhotos[0] ?? $profile->profilePhoto;
         $verification = DocumentVerification::firstOrCreate(['profile_id' => $profile->id]);
+        $documentColumns = [
+            'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
+            'birthDateProof' => ['birth_certificate'],
+            'addressProof' => ['address_proof'],
+            'educationProof' => ['education_certificate'],
+            'professionProof' => ['profession_proof'],
+            'incomeProof' => ['income_proof'],
+            'casteCertificate' => ['caste_certificate'],
+            'medicalFitnessCertificate' => ['medical_fitness_certificate'],
+            'selfieVerification' => [],
+        ];
 
         $documents = [];
         foreach (self::DOCUMENT_KEYS as $key) {
+            $path = array_key_exists($key, $profile->getAttributes()) ? $profile->{$key} : null;
+            if (! filled($path)) {
+                $path = collect($documentColumns[$key] ?? [])
+                    ->map(fn (string $column) => $profile->profileDocuments?->{$column})
+                    ->first(fn ($documentPath) => filled($documentPath));
+            }
+
             $documents[$key] = [
-                'file_url' => $this->fileUrl($profile->{$key} ?? null),
+                'file_url' => $this->fileUrl($path),
                 'status' => $this->cleanStatus($verification->{$key.'_status'} ?? 'pending'),
                 'remarks' => (string) ($verification->{$key.'_remarks'} ?? ''),
             ];
@@ -1489,10 +1634,11 @@ class ProfileController extends Controller
         return response()->json([
             'profile' => [
                 'id' => $profile->id,
-                'full_name' => $profile->fullName,
-                'registration_number' => $profile->registration_number ?: $profile->profile_id,
+                'full_name' => $profile->full_name ?: $profile->fullName ?: $profile->user?->name ?: 'Unnamed profile',
+                'registration_number' => $profile->reg_id ?: $profile->profile_id ?: $profile->registration_number,
                 'registration_date' => optional($profile->created_at)->format('d M, Y'),
-                'photo_url' => $this->fileUrl($profile->profilePhoto),
+                'photo_url' => $this->fileUrl(is_string($profilePhoto) ? $profilePhoto : null),
+                'profile_photo' => is_string($profilePhoto) ? $profilePhoto : null,
             ],
             'documents' => $documents,
         ]);
