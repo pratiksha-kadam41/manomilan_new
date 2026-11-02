@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use App\PaymentScreenshot;
 use App\Http\Controllers\Controller;
 
@@ -17,6 +18,33 @@ class Profile extends Model
     protected static function boot()
     {
         parent::boot();
+
+        static::deleting(function (self $profile): void {
+            $profileId = $profile->getKey();
+
+            foreach ([
+                'profile_family_details',
+                'profile_education',
+                'profile_employment',
+                'profile_religion_details',
+                'profile_documents',
+                'profile_partner_preferences',
+                'profile_melava_registrations',
+                'payment_screenshots',
+                'user_interests',
+                'profile_visitors',
+                'document_verifications',
+                'melava_pending_registrations',
+            ] as $table) {
+                if (Schema::hasTable($table) && Schema::hasColumn($table, 'profile_id')) {
+                    DB::table($table)->where('profile_id', $profileId)->delete();
+                }
+            }
+
+            if (Schema::hasTable('users') && Schema::hasColumn('users', 'profile_id')) {
+                DB::table('users')->where('profile_id', $profileId)->update(['profile_id' => null]);
+            }
+        });
 
         static::creating(function (self $profile): void {
             if (Schema::hasColumn($profile->getTable(), 'reg_id')) {
@@ -858,5 +886,10 @@ class Profile extends Model
     public function profileMelavaRegistrations(): HasMany
     {
         return $this->hasMany(ProfileMelavaRegistration::class, 'profile_id', 'id');
+    }
+
+    public function melavaRegistrations(): HasMany
+    {
+        return $this->profileMelavaRegistrations();
     }
 }

@@ -563,14 +563,13 @@ class ProfileController extends Controller
                 'user.preference',
                 'documentVerification',
                 'paymentScreenshots',
-                'profileMelavaRegistrations',
+                'profileMelavaRegistrations.campaign',
                 'profileDocuments',
                 'familyDetails',
                 'educations',
                 'employments',
                 'religionDetails',
                 'partnerPreferences',
-                'profileMelavaRegistrations',
             ])->find((int) $id);
 
             if (! $profile) {
@@ -591,6 +590,7 @@ class ProfileController extends Controller
             $permanentAddress = $addresses['permanent'] ?? [];
             $referenceAddress = $addresses['reference'] ?? [];
             $latestMelava = $profile->profileMelavaRegistrations->sortByDesc('id')->first();
+            $birthDate = $profile->birth_date ?: $latestMelava?->birthDate;
             $heightInches = $profile->height_cm
                 ? (int) round((float) $profile->height_cm / 2.54)
                 : null;
@@ -623,7 +623,7 @@ class ProfileController extends Controller
                 $documents[] = [
                     'id' => $key,
                     'label' => $this->documentLabel($key),
-                    'url' => $path,
+                    'url' => $this->fileUrl($path),
                     'status' => $status,
                     'verified' => in_array($status, ['verified', 'approved', 'approve', 'complete', 'completed'], true),
                 ];
@@ -669,7 +669,10 @@ class ProfileController extends Controller
                 $addPhoto('Candidate Photo '.($index + 1), $path);
             }
 
-            if (Schema::hasTable('profile_melava_registrations')) {
+            if (
+                Schema::hasTable('profile_melava_registrations')
+                && Schema::hasColumn('profile_melava_registrations', 'candidate_photos')
+            ) {
                 $candidatePhotos = ProfileMelavaRegistration::query()
                     ->where('profile_id', $profile->id)
                     ->get(['candidate_photos']);
@@ -699,9 +702,10 @@ class ProfileController extends Controller
                 'mobile' => $profile->user?->username ?? $profile->phone,
                 'email' => $profile->email ?? $profile->user?->email,
                 'gender' => $profile->groomorbride,
-                'dob' => $profile->birth_date,
-                'birth_date' => $profile->birth_date,
-                'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
+                'dob' => $birthDate,
+                'birth_date' => $birthDate,
+                'birthDate' => $birthDate,
+                'age' => $birthDate ? Carbon::parse($birthDate)->age : null,
                 'height' => $heightInches
                     ? intdiv($heightInches, 12).'ft '.($heightInches % 12).'in'
                     : null,
@@ -715,7 +719,7 @@ class ProfileController extends Controller
                 'taluka' => null,
                 'village' => null,
                 'pincode' => $currentAddress['pincode'] ?? null,
-                'source_of_information' => $latestMelava?->source_of_information,
+                'source_of_information' => $profile->source_of_information,
                 'registration_type' => $registrationSummary['is_melava'] ? 'melava' : 'profile',
                 'registration_label' => $registrationSummary['label'],
                 'registration_is_profile' => $registrationSummary['is_profile'],
@@ -734,7 +738,7 @@ class ProfileController extends Controller
                 'created_at' => $profile->created_at,
                 'profile_completion' => null,
 
-                'marital_status' => $latestMelava?->maritalStatus,
+                'marital_status' => $profile->marital_status,
                 'caste' => $religion?->caste,
                 'sub_caste' => $religion?->sub_caste,
                 'mother_tongue' => $profile->mother_tongue,
@@ -744,7 +748,7 @@ class ProfileController extends Controller
                 'religion' => $religion?->religion,
                 'father_phone' => $family?->father_contact,
                 'mother_phone' => $family?->mother_contact,
-                'reference_phone' => $referenceAddress['phone'] ?? null,
+                'reference_phone' => $referenceAddress['contact'] ?? $referenceAddress['phone'] ?? null,
                 'blood_group' => $profile->blood_group,
                 'spectacles' => $profile->has_spectacles ? 'Yes' : 'None',
                 'has_medical_history' => collect([
@@ -794,14 +798,14 @@ class ProfileController extends Controller
                 'family_income' => $family?->family_annual_income,
                 'family_values' => $family?->family_values,
                 'parents_intercaste_marriage' => $family?->parents_intercaste_marriage,
-                'profile_creator_name' => null,
+                'profile_creator_name' => $profile->profile_creator_name,
                 'profile_creator_relation' => $profile->creator_relation,
                 'reference_name' => $referenceAddress['name'] ?? null,
                 'reference_relation' => $referenceAddress['relation'] ?? null,
                 'reference_address' => $referenceAddress['address'] ?? null,
                 'reference_email' => $referenceAddress['email'] ?? null,
 
-                'horoscope_dob' => null,
+                'horoscope_dob' => $birthDate,
                 'birth_time' => $profile->birth_time,
                 'birth_time_ampm' => $profile->birth_time
                     ? (Carbon::parse($profile->birth_time)->format('A'))
@@ -809,6 +813,15 @@ class ProfileController extends Controller
                 'birth_place' => $profile->birth_place,
                 'horoscope_caste' => $religion?->horoscope,
                 'horoscope_sub_caste' => $religion?->sub_caste,
+                'horoscope' => $religion?->horoscope,
+                'horoscope_match_required' => $religion?->horoscope_match_required,
+                'manglik_status' => $religion?->manglik_status,
+                'rashi' => $religion?->rashi,
+                'nakshatra' => $religion?->nakshatra,
+                'charan' => $religion?->charan,
+                'nadi' => $religion?->nadi,
+                'gan' => $religion?->gan,
+                'gotra' => $religion?->gotra,
 
                 'pref_age_range' => $this->rangeText(
                     $partnerPreference?->age_from ?? $preference?->age_from,
@@ -822,23 +835,58 @@ class ProfileController extends Controller
                 ),
                 'pref_height_from' => $partnerPreference?->height_from ?? $preference?->height_from,
                 'pref_height_to' => $partnerPreference?->height_to ?? $preference?->height_to,
-                'pref_religion' => $preference?->preferred_religion,
+                'pref_religion' => $partnerPreference?->preferred_religion ?? $preference?->preferred_religion,
                 'pref_caste' => $partnerPreference?->preferred_caste ?? $preference?->preferred_caste,
-                'pref_sub_caste' => $preference?->preferred_sub_caste,
+                'pref_sub_caste' => $partnerPreference?->preferred_sub_caste ?? $preference?->preferred_sub_caste,
                 'pref_education' => $partnerPreference?->preferred_education ?? $preference?->preferred_education,
-                'pref_working_partner' => $preference?->working_partner,
+                'pref_working_partner' => $partnerPreference?->working_partner ?? $preference?->working_partner,
                 'pref_working_field' => $partnerPreference?->preferred_working_field ?? $preference?->preferred_working_field,
-                'pref_income' => $preference?->expected_income,
-                'pref_family_type' => $preference?->family_type,
-                'pref_financial_background' => $preference?->financial_background,
-                'pref_family_values' => $preference?->family_values,
-                'pref_body_type' => $preference?->preferred_body_type,
+                'pref_income' => $partnerPreference?->expected_income ?? $preference?->expected_income,
+                'pref_family_type' => $partnerPreference?->family_type ?? $preference?->family_type,
+                'pref_financial_background' => $partnerPreference?->financial_background ?? $preference?->financial_background,
+                'pref_family_values' => $partnerPreference?->family_values ?? $preference?->family_values,
+                'pref_body_type' => $partnerPreference?->preferred_body_type ?? $preference?->preferred_body_type,
                 'pref_location' => $partnerPreference?->preferred_location ?? $preference?->preferred_location,
-                'pref_country' => $preference?->preferred_country,
-                'pref_state' => $preference?->preferred_state,
-                'pref_city' => $preference?->preferred_city,
+                'pref_country' => $partnerPreference?->preferred_country ?? $preference?->preferred_country,
+                'pref_state' => $partnerPreference?->preferred_state ?? $preference?->preferred_state,
+                'pref_city' => $partnerPreference?->preferred_city ?? $preference?->preferred_city,
                 'other_expectations' => $partnerPreference?->other_expectations ?? $preference?->other_expectations,
                 'documents' => $documents,
+                'education_records' => $educationRows->map(fn ($record) => [
+                    'education_level' => $record->education_level,
+                    'degree_name' => $record->degree_name,
+                    'specialization' => $record->specialization,
+                    'university_name' => $record->university_name,
+                    'college_name' => $record->college_name,
+                    'passing_year' => $record->passing_year,
+                    'percentage' => $record->percentage,
+                    'grade' => $record->grade,
+                    'education_city' => $record->education_city,
+                    'additional_qualification' => $record->additional_qualification,
+                ])->values(),
+                'employment_records' => $profile->employments->map(fn ($record) => [
+                    'employment_type' => $record->employment_type,
+                    'profession' => $record->profession,
+                    'working_field' => $record->working_field,
+                    'organisation_name' => $record->organisation_name,
+                    'designation' => $record->designation,
+                    'employment_city' => $record->employment_city,
+                    'employment_duration' => $record->employment_duration,
+                    'monthly_income' => $record->monthly_income,
+                    'annual_income' => $record->annual_income,
+                    'income_currency' => $record->income_currency,
+                ])->values(),
+                'religion_details' => $religion?->toArray(),
+                'family_details' => $family?->toArray(),
+                'partner_preferences' => $partnerPreference?->toArray(),
+                'melava_registrations' => $profile->profileMelavaRegistrations->map(fn ($registration) => [
+                    'id' => $registration->id,
+                    'campaign_title' => $registration->campaign?->title,
+                    'melava_campaign_id' => $registration->melava_campaign_id,
+                    'is_booklet_req' => (bool) $registration->is_booklet_req,
+                    'payment_screenshot' => $registration->payment_screenshot,
+                    'payment_verified' => (bool) $registration->payment_verified,
+                ])->values(),
             ];
 
             return response()->json(['data' => $data]);
@@ -1230,7 +1278,26 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $filePath = $this->localUploadPath($profile->{$docId});
+            $documentColumns = [
+                'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
+                'birthDateProof' => ['birth_certificate'],
+                'addressProof' => ['address_proof'],
+                'educationProof' => ['education_certificate'],
+                'professionProof' => ['profession_proof'],
+                'incomeProof' => ['income_proof'],
+                'casteCertificate' => ['caste_certificate'],
+                'medicalFitnessCertificate' => ['medical_fitness_certificate'],
+                'selfieVerification' => [],
+            ];
+            $path = $profile->{$docId};
+            if (! filled($path)) {
+                $profile->loadMissing('profileDocuments');
+                $path = collect($documentColumns[$docId] ?? [])
+                    ->map(fn (string $column) => $profile->profileDocuments?->{$column})
+                    ->first(fn ($documentPath) => filled($documentPath));
+            }
+
+            $filePath = $this->localUploadPath($path);
             if (! $filePath) {
                 return response()->json(['message' => 'Document not found.'], 404);
             }
@@ -1699,6 +1766,6 @@ class ProfileController extends Controller
             return url('storage/'.$path);
         }
 
-        return url($path);
+        return Storage::disk('public')->url($path);
     }
 }

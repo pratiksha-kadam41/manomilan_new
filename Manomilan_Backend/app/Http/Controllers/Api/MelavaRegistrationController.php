@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\MelavaPendingRegistration;
+use App\MelavaPendingRegistration;
 use App\Models\User;
 use App\PaymentScreenshot;
 use App\Profile;
@@ -151,6 +151,128 @@ class MelavaRegistrationController extends Controller
             ]);
         }
 
+        if ($profile) {
+            $profile->loadMissing([
+                'preference', 'partnerPreferences', 'educations', 'employments', 'profileDocuments',
+                'religionDetails', 'familyDetails', 'user',
+            ]);
+            $photos = is_array($profile->photos) ? $profile->photos : [];
+            $latestEducation = $profile->educations->last();
+            $latestEmployment = $profile->employments->last();
+            $religion = $profile->religionDetails;
+            $family = $profile->familyDetails;
+
+            return response()->json([
+                'success' => true,
+                'type' => 'website_user',
+                'user' => [
+                    'id' => $profile->user?->id,
+                    'username' => $profile->phone,
+                    'profile_id' => $profile->id,
+                ],
+                'profile' => [
+                    'fullName' => $profile->full_name,
+                    'email' => $profile->email,
+                    'username' => $profile->phone,
+                    'source_of_information' => $profile->source_of_information,
+                    'groomOrBride' => strtolower($profile->groomorbride),
+                    'birthDate' => $profile->birth_date ?: $registration?->birthDate,
+                    'maritalStatus' => $profile->marital_status,
+                    'height' => $this->heightTextFromCm($profile->height_cm),
+                    'weight' => $profile->weight_kg,
+                    'havingSpecsLenses' => $profile->has_spectacles ? 'Yes' : 'None',
+                    'bloodGroup' => $profile->blood_group,
+                    'motherTongue' => $profile->mother_tongue,
+                    'language' => implode(', ', $profile->languages ?? []),
+                    'specialCases' => $profile->special_cases,
+                    'knowAboutMyself' => $profile->about_me,
+                    'placeOfBirth' => $profile->birth_place,
+                    'timeOfBirth' => $profile->birth_time,
+                    'birthTime_ampm' => $this->timeMeridiem($profile->birth_time),
+                    'address' => data_get($profile->addresses, 'current.address'),
+                    'permanent_address' => data_get($profile->addresses, 'permanent.address'),
+                    'current_address_pincode' => data_get($profile->addresses, 'current.pincode'),
+                    'current_address_city' => data_get($profile->addresses, 'current.city'),
+                    'current_address_district' => data_get($profile->addresses, 'current.district'),
+                    'current_address_state' => data_get($profile->addresses, 'current.state'),
+                    'current_address_country' => data_get($profile->addresses, 'current.country', 'India'),
+                    'religion' => $religion?->religion,
+                    'caste' => $religion?->caste,
+                    'subCaste' => $religion?->sub_caste,
+                    'community' => $religion?->community,
+                    'horoscope' => $religion?->horoscope,
+                    'horoscope_match_required' => $religion?->horoscope_match_required,
+                    'manglik_status' => $religion?->manglik_status,
+                    'rashi' => $religion?->rashi,
+                    'nakshatra' => $religion?->nakshatra,
+                    'charan' => $religion?->charan,
+                    'nadi' => $religion?->nadi,
+                    'gan' => $religion?->gan,
+                    'gotra' => $religion?->gotra,
+                    'fathersName' => $family?->father_name,
+                    'fatherAlive' => $family?->father_status === 'Alive' ? 'Yes' : ($family?->father_status === 'Deceased' ? 'No' : null),
+                    'fatherContactNumber' => $family?->father_contact,
+                    'fathersOccupation' => $family?->father_occupation,
+                    'fathersNativePlace' => $family?->father_native_place,
+                    'mothersName' => $family?->mother_name,
+                    'motherAlive' => $family?->mother_status === 'Alive' ? 'Yes' : ($family?->mother_status === 'Deceased' ? 'No' : null),
+                    'motherContactNumber' => $family?->mother_contact,
+                    'mothersOccupation' => $family?->mother_occupation,
+                    'mothersNativePlace' => $family?->mother_native_place,
+                    'noOfBrothers' => $family?->brothers_count,
+                    'brothersMarried' => $family?->married_brothers_count,
+                    'noOfSisters' => $family?->sisters_count,
+                    'sistersMarried' => $family?->married_sisters_count,
+                    'parentsIntercasteMarriage' => $family?->parents_intercaste_marriage,
+                    'parentsDifferentCaste' => $family?->parents_different_caste_details,
+                    'familyValues' => $family?->family_values,
+                    'familyFinancialStatus' => $family?->family_financial_status,
+                    'familyAnnualIncome' => $family?->family_annual_income,
+                    'profileCreatorName' => $profile->profile_creator_name,
+                    'profileCreatorRelation' => $profile->creator_relation,
+                    'referenceName' => data_get($profile->addresses, 'reference.name'),
+                    'referenceRelation' => data_get($profile->addresses, 'reference.relation'),
+                    'referenceAddress' => data_get($profile->addresses, 'reference.address'),
+                    'referenceContactNumber' => data_get($profile->addresses, 'reference.contact'),
+                    'referenceEmail' => data_get($profile->addresses, 'reference.email'),
+                    'education' => $latestEducation?->education_level,
+                    'degreeDiplomaName1' => $latestEducation?->degree_name,
+                    'specialisation1' => $latestEducation?->specialization,
+                    'universityBoardCollege' => $latestEducation?->university_name ?: $latestEducation?->college_name,
+                    'cityOfEducation' => $latestEducation?->education_city,
+                    'profession' => $latestEmployment?->profession,
+                    'fieldOfWorking' => $latestEmployment?->working_field,
+                    'organisationWorkingIn' => $latestEmployment?->organisation_name,
+                    'professionalCity' => $latestEmployment?->employment_city,
+                    'designation' => $latestEmployment?->designation,
+                    'lengthOfEmployment' => $latestEmployment?->employment_duration,
+                    'monthlyIncome' => $latestEmployment?->monthly_income,
+                    'annualIncome' => $latestEmployment?->annual_income,
+                    'educations' => $profile->educations->toArray(),
+                    'employments' => $profile->employments->toArray(),
+                ],
+                'preference' => ($profile->partnerPreferences ?: $profile->preference)?->toArray(),
+                'registration' => $registration,
+                'has_registration' => (bool) $registration,
+                'profile_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'profile_photo', $photos)),
+                'full_body_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'full_body_photo', $photos)),
+                'half_body_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'half_body_photo', $photos)),
+                'selfie_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'selfie_photo', $photos)),
+                'candidate_photos_urls' => $this->fileUrls(request(), $this->photoList($profile, 'candidate_photos', $photos)),
+                'additional_photos_urls' => $this->fileUrls(request(), $this->photoList($profile, 'additional_photos', $photos)),
+                'identification_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->aadhaar_card),
+                'pan_card_url' => $this->fileUrl(request(), $profile->profileDocuments?->pan_card),
+                'passport_url' => $this->fileUrl(request(), $profile->profileDocuments?->passport),
+                'birth_date_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->birth_certificate),
+                'address_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->address_proof),
+                'education_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->education_certificate),
+                'profession_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->profession_proof),
+                'income_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->income_proof),
+                'caste_certificate_url' => $this->fileUrl(request(), $profile->profileDocuments?->caste_certificate),
+                'medical_fitness_certificate_url' => $this->fileUrl(request(), $profile->profileDocuments?->medical_fitness_certificate),
+            ]);
+        }
+
         return response()->json([
             'success' => true,
             'exists' => (bool) $registration,
@@ -253,10 +375,16 @@ class MelavaRegistrationController extends Controller
 
         foreach (['candidate_photos' => 'candidate_photos', 'additionalPhotos' => 'additional_photos'] as $input => $key) {
             if ($request->hasFile($input)) {
-                $registrationData['_pending_files'][$key] = collect($request->file($input))
+                $newPaths = collect($request->file($input))
                     ->map(fn ($file) => $file->store($directory, 'public'))
                     ->values()
                     ->all();
+                $registrationData['_pending_files'][$key] = array_values(array_merge(
+                    is_array($registrationData['_pending_files'][$key] ?? null)
+                        ? $registrationData['_pending_files'][$key]
+                        : [],
+                    $newPaths
+                ));
             }
         }
 
@@ -300,9 +428,12 @@ class MelavaRegistrationController extends Controller
             $user->profile_id = $profile->id;
             $user->save();
 
+            $pendingFiles = $this->pendingFiles($request);
             $paymentPath = $request->hasFile('payment_screenshot')
                 ? $request->file('payment_screenshot')->store('payment_screenshots', 'public')
-                : null;
+                : (! empty($pendingFiles['payment_screenshot'])
+                    ? $this->promotePendingFile($pendingFiles['payment_screenshot'], 'payment_screenshots')
+                    : null);
             $registration = ProfileMelavaRegistration::updateOrCreate(
                 ['profile_id' => $profile->id, 'melava_campaign_id' => $campaign->id],
                 [
@@ -363,6 +494,12 @@ class MelavaRegistrationController extends Controller
             $registration->is_booklet_req = (bool) $data['booklet_required'];
         }
         $registration->save();
+        if ($registration->payment_screenshot) {
+            PaymentScreenshot::updateOrCreate(
+                ['profile_id' => $registration->profile_id, 'screenshot_path' => $registration->payment_screenshot],
+                ['payment_verified' => (bool) $registration->payment_verified]
+            );
+        }
         return response()->json(['success' => true, 'data' => $this->present($registration->fresh(['profile', 'campaign']))]);
     }
 
@@ -401,32 +538,44 @@ class MelavaRegistrationController extends Controller
             'selfie_photo' => 'selfie_photo',
         ] as $input => $key) {
             if ($request->hasFile($input)) {
-                $photos[$key] = $request->file($input)->store('profile_photos', 'public');
+                $photos[$key] = $request->file($input)->store('profile_photos/candidate', 'public');
             } elseif (! empty($pendingFiles[$input])) {
-                $photos[$key] = $this->promotePendingFile($pendingFiles[$input], 'profile_photos');
+                $photos[$key] = $this->promotePendingFile($pendingFiles[$input], 'profile_photos/candidate');
             }
         }
         if ($request->hasFile('candidate_photos')) {
-            $photos['candidate_photos'] = collect($request->file('candidate_photos'))
-                ->map(fn ($file) => $file->store('profile_photos/candidate', 'public'))
-                ->values()
-                ->all();
+            $photos['candidate_photos'] = array_values(array_merge(
+                $this->photoPaths($photos['candidate_photos'] ?? []),
+                collect($request->file('candidate_photos'))
+                    ->map(fn ($file) => $file->store('profile_photos/candidate', 'public'))
+                    ->values()
+                    ->all()
+            ));
         } elseif (! empty($pendingFiles['candidate_photos'])) {
-            $photos['candidate_photos'] = array_map(
+            $photos['candidate_photos'] = array_values(array_merge(
+                $this->photoPaths($photos['candidate_photos'] ?? []),
+                array_map(
                 fn (string $path) => $this->promotePendingFile($path, 'profile_photos/candidate'),
                 $pendingFiles['candidate_photos']
-            );
+                )
+            ));
         }
         if ($request->hasFile('additionalPhotos')) {
-            $photos['additional_photos'] = collect($request->file('additionalPhotos'))
-                ->map(fn ($file) => $file->store('profile_photos/additional', 'public'))
-                ->values()
-                ->all();
+            $photos['additional_photos'] = array_values(array_merge(
+                $this->photoPaths($photos['additional_photos'] ?? []),
+                collect($request->file('additionalPhotos'))
+                    ->map(fn ($file) => $file->store('profile_photos/candidate', 'public'))
+                    ->values()
+                    ->all()
+            ));
         } elseif (! empty($pendingFiles['additional_photos'])) {
-            $photos['additional_photos'] = array_map(
-                fn (string $path) => $this->promotePendingFile($path, 'profile_photos/additional'),
-                $pendingFiles['additional_photos']
-            );
+            $photos['additional_photos'] = array_values(array_merge(
+                $this->photoPaths($photos['additional_photos'] ?? []),
+                array_map(
+                    fn (string $path) => $this->promotePendingFile($path, 'profile_photos/candidate'),
+                    $pendingFiles['additional_photos']
+                )
+            ));
         }
 
         $profile->fill([
@@ -733,6 +882,18 @@ class MelavaRegistrationController extends Controller
         return $target;
     }
 
+    private function photoPaths($photos): array
+    {
+        if (is_string($photos)) {
+            $photos = json_decode($photos, true);
+        }
+
+        return array_values(array_filter(
+            is_array($photos) ? $photos : [],
+            static fn ($path): bool => is_string($path) && trim($path) !== ''
+        ));
+    }
+
     private function educationRows(Request $request, array $data): array
     {
         if (! empty($data['educations'])) {
@@ -850,9 +1011,37 @@ class MelavaRegistrationController extends Controller
         return is_numeric($height) ? round((float) $height * 30.48, 2) : null;
     }
 
+    private function heightTextFromCm($height): ?string
+    {
+        if ($height === null || $height === '') {
+            return null;
+        }
+
+        $inches = round(((float) $height) / 2.54);
+        $feet = intdiv((int) $inches, 12);
+
+        return (string) $feet;
+    }
+
+    private function timeMeridiem(?string $time): ?string
+    {
+        if (! $time) {
+            return null;
+        }
+
+        return (int) substr($time, 0, 2) >= 12 ? 'PM' : 'AM';
+    }
+
     private function fileUrl(Request $request, ?string $path): string
     {
-        return $path ? Storage::disk('public')->url($path) : '';
+        if (! $path) {
+            return '';
+        }
+        if (preg_match('#^https?://#i', $path)) {
+            return $path;
+        }
+
+        return Storage::disk('public')->url(ltrim(preg_replace('#^/?storage/#', '', $path), '/'));
     }
 
     private function fileUrls(Request $request, array $paths): array
@@ -861,6 +1050,29 @@ class MelavaRegistrationController extends Controller
             fn ($path) => $this->fileUrl($request, is_string($path) ? $path : null),
             $paths
         )));
+    }
+
+    private function profilePhotoPath(Profile $profile, string $key, array $photos): ?string
+    {
+        $legacyKey = match ($key) {
+            'profile_photo' => 'profilePhoto',
+            default => $key,
+        };
+
+        return $photos[$key]
+            ?? $profile->getAttribute($legacyKey)
+            ?? $profile->getAttribute($key);
+    }
+
+    private function photoList(Profile $profile, string $key, array $photos): array
+    {
+        $value = $photos[$key] ?? $profile->getAttribute($key) ?? [];
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : [$value];
+        }
+
+        return is_array($value) ? array_values(array_filter($value)) : [];
     }
 
     private function isAdmin($user): bool

@@ -1483,7 +1483,9 @@ public function successStories()
                 Storage::disk('public')->delete($profile->profilePhoto);
             }
 
-            $profile->delete();
+            DB::transaction(static function () use ($profile): void {
+                $profile->delete();
+            });
 
             return redirect()->back()->with('success', 'Profile deleted successfully!');
         } catch (Exception $e) {

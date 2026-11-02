@@ -310,6 +310,81 @@
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 20px 16px;
+  min-width: 0;
+}
+
+.melava-page .repeatable-sections {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+
+.melava-page .repeatable-sections h3 {
+  margin: 0 0 12px;
+  color: var(--bd);
+  font-size: 1rem;
+}
+
+.melava-page .repeatable-sections > .grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+  background: #f8fbfb;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.melava-page .repeatable-field {
+  display: block;
+  min-width: 0;
+}
+
+.melava-page .repeatable-field span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.melava-page .repeatable-field input,
+.melava-page .repeatable-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.melava-page .repeatable-field input:focus,
+.melava-page .repeatable-field select:focus {
+  outline: 0;
+  border-color: var(--b);
+  box-shadow: 0 0 0 3px rgba(42, 99, 101, 0.15);
+}
+
+.melava-page .repeatable-sections button {
+  min-height: 38px;
+  margin: 0 0 20px;
+  padding: 8px 14px;
+  border: 1px solid var(--b);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--b);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.melava-page .repeatable-sections button:hover {
+  background: var(--soft);
 }
 
 .melava-page .w3 { grid-column: span 3; }
@@ -920,12 +995,20 @@
     grid-template-columns: 1fr;
   }
 
+  .melava-page .repeatable-sections > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* ---------- Mobile ---------- */
 @media (max-width: 560px) {
   .melava-page {
     font-size: 15px;
+  }
+
+  .melava-page .repeatable-sections > .grid {
+    grid-template-columns: 1fr;
+    padding: 12px;
   }
 
   .melava-page .wrap {

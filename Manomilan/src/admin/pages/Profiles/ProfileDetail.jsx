@@ -122,6 +122,7 @@ const TABS = [
       {
         title: "About", icon: <FaInfoCircle />, fields: [
           { l: "About Me", k: "about", wide: true },
+          { l: "Date of Birth", k: "birth_date", t: "date" },
           { l: "Marital Status", k: "marital_status" },
           { l: "Religion", k: "religion" },
           { l: "Caste", k: "caste" },
@@ -218,6 +219,15 @@ const TABS = [
           { l: "Place of Birth", k: "birth_place" },
           { l: "Horoscope Caste", k: "horoscope_caste" },
           { l: "Horoscope Sub Caste", k: "horoscope_sub_caste" },
+          { l: "Horoscope", k: "horoscope" },
+          { l: "Horoscope Matching", k: "horoscope_match_required" },
+          { l: "Manglik Status", k: "manglik_status" },
+          { l: "Rashi", k: "rashi" },
+          { l: "Nakshatra", k: "nakshatra" },
+          { l: "Charan", k: "charan" },
+          { l: "Nadi", k: "nadi" },
+          { l: "Gan", k: "gan" },
+          { l: "Gotra", k: "gotra" },
         ],
       },
     ],
@@ -244,11 +254,12 @@ const TABS = [
           { l: "Preferred Country", k: "pref_country" },
           { l: "Preferred State", k: "pref_state" },
           { l: "Preferred City", k: "pref_city" },
+          { l: "Other Expectations", k: "other_expectations", wide: true },
         ],
       },
-      { title: "Other Expectations", icon: <FaCommentDots />, kind: "text", k: "other_expectations", empty: "No other specific expectations mentioned." },
     ],
   },
+  { id: "melava", label: "Melava", sections: [] },
 ];
 
 function Field({ field, profile }) {
@@ -277,6 +288,28 @@ function Section({ section, profile }) {
           {section.fields.map((field) => <Field key={field.k + field.l} field={field} profile={profile} />)}
         </div>
       )}
+    </section>
+  );
+}
+
+function RecordList({ title, records, fields }) {
+  if (!Array.isArray(records) || records.length === 0) return null;
+  return (
+    <section className="pd-section">
+      <h3 className="pd-section-title"><span className="pd-section-ic"><FaListUl /></span>{title}</h3>
+      {records.map((record, index) => (
+        <div className="pd-record" key={`${title}-${index}`}>
+          <strong>{title} {index + 1}</strong>
+          <div className="pd-grid">
+            {fields.map(([label, key]) => (
+              <div className="pd-field" key={key}>
+                <span className="pd-label">{label}</span>
+                <span className={`pd-value${record[key] ? "" : " pd-empty"}`}>{fmt(record[key]) || NA}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -415,7 +448,7 @@ function SummaryCard({ profile }) {
 
   const facts = [
     ["Gender", fmt(profile.gender)],
-    ["Date of Birth", dob ? longDate(dob) : fmt(profile.dob)],
+    ["Date of Birth", dob ? longDate(dob) : fmt(profile.dob || profile.birth_date, "date")],
     ["Age", age ? `${age} years` : null],
     ["Height", fmt(profile.height)],
     ["Weight", weight ? (/^\d+(\.\d+)?$/.test(weight) ? `${weight} kg` : weight) : null],
@@ -656,7 +689,55 @@ export default function ProfileDetail() {
               ? <PhotoGrid photos={profile.photos} />
               : active.id === "documents"
                 ? <Documents docs={profile.documents} onDelete={handleDeleteDoc} deletingId={deletingId} />
+                : active.id === "melava"
+                  ? <RecordList
+                      title="Melava Registration"
+                      records={profile.melava_registrations}
+                      fields={[
+                        ["Campaign", "campaign_title"],
+                        ["Campaign ID", "melava_campaign_id"],
+                        ["Booklet Requested", "is_booklet_req"],
+                        ["Payment Verified", "payment_verified"],
+                        ["Payment Screenshot", "payment_screenshot"],
+                      ]}
+                    />
                 : active.sections.map((section) => <Section key={section.title} section={section} profile={profile} />)}
+            {active.id === "professional" && (
+              <>
+                <RecordList
+                  title="Education Record"
+                  records={profile.education_records}
+                  fields={[
+                    ["Level", "education_level"],
+                    ["Degree", "degree_name"],
+                    ["Specialisation", "specialization"],
+                    ["University", "university_name"],
+                    ["College", "college_name"],
+                    ["Passing Year", "passing_year"],
+                    ["Percentage", "percentage"],
+                    ["Grade", "grade"],
+                    ["City", "education_city"],
+                    ["Additional Qualification", "additional_qualification"],
+                  ]}
+                />
+                <RecordList
+                  title="Employment Record"
+                  records={profile.employment_records}
+                  fields={[
+                    ["Type", "employment_type"],
+                    ["Profession", "profession"],
+                    ["Working Field", "working_field"],
+                    ["Organisation", "organisation_name"],
+                    ["Designation", "designation"],
+                    ["City", "employment_city"],
+                    ["Duration", "employment_duration"],
+                    ["Monthly Income", "monthly_income"],
+                    ["Annual Income", "annual_income"],
+                    ["Currency", "income_currency"],
+                  ]}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>

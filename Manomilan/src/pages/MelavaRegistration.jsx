@@ -117,6 +117,8 @@ const S = (id, fn) => ({ s: [id, fn] });
 const DOC_ACCEPT = ".pdf,.jpg,.jpeg,.png";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
+const EDUCATION_LEVEL_OPTIONS = ["10th", "12th", "UG", "PG", "PhD", "Diploma"];
+
 const STEPS = [
   {
     t: "Basic Info",
@@ -161,8 +163,17 @@ const STEPS = [
       { sec: "Horoscope" },
       F("timeOfBirth", "Time of Birth", "tob", 6, 1, { h: "Hour, minute and AM/PM" }),
       F("placeOfBirth", "Place of Birth", "text", 6, 1),
+      F("horoscope", "Horoscope", "text", 3),
+      F("horoscope_match_required", "Horoscope Matching", "select", 3, 0, { o: [["1", "Required"], ["0", "Not required"]] }),
+      F("manglik_status", "Manglik Status", "select", 3, 0, { o: ["Yes", "No", "Unknown"] }),
+      F("rashi", "Rashi", "text", 3),
+      F("nakshatra", "Nakshatra", "text", 3),
+      F("charan", "Charan", "text", 3),
+      F("nadi", "Nadi", "text", 3),
+      F("gan", "Gan", "text", 3),
+      F("gotra", "Gotra", "text", 3),
       { sec: "Education" },
-      F("education", "Highest Education", "select", 3, 1, { o: ["10th", "12th", "Graduation", "Post Graduation", "Diploma"] }),
+      F("education", "Highest Education", "select", 3, 1, { o: EDUCATION_LEVEL_OPTIONS }),
       F("degreeDiplomaName1", "Degree / Diploma 1", "text", 3, 1),
       F("degreeDiplomaName2", "Degree / Diploma 2", "text", 3),
       F("specialisation1", "Specialisation 1", "text", 3),
@@ -248,7 +259,6 @@ const STEPS = [
       F("income_proof", "Income Proof", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
       F("caste_certificate", "Caste Certificate", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
       F("medical_fitness_certificate", "Medical Fitness Certificate", "file", 4, 0, { acc: DOC_ACCEPT, h: "PDF, JPG, PNG" }),
-      F("additionalPhotos[]", "Additional Photos (max 4)", "file", 6, 0, { acc: "image/*", id: "additionalPhotos", h: "Select up to 4 photos" }),
       F("candidate_photos[]", "Your Photos (max 5)", "file", 6, 0, { acc: "image/*", id: "candidate_photos", h: "Select up to 5 photos" }),
     ],
   },
@@ -374,13 +384,15 @@ const heightInches = (value) => {
 };
 
 const parseTime = (value) => {
-  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{1,2}):(\d{2})/);
   if (!match) return null;
   const hour24 = Number(match[1]);
+  const explicitSuffix = text.match(/\b(AM|PM)\b/i)?.[1]?.toUpperCase();
   return {
     hour: String(hour24 % 12 || 12).padStart(2, "0"),
     minute: match[2],
-    suffix: hour24 >= 12 ? "PM" : "AM",
+    suffix: explicitSuffix || (hour24 >= 12 ? "PM" : "AM"),
   };
 };
 
@@ -903,17 +915,21 @@ export default function MelavaRegistration() {
         if (height.feet) {
           next.height_ft = height.feet;
           next.height_in = height.inches;
-          next.height = composeHeight(height.feet, height.inches);
+          next.height = height.feet;
         } else {
           next.height = String(source.height);
         }
       }
-      if (source.timeOfBirth) {
-        const time = parseTime(source.timeOfBirth);
+      const sourceTime = source.timeOfBirth
+        || (source.birth_hour && source.birth_minute !== ""
+          ? `${source.birth_hour}:${source.birth_minute} ${source.birthTime_ampm || "AM"}`
+          : "");
+      if (sourceTime) {
+        const time = parseTime(sourceTime);
         if (time) {
           next.birth_hour = time.hour;
           next.birth_minute = time.minute;
-          next.birthTime_ampm = source.birthTime_ampm === "PM" ? "PM" : time.suffix;
+          next.birthTime_ampm = String(source.birthTime_ampm || time.suffix).toUpperCase() === "PM" ? "PM" : "AM";
         }
       }
       if (source.is_booklet_req !== undefined) next.booklet_required = Boolean(source.is_booklet_req);
@@ -1053,6 +1069,8 @@ export default function MelavaRegistration() {
           },
           { existing: true, username: data.user.username },
         );
+        setEducations(data.profile?.educations?.length ? data.profile.educations : [{ ...EMPTY_EDUCATION }]);
+        setEmployments(data.profile?.employments?.length ? data.profile.employments : [{ ...EMPTY_EMPLOYMENT }]);
         setFiles((previous) => ({
           ...previous,
           profilePhoto: data.profile_photo_url
@@ -1070,15 +1088,16 @@ export default function MelavaRegistration() {
         }));
         setDocuments((previous) => ({
           ...previous,
-          identificationProof: data.identification_proof_url
-            ? { preview: data.identification_proof_url, existing: true }
-            : previous.identificationProof,
-          birthDateProof: data.birth_date_proof_url
-            ? { preview: data.birth_date_proof_url, existing: true }
-            : previous.birthDateProof,
-          educationProof: data.education_proof_url
-            ? { preview: data.education_proof_url, existing: true }
-            : previous.educationProof,
+          identificationProof: data.identification_proof_url ? { preview: data.identification_proof_url, existing: true } : previous.identificationProof,
+          pan_card: data.pan_card_url ? { preview: data.pan_card_url, existing: true } : previous.pan_card,
+          passport: data.passport_url ? { preview: data.passport_url, existing: true } : previous.passport,
+          birthDateProof: data.birth_date_proof_url ? { preview: data.birth_date_proof_url, existing: true } : previous.birthDateProof,
+          address_proof: data.address_proof_url ? { preview: data.address_proof_url, existing: true } : previous.address_proof,
+          educationProof: data.education_proof_url ? { preview: data.education_proof_url, existing: true } : previous.educationProof,
+          profession_proof: data.profession_proof_url ? { preview: data.profession_proof_url, existing: true } : previous.profession_proof,
+          income_proof: data.income_proof_url ? { preview: data.income_proof_url, existing: true } : previous.income_proof,
+          caste_certificate: data.caste_certificate_url ? { preview: data.caste_certificate_url, existing: true } : previous.caste_certificate,
+          medical_fitness_certificate: data.medical_fitness_certificate_url ? { preview: data.medical_fitness_certificate_url, existing: true } : previous.medical_fitness_certificate,
         }));
         setFiles((previous) => ({
           ...previous,
@@ -2083,9 +2102,16 @@ export default function MelavaRegistration() {
                   {educations.map((row, index) => (
                     <div className="grid" key={`education-${index}`}>
                       {Object.keys(EMPTY_EDUCATION).map((field) => (
-                        <label className="field" key={field}>
+                        <label className="repeatable-field" key={field}>
                           <span>{field.replaceAll("_", " ")}</span>
-                          <input value={row[field]} onChange={(event) => setEducations((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))} />
+                          {field === "education_level" ? (
+                            <select value={row[field]} onChange={(event) => setEducations((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))}>
+                              <option value="">Choose level</option>
+                              {EDUCATION_LEVEL_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          ) : (
+                            <input value={row[field]} onChange={(event) => setEducations((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))} />
+                          )}
                         </label>
                       ))}
                       {educations.length > 1 && <button type="button" onClick={() => setEducations((items) => items.filter((_, itemIndex) => itemIndex !== index))}>Remove education</button>}
@@ -2096,7 +2122,7 @@ export default function MelavaRegistration() {
                   {employments.map((row, index) => (
                     <div className="grid" key={`employment-${index}`}>
                       {Object.keys(EMPTY_EMPLOYMENT).map((field) => (
-                        <label className="field" key={field}>
+                        <label className="repeatable-field" key={field}>
                           <span>{field.replaceAll("_", " ")}</span>
                           <input value={row[field]} onChange={(event) => setEmployments((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: event.target.value } : item))} />
                         </label>
