@@ -29,11 +29,13 @@ class SuccessStory extends Model
         'is_featured',
         'display_order',
         'status',
-        'created_by'
+        'created_by',
     ];
 
     protected $casts = [
-        'marriage_date' => 'date',
+        'marriage_date' => 'date:Y-m-d',
+        'rating' => 'integer',
         'is_featured' => 'boolean',
+        'display_order' => 'integer',
     ];
 }

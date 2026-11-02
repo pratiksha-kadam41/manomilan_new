@@ -5,6 +5,7 @@ import {
   FileText,
   Globe,
   GraduationCap,
+  HeartHandshake,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -26,6 +27,7 @@ const SYSTEM_MANAGEMENT = {
 
 const ICONS = {
   "/admin": LayoutDashboard,
+  "/admin/success-stories": HeartHandshake,
   "/admin/profiles": Users,
   "/admin/nri-profiles": Globe,
   "/admin/verified-profiles": BadgeCheck,
@@ -42,6 +44,7 @@ const ICONS = {
 
 const ICON_COLORS = {
   "/admin": "#2f80ed",
+  "/admin/success-stories": "#e11d48",
   "/admin/profiles": "#8b5cf6",
   "/admin/nri-profiles": "#14b8a6",
   "/admin/verified-profiles": "#22c55e",

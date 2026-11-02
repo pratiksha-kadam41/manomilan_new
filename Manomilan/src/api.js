@@ -36,6 +36,7 @@ export function apiMediaUrl(value) {
 
   const apiOrigin = new URL(API_URL, window.location.origin).origin;
   const knownUploadFolders = [
+    "success_stories/",
     "profile_photos/",
     "full_body_photos/",
     "half_body_photos/",

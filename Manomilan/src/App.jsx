@@ -45,7 +45,9 @@ const UpcomingEventsSettings = lazy(() => import("./admin/pages/website/Upcoming
 const DowntimeManagement = lazy(() => import("./admin/pages/website/DowntimeManagement.jsx"));
 const FullMaintenanceMode = lazy(() => import("./admin/pages/website/FullMaintenanceMode.jsx"));
 const Maintenance = lazy(() => import("./website/Maintenance.jsx"));
-
+const SuccessStoriesAdmin = lazy(
+  () => import("./admin/pages/SuccessStoriesAdmin.jsx")
+);
 // Add a page here: "/url-name": Component
 const ROUTES = {
   "/": Home,
@@ -79,6 +81,7 @@ const ROUTES = {
   "/admin/melava-campaigns": MelavaCampaigns,
   "/admin/reset-passwords": ResetPasswords,
   "/admin/report": Reports,
+  "/admin/success-stories": SuccessStoriesAdmin,
   "/admin/system-management": SystemManagement,
   "/admin/software-tickets": Tickets,
   "/admin/software-tickets/create": CreateTicket,

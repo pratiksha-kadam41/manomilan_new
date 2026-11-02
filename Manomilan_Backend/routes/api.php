@@ -23,6 +23,7 @@ use App\Http\Controllers\Candidate\MatchController as CandidateMatchController;
 use App\Http\Controllers\Candidate\NotificationController as CandidateNotificationController;
 use App\Http\Controllers\Candidate\PreferenceController as CandidatePreferenceController;
 use App\Http\Controllers\Candidate\ProfileController as CandidateProfileController;
+use App\Http\Controllers\Api\SuccessStoryController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -40,8 +41,52 @@ Route::middleware('website.availability')->group(function () {
     Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
     Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
 });
+// Public Success Stories APIs
+Route::get('/success-stories', [
+    SuccessStoryController::class,
+    'publicIndex'
+]);
+
+Route::get('/success-stories/{id}', [
+    SuccessStoryController::class,
+    'publicShow'
+])->whereNumber('id');
 
 Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function () {
+    // Admin Success Stories APIs
+Route::prefix('admin/success-stories')->group(function () {
+
+    Route::get('/', [
+        SuccessStoryController::class,
+        'index'
+    ]);
+
+    Route::post('/', [
+        SuccessStoryController::class,
+        'store'
+    ]);
+
+    Route::get('/{id}', [
+        SuccessStoryController::class,
+        'show'
+    ])->whereNumber('id');
+
+    Route::post('/{id}', [
+        SuccessStoryController::class,
+        'update'
+    ])->whereNumber('id');
+
+    Route::delete('/{id}', [
+        SuccessStoryController::class,
+        'destroy'
+    ])->whereNumber('id');
+
+    Route::patch('/{id}/status', [
+        SuccessStoryController::class,
+        'updateStatus'
+    ])->whereNumber('id');
+
+});
     Route::get('/user', function (Request $request) {
         return response()->json(['user' => $request->user()->load('profile')]);
     });
