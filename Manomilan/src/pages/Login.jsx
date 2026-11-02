@@ -56,8 +56,11 @@ const validate = ({ username, password, name, email }, registering = false) => {
 /* Remove spaces; also turns a pasted "+91 98765 43210" into "9876543210" */
 const cleanUsername = (value) => {
   const v = value.replace(/\s/g, "");
-  const match = v.match(/^\+?91(\d{10})$/);
-  return (match ? match[1] : v).slice(0, 30);
+  const match = v.match(/^\+?91(\d{10,})$/);
+
+  if (/^\d+$/.test(v)) return v.slice(0, 10);
+  if (match) return match[1].slice(0, 10);
+  return v.slice(0, 30);
 };
 
 const LIVE_LOGO =
@@ -275,7 +278,7 @@ export default function Login() {
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                maxLength={30}
+                maxLength={isRegistering ? 10 : 30}
                 placeholder={
                   isRegistering ? "Enter 10-digit mobile number" : "Enter your username"
                 }
