@@ -172,7 +172,8 @@
   color: #8b8fa3;
 }
 
-.login-control input {
+.login-control input,
+.login-control select {
   flex: 1;
   min-width: 0;
   height: 28px;

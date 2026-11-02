@@ -183,10 +183,10 @@ export async function loginUser(username, password) {
   }
 }
 
-export async function registerUser({ name, email, phone, password }) {
+export async function registerUser({ name, email, phone, password, birth_date, gender }) {
   const body = await request("/register", {
     method: "POST",
-    body: { name, email, phone, password },
+    body: { name, email, phone, password, birth_date, gender },
     auth: false,
   });
 

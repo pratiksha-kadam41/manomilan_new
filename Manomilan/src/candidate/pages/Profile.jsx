@@ -283,13 +283,14 @@ const timeValue = (value) => {
   return String(value).slice(0, 5);
 };
 
-const buildForm = (profile) => {
+const buildForm = (profile, user = null) => {
   const details = profile?.details || {};
   const form = {
-    full_name: profile?.full_name || "",
-    gender: profile?.gender || "",
-    birth_date: dateValue(profile?.birth_date),
-    email: profile?.email || "",
+    full_name: profile?.full_name || user?.name || user?.full_name || "",
+    gender: profile?.gender || user?.gender || "",
+    birth_date: dateValue(profile?.birth_date || user?.birth_date),
+    email: profile?.email || user?.email || "",
+    mobile: profile?.mobile || user?.mobile || user?.username || "",
   };
   ALL_EDIT_FIELDS.forEach(({ name }) => {
     if (!(name in form)) form[name] = details[name] ?? "";
@@ -320,7 +321,7 @@ export default function CandidateProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState(tabFromUrl);
-  const [form, setForm] = useState(() => buildForm(null));
+  const [form, setForm] = useState(() => buildForm(null, cached?.user || null));
   const [preferenceForm, setPreferenceForm] = useState(() => buildPreferenceForm(null));
   const [fieldErrors, setFieldErrors] = useState({});
   const [preferenceErrors, setPreferenceErrors] = useState({});
@@ -350,9 +351,10 @@ export default function CandidateProfile() {
     setError("");
     try {
       const result = await getCandidateProfile();
+      const currentUser = result?.user || cached?.user || account || null;
       setProfile(result?.profile || null);
-      setAccount(result?.user || cached?.user || null);
-      setForm(buildForm(result?.profile));
+      setAccount(currentUser);
+      setForm(buildForm(result?.profile, currentUser));
       setPreferenceForm(buildPreferenceForm(result?.profile?.preference));
       const requestedTab = new URLSearchParams(window.location.search).get("tab");
       const complete = Number(result?.profile?.profile_completion || 0) >= 100;
@@ -432,9 +434,10 @@ export default function CandidateProfile() {
         email: form.email,
       });
       const result = await payload;
+      const currentUser = result?.user || account;
       setProfile(result?.profile || null);
-      setAccount(result?.user || account);
-      setForm(buildForm(result?.profile));
+      setAccount(currentUser);
+      setForm(buildForm(result?.profile, currentUser));
       setPreferenceForm(buildPreferenceForm(result?.profile?.preference));
       push(profile ? "Your profile has been updated." : "Your candidate profile has been created.");
       setTab(Number(result?.profile?.profile_completion || 0) >= 100 ? "overview" : "edit");

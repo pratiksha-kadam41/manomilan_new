@@ -84,6 +84,8 @@ abstract class CandidateController extends Controller
             'email' => $user->email,
             'username' => $user->username,
             'mobile' => $user->username,
+            'birth_date' => $user->birth_date,
+            'gender' => $user->gender,
             'role_id' => $user->role_id,
             'user_type' => $user->user_type,
             'status' => $user->status,

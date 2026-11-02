@@ -18,6 +18,7 @@ class RegisterController extends Controller
             'name' => trim((string) $request->input('name')),
             'email' => strtolower(trim((string) $request->input('email'))),
             'phone' => preg_replace('/\D+/', '', (string) $request->input('phone', $request->input('username'))),
+            'gender' => strtolower(trim((string) $request->input('gender'))),
         ]);
 
         $data = $request->validate([
@@ -25,6 +26,8 @@ class RegisterController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'phone' => ['required', 'digits:10', 'unique:users,username'],
             'password' => ['required', 'string', 'min:6', 'max:255'],
+            'birth_date' => ['required', 'date', 'before:today'],
+            'gender' => ['required', 'in:groom,bride'],
         ]);
 
         try {
@@ -36,16 +39,19 @@ class RegisterController extends Controller
                     throw new \RuntimeException('Candidate role is not configured.');
                 }
 
-                return User::create([
+                $user = User::create([
                     'name' => $data['name'],
                     'email' => $data['email'],
                     'username' => $data['phone'],
+                    'birth_date' => $data['birth_date'],
+                    'gender' => $data['gender'],
                     'user_type' => '21',
                     'role_id' => $candidateRoleId,
                     'password' => $data['password'],
                     'is_password_changed' => 1,
                     'status' => 'active',
                 ]);
+                return $user;
             });
 
             $token = ApiToken::create((int) $user->id);

@@ -24,7 +24,7 @@ import "./Login.css";
 // Usernames: start with a letter, then letters / numbers / . _ -  (3 to 30 characters)
 const USERNAME_RE = /^[A-Za-z][A-Za-z0-9._-]{2,29}$/;
 
-const validate = ({ username, password, name, email }, registering = false) => {
+const validate = ({ username, password, name, email, birth_date, gender }, registering = false) => {
   const errors = {};
 
   if (registering) {
@@ -32,6 +32,16 @@ const validate = ({ username, password, name, email }, registering = false) => {
     if (!email.trim()) errors.email = "Email is required.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       errors.email = "Enter a valid email address.";
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    if (!birth_date) errors.birth_date = "Date of birth is required.";
+    else if (birth_date >= today)
+      errors.birth_date = "Date of birth must be before today.";
+    if (!gender) errors.gender = "Profile type is required.";
     if (!/^[6-9]\d{9}$/.test(username))
       errors.username = "Enter a valid 10-digit mobile number.";
   } else if (!username) {
@@ -72,6 +82,8 @@ export default function Login() {
     password: "",
     name: "",
     email: "",
+    birth_date: "",
+    gender: "",
   });
   const [isRegistering, setIsRegistering] = useState(() =>
     window.location.pathname.startsWith("/register"),
@@ -113,11 +125,18 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError("");
-    setTouched({ username: true, password: true, name: true, email: true });
+    setTouched({
+      username: true,
+      password: true,
+      name: true,
+      email: true,
+      birth_date: true,
+      gender: true,
+    });
 
     const currentErrors = validate(values, isRegistering);
     if (Object.keys(currentErrors).length > 0) {
-      const firstInvalid = ["name", "email", "username", "password"].find(
+      const firstInvalid = ["name", "email", "birth_date", "gender", "username", "password"].find(
         (field) => currentErrors[field],
       );
       e.currentTarget.elements.namedItem(firstInvalid)?.focus();
@@ -132,6 +151,8 @@ export default function Login() {
             email: values.email.trim(),
             phone: values.username,
             password: values.password,
+            birth_date: values.birth_date,
+            gender: values.gender,
           })
         : await loginUser(values.username, values.password);
 
@@ -255,6 +276,56 @@ export default function Login() {
                 {showError("email") && (
                   <small className="login-error" role="alert">
                     {errors.email}
+                  </small>
+                )}
+              </div>
+
+              <div className="login-field">
+                <label htmlFor="birth_date">
+                  <User size={16} /> Date of birth
+                </label>
+                <div className={`login-control ${showError("birth_date") ? "invalid" : ""}`}>
+                  <User size={18} className="login-ico" />
+                  <input
+                    id="birth_date"
+                    name="birth_date"
+                    type="date"
+                    autoComplete="bday"
+                    value={values.birth_date}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    aria-invalid={!!showError("birth_date")}
+                  />
+                </div>
+                {showError("birth_date") && (
+                  <small className="login-error" role="alert">
+                    {errors.birth_date}
+                  </small>
+                )}
+              </div>
+
+              <div className="login-field">
+                <label htmlFor="gender">
+                  <User size={16} /> Profile type
+                </label>
+                <div className={`login-control ${showError("gender") ? "invalid" : ""}`}>
+                  <User size={18} className="login-ico" />
+                  <select
+                    id="gender"
+                    name="gender"
+                    value={values.gender}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    aria-invalid={!!showError("gender")}
+                  >
+                    <option value="">Select profile type</option>
+                    <option value="groom">Groom</option>
+                    <option value="bride">Bride</option>
+                  </select>
+                </div>
+                {showError("gender") && (
+                  <small className="login-error" role="alert">
+                    {errors.gender}
                   </small>
                 )}
               </div>

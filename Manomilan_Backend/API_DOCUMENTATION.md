@@ -10,6 +10,8 @@ Base URL: http://localhost:8000/api
 - GET /user (auth) - Get authenticated user
 - GET /system/my-permissions (auth) - Load the current role's database-backed module permissions
 
+Candidate registration requires `name`, `email`, `phone`, `password`, `birth_date` (`YYYY-MM-DD`), and `gender` (`groom` or `bride`). Date of birth and profile type are saved on the candidate account and returned by the authenticated `GET /candidate/profile` endpoint until the candidate creates a full profile.
+
 ## System Management (Super Admin)
 - GET /system - Roles, modules, and system statistics
 - POST /system/roles - Create a role
