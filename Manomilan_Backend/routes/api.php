@@ -104,8 +104,11 @@ Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function (
     Route::put('/enquiries/{id}', [EnquiryController::class, 'update']);
     Route::delete('/enquiries/{id}', [EnquiryController::class, 'destroy']);
 
+    Route::get('/tickets/meta', [TicketController::class, 'meta']);
     Route::get('/tickets', [TicketController::class, 'index']);
     Route::post('/tickets', [TicketController::class, 'store']);
+    Route::patch('/tickets/{id}/activate', [TicketController::class, 'activate']);
+    Route::delete('/tickets/{id}', [TicketController::class, 'destroy']);
     Route::get('/tickets/{id}', [TicketController::class, 'show']);
     Route::put('/tickets/{id}', [TicketController::class, 'update']);
 

@@ -96,7 +96,14 @@ class ApplicationModuleSeeder extends Seeder
         'Software Ticket Module' => [
             'key' => 'software_ticket_module',
             'description' => 'Software Ticket Module module for Aaryans Manomilan',
+            'route' => '/admin/software-tickets',
+            'frontend_routes' => [
+                '/admin/software-tickets',
+                '/admin/software-tickets/create',
+                '/admin/software-tickets/inactive',
+            ],
             'api_prefixes' => ['/tickets'],
+            'icon' => 'ticket',
         ],
         'Admin Dashboard' => [
             'key' => 'admin_dashboard',
@@ -124,6 +131,29 @@ class ApplicationModuleSeeder extends Seeder
         }
 
         foreach (self::MODULES as $moduleName => $configuration) {
+            if ($configuration['key'] === 'software_ticket_module') {
+                $module = Module::query()->where('module_key', $configuration['key'])->first()
+                    ?? Module::query()
+                        ->where('application_id', $application->id)
+                        ->where('module_name', $moduleName)
+                        ->first()
+                    ?? new Module();
+
+                $module->fill([
+                    'application_id' => $application->id,
+                    'module_name' => $moduleName,
+                    'module_key' => $configuration['key'],
+                    'description' => $configuration['description'],
+                    'status' => true,
+                    'route' => $configuration['route'],
+                    'frontend_routes' => $configuration['frontend_routes'],
+                    'api_prefixes' => $configuration['api_prefixes'],
+                    'icon' => $configuration['icon'],
+                ])->save();
+
+                continue;
+            }
+
             $module = Module::query()->firstOrCreate(
                 [
                     'application_id' => $application->id,

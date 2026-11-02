@@ -58,8 +58,12 @@ class CandidateRoleAccessSeeder extends Seeder
             'actions' => ['view', 'create'],
         ],
         'software_ticket_module' => [
-            'route' => null,
-            'frontend_routes' => [],
+            'route' => '/admin/software-tickets',
+            'frontend_routes' => [
+                '/admin/software-tickets',
+                '/admin/software-tickets/create',
+                '/admin/software-tickets/inactive',
+            ],
             'api_prefixes' => ['/tickets'],
             'actions' => ['view', 'create', 'edit'],
         ],

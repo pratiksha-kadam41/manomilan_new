@@ -36,6 +36,9 @@ const MelavaCampaigns = lazy(() => import("./admin/pages/MelavaCampaigns.jsx"));
 const Reports = lazy(() => import("./admin/pages/Reports.jsx"));
 const ResetPasswords = lazy(() => import("./admin/pages/ResetPasswords.jsx"));
 const SystemManagement = lazy(() => import("./admin/pages/SystemManagement.jsx"));
+const Tickets = lazy(() => import("./admin/pages/Tickets/Tickets.jsx"));
+const CreateTicket = lazy(() => import("./admin/pages/Tickets/CreateTicket.jsx"));
+const TicketDetail = lazy(() => import("./admin/pages/Tickets/TicketDetail.jsx"));
 const ProfileDetail = lazy(() => import("./pages/ProfileDetail.jsx"));
 const WebsiteOverview = lazy(() => import("./admin/pages/website/WebsiteOverview.jsx"));
 const UpcomingEventsSettings = lazy(() => import("./admin/pages/website/UpcomingEventsSettings.jsx"));
@@ -77,6 +80,9 @@ const ROUTES = {
   "/admin/reset-passwords": ResetPasswords,
   "/admin/report": Reports,
   "/admin/system-management": SystemManagement,
+  "/admin/software-tickets": Tickets,
+  "/admin/software-tickets/create": CreateTicket,
+  "/admin/software-tickets/inactive": () => <Tickets inactive />,
   "/admin/website": WebsiteOverview,
   "/admin/website/upcoming-events": UpcomingEventsSettings,
   "/admin/website/downtime": DowntimeManagement,
@@ -86,6 +92,7 @@ const ROUTES = {
 
 // Pages whose URL contains an id (only digits are accepted)
 const DYNAMIC_ROUTES = [
+  { pattern: /^\/admin\/software-tickets\/(\d+)$/, Page: TicketDetail },
   { pattern: /^\/admin\/melava-biodata\/(\d+)$/, Page: MelavaBioDataPage },
   { pattern: /^\/admin\/profiles\/(\d+)\/details$/, Page: ProfileDetail },
   { pattern: /^\/admin\/profiles\/(\d+)$/, Page: ProfileVerify },

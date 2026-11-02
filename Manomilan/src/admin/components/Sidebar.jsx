@@ -10,6 +10,7 @@ import {
   LogOut,
   Settings,
   ShieldAlert,
+  Ticket,
   UserPlus,
   Users,
 } from "lucide-react";
@@ -35,6 +36,7 @@ const ICONS = {
   "/admin/requests": UserPlus,
   "/admin/reset-passwords": KeyRound,
   "/admin/report": FileText,
+  "/admin/software-tickets": Ticket,
   "/admin/system-management": Settings,
 };
 
@@ -50,6 +52,7 @@ const ICON_COLORS = {
   "/admin/requests": "#0ea5e9",
   "/admin/reset-passwords": "#f59e0b",
   "/admin/report": "#6366f1",
+  "/admin/software-tickets": "#0891b2",
   "/admin/system-management": "#0f766e",
 };
 

@@ -10,4 +10,5 @@ export const menuItems = [
   { label: "Candidate Requests", path: "/admin/requests" },
   { label: "Reset Passwords", path: "/admin/reset-passwords" },
   { label: "Report", path: "/admin/report" },
+  { label: "Software Tickets", path: "/admin/software-tickets" },
 ];
