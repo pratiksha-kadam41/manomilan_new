@@ -36,7 +36,6 @@ export function apiMediaUrl(value) {
 
   const apiOrigin = new URL(API_URL, window.location.origin).origin;
   const knownUploadFolders = [
-    "success_stories/",
     "profile_photos/",
     "full_body_photos/",
     "half_body_photos/",
@@ -56,7 +55,9 @@ export function apiMediaUrl(value) {
     }
 
     const storedPath = path.replace(/^\/storage\//i, "").replace(/^\/+/, "");
-    if (/^candidate\/documents\//i.test(storedPath)) {
+    if (/^\/success_stories\//i.test(path)) {
+      path = `/storage${path}`;
+    } else if (/^candidate\/documents\//i.test(storedPath)) {
       path = `/storage/candidate_documents/${storedPath.split("/").pop()}`;
     } else if (/^candidate\/(?:profile_photos|body_photos)\//i.test(storedPath)) {
       path = `/storage/candidate_images/${storedPath.split("/").pop()}`;

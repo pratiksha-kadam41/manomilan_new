@@ -1,63 +1,159 @@
 import { useEffect, useState } from "react";
-import { STORIES } from "../data/stories.js";
+import { ChevronLeft, ChevronRight, HeartHandshake, LoaderCircle, MapPin, Star } from "lucide-react";
+import { request, apiMediaUrl } from "../api.js";
 
-// One card: photo slider + names + stars + button
 function StoryCard({ story, onOpen }) {
-  const [i, setI] = useState(0);
-  const n = story.images.length;
-  const next = () => setI((i + 1) % n);
-  const prev = () => setI((i - 1 + n) % n);
+  const [imageIndex, setImageIndex] = useState(0);
+  const images = story.images;
+
+  const changeImage = direction => {
+    setImageIndex(index => (index + direction + images.length) % images.length);
+  };
 
   return (
-    <div className="ss-card">
+    <article className="ss-card">
       <div className="ss-photo">
-        <div className="ss-slider">
-          {story.images.map((src, k) => (
-            <img key={src} src={src} alt="" className={`ss-img${k === i ? " on" : ""}`} />
-          ))}
-          {n > 1 && (
-            <>
-              <button className="ss-arrow left" onClick={prev} aria-label="Previous">❮</button>
-              <button className="ss-arrow right" onClick={next} aria-label="Next">❯</button>
-            </>
-          )}
-        </div>
+        {images.length > 0 ? (
+          <>
+            <div className="ss-slider">
+              {images.map((image, index) => (
+                <img
+                  key={`${image}-${index}`}
+                  src={image}
+                  alt={`${story.groom_name} and ${story.bride_name}`}
+                  className={`ss-img${index === imageIndex ? " on" : ""}`}
+                />
+              ))}
+            </div>
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  className="ss-arrow left"
+                  onClick={() => changeImage(-1)}
+                  aria-label="Previous couple photo"
+                >
+                  <ChevronLeft size={22} />
+                </button>
+                <button
+                  type="button"
+                  className="ss-arrow right"
+                  onClick={() => changeImage(1)}
+                  aria-label="Next couple photo"
+                >
+                  <ChevronRight size={22} />
+                </button>
+                <div className="ss-photo-count">
+                  {imageIndex + 1} / {images.length}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div className="ss-photo-placeholder">
+            <HeartHandshake size={54} />
+            <span>Celebrating a beautiful beginning</span>
+          </div>
+        )}
       </div>
 
       <div className="ss-body">
         <h2 className="ss-names">
-          {story.names[0]} ❤️ {story.names[1]}
+          {story.groom_name} <span aria-hidden="true">❤️</span> {story.bride_name}
         </h2>
 
-        <div className="ss-stars">
-          {Array.from({ length: story.stars }).map((_, k) => (
-            <i key={k} className="fas fa-star" />
+        {(story.city || story.state || story.marriage_date) && (
+          <div className="ss-meta">
+            {(story.city || story.state) && (
+              <span><MapPin size={14} />{[story.city, story.state].filter(Boolean).join(", ")}</span>
+            )}
+            {story.marriage_date && (
+              <span>{new Date(`${story.marriage_date}T00:00:00`).toLocaleDateString(undefined, {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}</span>
+            )}
+          </div>
+        )}
+
+        {story.story_title && <h3 className="ss-story-title-public">{story.story_title}</h3>}
+
+        <div className="ss-stars" aria-label={`${story.rating} out of 5 stars`}>
+          {Array.from({ length: 5 }, (_, index) => (
+            <Star
+              key={index}
+              size={22}
+              fill={index < Number(story.rating) ? "currentColor" : "none"}
+              strokeWidth={1.8}
+            />
           ))}
         </div>
 
-        {story.desc && <p className="ss-desc">{story.desc}</p>}
+        {story.short_description && (
+          <p className="ss-desc">{story.short_description}</p>
+        )}
 
-        {story.family && (
+        {(story.full_story || story.family_message) && (
           <div className="ss-btn-wrap">
-            <button className="ss-read" onClick={() => onOpen(story)}>Read Full Story</button>
+            <button type="button" className="ss-read" onClick={() => onOpen(story)}>
+              Read Full Story
+            </button>
           </div>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 
 export default function SuccessStories() {
-  const [open, setOpen] = useState(null); // story shown in the popup
+  const [stories, setStories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [open, setOpen] = useState(null);
 
-  // lock page scroll while the popup is open + close with Esc
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "auto";
-    const onKey = (e) => e.key === "Escape" && setOpen(null);
-    document.addEventListener("keydown", onKey);
+    const controller = new AbortController();
+    request("/success-stories", { auth: false, signal: controller.signal })
+      .then(response => {
+        if (!Array.isArray(response.data)) {
+          throw new Error("The stories response was not in the expected format.");
+        }
+
+        setStories(response.data.map(story => ({
+          ...story,
+          images: [
+            story.couple_photo,
+            story.wedding_photo,
+            story.groom_photo,
+            story.bride_photo,
+          ].filter(Boolean).map(apiMediaUrl),
+        })));
+        setLoading(false);
+      })
+      .catch(loadError => {
+        if (controller.signal.aborted) return;
+        setError(loadError.message || "Unable to load success stories.");
+        setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [reloadKey]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKeyDown = event => {
+      if (event.key === "Escape") setOpen(null);
+    };
+    document.addEventListener("keydown", onKeyDown);
+
     return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "auto";
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
     };
   }, [open]);
 
@@ -66,43 +162,83 @@ export default function SuccessStories() {
       <section className="ss-section">
         <div className="ss-wrap">
           <div className="ss-head">
-            <h1>❤️ Success Stories</h1>
+            <h1><span aria-hidden="true">❤️</span> Success Stories</h1>
             <p>
               Every successful marriage begins with the right introduction. Here are some beautiful journeys that started with{" "}
               <span>Aaryans Manomilan.</span>
             </p>
           </div>
 
-          <div className="ss-grid">
-            {STORIES.map((s) => (
-              <StoryCard key={s.names[0]} story={s} onOpen={setOpen} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="ss-state" role="status">
+              <LoaderCircle className="ss-state-spinner" size={34} />
+              <strong>Gathering beautiful stories...</strong>
+              <span>Please wait a moment.</span>
+            </div>
+          ) : error ? (
+            <div className="ss-state ss-state-error" role="alert">
+              <HeartHandshake size={38} />
+              <strong>We couldn’t load the stories</strong>
+              <span>{error}</span>
+              <button
+                type="button"
+                className="ss-read"
+                onClick={() => {
+                  setError("");
+                  setLoading(true);
+                  setReloadKey(key => key + 1);
+                }}
+              >
+                Try Again
+              </button>
+            </div>
+          ) : stories.length === 0 ? (
+            <div className="ss-state">
+              <HeartHandshake size={42} />
+              <strong>New stories are on their way</strong>
+              <span>Check back soon for more beautiful journeys.</span>
+            </div>
+          ) : (
+            <div className="ss-grid">
+              {stories.map(story => (
+                <StoryCard key={story.id} story={story} onOpen={setOpen} />
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* popup */}
         {open && (
-          <div className="ss-modal" onClick={(e) => e.target === e.currentTarget && setOpen(null)}>
-            <div className="ss-modal-box">
-              <button className="ss-close" onClick={() => setOpen(null)}>✕</button>
+          <div className="ss-public-modal" onClick={event => {
+            if (event.target === event.currentTarget) setOpen(null);
+          }}>
+            <div className="ss-public-modal-box">
+              <button
+                type="button"
+                className="ss-public-close"
+                onClick={() => setOpen(null)}
+                aria-label="Close story"
+              >
+                ✕
+              </button>
+              <div className="ss-public-modal-in">
+                <h2 className="ss-public-modal-title">{open.story_title || `${open.groom_name} & ${open.bride_name}`}</h2>
 
-              <div className="ss-modal-in">
-                <h2 className="ss-modal-title">{open.title || "Success Story"}</h2>
-
-                {open.story.trim() && (
-                  <>
-                    <div>
-                      <h4>📖 Full Story</h4>
-                      <p className="ss-modal-story">{open.story}</p>
-                    </div>
-                    <hr />
-                  </>
+                {open.full_story && (
+                  <section>
+                    <h4>📖 Their Story</h4>
+                    <p className="ss-public-modal-story">{open.full_story}</p>
+                  </section>
                 )}
 
-                <div>
-                  <h4>💌 Family Message</h4>
-                  <p className="ss-modal-family">{open.family || "No family message available."}</p>
-                </div>
+                {open.family_message && (
+                  <>
+                    {open.full_story && <hr />}
+                    <section>
+                      <h4>💌 A Message from the Family</h4>
+                      <p className="ss-public-modal-family">{open.family_message}</p>
+                    </section>
+                  </>
+                )}
               </div>
             </div>
           </div>

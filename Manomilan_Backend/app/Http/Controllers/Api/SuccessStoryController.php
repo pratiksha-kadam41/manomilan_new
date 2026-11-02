@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
+use RuntimeException;
 use Throwable;
 
 class SuccessStoryController extends Controller
@@ -20,16 +22,25 @@ class SuccessStoryController extends Controller
 
     public function publicIndex()
     {
-        $stories = SuccessStory::where('status', 'Active')
-            ->orderByDesc('is_featured')
-            ->orderBy('display_order')
-            ->latest()
-            ->get();
+        try {
+            $stories = SuccessStory::where('status', 'Active')
+                ->orderByDesc('is_featured')
+                ->orderBy('display_order')
+                ->latest()
+                ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => $stories,
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $stories,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load success stories.',
+            ], 500);
+        }
     }
 
     /*
@@ -40,13 +51,23 @@ class SuccessStoryController extends Controller
 
     public function publicShow($id)
     {
-        $story = SuccessStory::where('status', 'Active')
-            ->findOrFail($id);
+        try {
+            $story = SuccessStory::where('status', 'Active')->findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'data' => $story,
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $story,
+            ]);
+        } catch (ModelNotFoundException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load this success story.',
+            ], 500);
+        }
     }
 
     /*
@@ -64,14 +85,23 @@ class SuccessStoryController extends Controller
             ], 403);
         }
 
-        $stories = SuccessStory::orderBy('display_order')
-            ->latest()
-            ->paginate(15);
+        try {
+            $stories = SuccessStory::orderBy('display_order')
+                ->latest()
+                ->paginate(15);
 
-        return response()->json([
-            'success' => true,
-            'data' => $stories,
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $stories,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load success stories.',
+            ], 500);
+        }
     }
 
     /*
@@ -89,12 +119,23 @@ class SuccessStoryController extends Controller
             ], 403);
         }
 
-        $story = SuccessStory::findOrFail($id);
+        try {
+            $story = SuccessStory::findOrFail($id);
 
-        return response()->json([
-            'success' => true,
-            'data' => $story,
-        ]);
+            return response()->json([
+                'success' => true,
+                'data' => $story,
+            ]);
+        } catch (ModelNotFoundException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load this success story.',
+            ], 500);
+        }
     }
 
     /*
@@ -120,7 +161,7 @@ class SuccessStoryController extends Controller
             'city' => 'nullable|string|max:255',
             'state' => 'nullable|string|max:255',
 
-            'groom_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
+            'groom_photo' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
             'bride_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
             'couple_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
             'wedding_photo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:5120',
@@ -140,30 +181,31 @@ class SuccessStoryController extends Controller
             ],
         ]);
 
+        $uploadedPaths = [];
+
         try {
-            $story = DB::transaction(function () use ($request, $validated) {
+            $data = $validated;
+            $data['is_featured'] = $request->boolean('is_featured');
+            $data['created_by'] = $request->user()->id;
 
-                $data = $validated;
-
-                $data['is_featured'] = $request->boolean('is_featured');
-                $data['created_by'] = $request->user()->id;
-
-                foreach ([
-                    'groom_photo',
-                    'bride_photo',
-                    'couple_photo',
-                    'wedding_photo',
-                ] as $field) {
-
-                    if ($request->hasFile($field)) {
-
-                        $data[$field] = $request->file($field)
-                            ->store('success_stories', 'public');
+            foreach ([
+                'groom_photo',
+                'bride_photo',
+                'couple_photo',
+                'wedding_photo',
+            ] as $field) {
+                if ($request->hasFile($field)) {
+                    $path = $request->file($field)->store('success_stories', 'public');
+                    if ($path === false) {
+                        throw new RuntimeException("Unable to store {$field}.");
                     }
-                }
 
-                return SuccessStory::create($data);
-            });
+                    $uploadedPaths[] = $path;
+                    $data[$field] = $path;
+                }
+            }
+
+            $story = DB::transaction(fn () => SuccessStory::create($data));
 
             return response()->json([
                 'success' => true,
@@ -172,7 +214,7 @@ class SuccessStoryController extends Controller
             ], 201);
 
         } catch (Throwable $e) {
-
+            $this->deleteMediaFiles($uploadedPaths);
             report($e);
 
             return response()->json([
@@ -227,34 +269,39 @@ class SuccessStoryController extends Controller
             ],
         ]);
 
+        $uploadedPaths = [];
+        $replacedPaths = [];
+
         try {
+            $data = $validated;
+            $data['is_featured'] = $request->boolean('is_featured');
 
-            DB::transaction(function () use ($request, $validated, $story) {
-
-                $data = $validated;
-
-                $data['is_featured'] = $request->boolean('is_featured');
-
-                foreach ([
-                    'groom_photo',
-                    'bride_photo',
-                    'couple_photo',
-                    'wedding_photo',
-                ] as $field) {
-
-                    if ($request->hasFile($field)) {
-
-                        if ($story->$field) {
-                            Storage::disk('public')->delete($story->$field);
-                        }
-
-                        $data[$field] = $request->file($field)
-                            ->store('success_stories', 'public');
+            foreach ([
+                'groom_photo',
+                'bride_photo',
+                'couple_photo',
+                'wedding_photo',
+            ] as $field) {
+                if ($request->hasFile($field)) {
+                    $path = $request->file($field)->store('success_stories', 'public');
+                    if ($path === false) {
+                        throw new RuntimeException("Unable to store {$field}.");
                     }
-                }
 
-                $story->update($data);
+                    $uploadedPaths[] = $path;
+                    if ($story->$field) {
+                        $replacedPaths[] = $story->$field;
+                    }
+                    $data[$field] = $path;
+                }
+            }
+
+            DB::transaction(function () use ($story, $data): void {
+                if (!$story->update($data)) {
+                    throw new RuntimeException('Success story update was not persisted.');
+                }
             });
+            $this->deleteMediaFiles($replacedPaths);
 
             return response()->json([
                 'success' => true,
@@ -263,7 +310,7 @@ class SuccessStoryController extends Controller
             ]);
 
         } catch (Throwable $e) {
-
+            $this->deleteMediaFiles($uploadedPaths);
             report($e);
 
             return response()->json([
@@ -290,24 +337,33 @@ class SuccessStoryController extends Controller
 
         $story = SuccessStory::findOrFail($id);
 
-        foreach ([
-            'groom_photo',
-            'bride_photo',
-            'couple_photo',
-            'wedding_photo',
-        ] as $field) {
+        try {
+            $paths = array_filter([
+                $story->groom_photo,
+                $story->bride_photo,
+                $story->couple_photo,
+                $story->wedding_photo,
+            ]);
 
-            if ($story->$field) {
-                Storage::disk('public')->delete($story->$field);
-            }
+            DB::transaction(function () use ($story): void {
+                if (!$story->delete()) {
+                    throw new RuntimeException('Success story deletion was not persisted.');
+                }
+            });
+            $this->deleteMediaFiles($paths);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Success story deleted successfully.',
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to delete success story.',
+            ], 500);
         }
-
-        $story->delete();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Success story deleted successfully.',
-        ]);
     }
 
     /*
@@ -331,14 +387,39 @@ class SuccessStoryController extends Controller
 
         $story = SuccessStory::findOrFail($id);
 
-        $story->update([
-            'status' => $validated['status'],
-        ]);
+        try {
+            if (!$story->update([
+                'status' => $validated['status'],
+            ])) {
+                throw new RuntimeException('Success story status update was not persisted.');
+            }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Story status updated successfully.',
-            'data' => $story,
-        ]);
+            return response()->json([
+                'success' => true,
+                'message' => 'Story status updated successfully.',
+                'data' => $story,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update story status.',
+            ], 500);
+        }
+    }
+
+    private function deleteMediaFiles(array $paths): void
+    {
+        foreach (array_unique(array_filter($paths)) as $path) {
+            try {
+                if (Storage::disk('public')->exists($path)
+                    && !Storage::disk('public')->delete($path)) {
+                    report(new RuntimeException("Unable to delete success story image: {$path}"));
+                }
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
     }
 }

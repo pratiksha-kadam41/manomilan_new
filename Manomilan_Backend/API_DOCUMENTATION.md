@@ -90,6 +90,18 @@ After migrations, run `php artisan db:seed` to create the Super Admin user (`use
 - GET /workshop-registrations/{id} (admin) - Candidate details and payment screenshot URL
 - PATCH /workshop-registrations/{id}/status (admin with approve permission) - Set status to `Verified` or `Rejected`; optional `remarks` for rejected registrations
 
+## Success Stories
+- GET /success-stories (public) - List active stories
+- GET /success-stories/{id} (public) - Get one active story
+- GET /admin/success-stories (admin) - Paginated stories
+- POST /admin/success-stories (admin, multipart/form-data) - Create a story; requires groom/bride names, title, rating, status, and a `groom_photo`
+- GET /admin/success-stories/{id} (admin) - Get a story for editing
+- POST /admin/success-stories/{id} (admin, multipart/form-data) - Update a story; photo fields are optional
+- PATCH /admin/success-stories/{id}/status (admin) - Set status to `Active` or `Inactive`
+- DELETE /admin/success-stories/{id} (admin) - Soft-delete a story and remove its stored images
+
+Success story image uploads accept JPG, PNG, or WebP up to 5 MB each and are stored on the public disk under `success_stories/`. The `success_stories` module is registered by `ApplicationModuleSeeder`; grant the appropriate module permissions to non-super-admin roles.
+
 ## Payments
 - POST /payments/upload (auth) - multipart/form-data
 - GET /payments/my (auth)

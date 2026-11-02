@@ -67,6 +67,14 @@ class ApplicationModuleSeeder extends Seeder
             'api_prefixes' => ['/enquiries', '/workshop-registrations'],
             'icon' => 'graduation-cap',
         ],
+        'Success Stories' => [
+            'key' => 'success_stories',
+            'description' => 'Manage public success stories for Aaryans Manomilan',
+            'route' => '/admin/success-stories',
+            'frontend_routes' => ['/admin/success-stories'],
+            'api_prefixes' => ['/admin/success-stories'],
+            'icon' => 'heart',
+        ],
         'Authentication & Security' => [
             'key' => 'authentication_security',
             'description' => 'Authentication & Security module for Aaryans Manomilan',

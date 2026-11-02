@@ -87,6 +87,7 @@ const ROUTES = {
   "/admin/reset-passwords": ResetPasswords,
   "/admin/report": Reports,
   "/admin/success-stories": SuccessStoriesAdmin,
+  "/admin/success-stories/create": SuccessStoriesAdmin,
   "/admin/system-management": SystemManagement,
   "/admin/software-tickets": Tickets,
   "/admin/software-tickets/create": CreateTicket,

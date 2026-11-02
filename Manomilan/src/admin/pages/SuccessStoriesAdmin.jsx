@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
 Plus, Search, Edit, Trash2, Eye, HeartHandshake,
-Star, Users, CheckCircle, ImagePlus, X, Loader2,
-MapPin, Calendar, Filter
+Star, CheckCircle, ImagePlus, X, Loader2,
+MapPin, Filter
 } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import SuccessStoryForm from "./SuccessStoryForm.jsx";
 import { request, apiMediaUrl } from "../../api.js";
 import "./SuccessStories.css";
 
@@ -29,13 +32,16 @@ wedding_photo: null,
 };
 
 const IMAGE_FIELDS = [
-{ name: "groom_photo", label: "Groom Photo" },
+{ name: "groom_photo", label: "Groom Photo", required: true },
 { name: "bride_photo", label: "Bride Photo" },
 { name: "couple_photo", label: "Couple Photo" },
 { name: "wedding_photo", label: "Wedding Photo" },
 ];
 
 export default function SuccessStoriesAdmin() {
+const location = useLocation();
+const navigate = useNavigate();
+const createPage = location.pathname === "/admin/success-stories/create";
 const [stories, setStories] = useState([]);
 const [loading, setLoading] = useState(true);
 const [saving, setSaving] = useState(false);
@@ -48,15 +54,27 @@ const [statusFilter, setStatusFilter] = useState("All");
 const [page, setPage] = useState(1);
 const [pagination, setPagination] = useState(null);
 const [error, setError] = useState("");
+const previewUrls = useRef({});
+
+const closeModal = useCallback(() => {
+  if (saving) return;
+  setModalOpen(false);
+  setError("");
+  setPreviews({});
+  Object.values(previewUrls.current).forEach(URL.revokeObjectURL);
+  previewUrls.current = {};
+}, [saving]);
+
+const loadStories = useCallback(
+  currentPage => request(`/admin/success-stories?page=${currentPage}`),
+  [],
+);
 
 const fetchStories = async (currentPage = page) => {
 try {
 setLoading(true);
 
-
-  const response = await request(
-    `/admin/success-stories?page=${currentPage}`
-  );
+  const response = await loadStories(currentPage);
 
   const result = response.data;
 
@@ -72,8 +90,47 @@ setLoading(true);
 };
 
 useEffect(() => {
-fetchStories(page);
-}, [page]);
+if (createPage) return undefined;
+let isCurrent = true;
+
+loadStories(page)
+  .then(response => {
+    if (!isCurrent) return;
+    const result = response.data;
+    setStories(Array.isArray(result) ? result : result?.data || []);
+    setPagination(Array.isArray(result) ? null : result);
+  })
+  .catch(err => {
+    if (isCurrent) setError(err.message || "Unable to load stories.");
+  })
+  .finally(() => {
+    if (isCurrent) setLoading(false);
+  });
+
+return () => {
+  isCurrent = false;
+};
+}, [createPage, loadStories, page]);
+
+useEffect(() => () => {
+  Object.values(previewUrls.current).forEach(URL.revokeObjectURL);
+}, []);
+
+useEffect(() => {
+  if (!modalOpen) return undefined;
+
+  const previousOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  const handleKeyDown = event => {
+    if (event.key === "Escape") closeModal();
+  };
+  document.addEventListener("keydown", handleKeyDown);
+
+  return () => {
+    document.body.style.overflow = previousOverflow;
+    document.removeEventListener("keydown", handleKeyDown);
+  };
+}, [modalOpen, closeModal]);
 
 const stats = {
 total: pagination?.total ?? stories.length,
@@ -99,11 +156,13 @@ return matchesSearch && matchesStatus;
 });
 
 const openCreate = () => {
+Object.values(previewUrls.current).forEach(URL.revokeObjectURL);
+previewUrls.current = {};
 setEditingId(null);
 setForm({ ...EMPTY_FORM });
 setPreviews({});
 setError("");
-setModalOpen(true);
+navigate("/admin/success-stories/create");
 };
 
 const openEdit = async (story) => {
@@ -118,6 +177,8 @@ setError("");
   const data = response.data;
 
   setEditingId(data.id);
+  Object.values(previewUrls.current).forEach(URL.revokeObjectURL);
+  previewUrls.current = {};
 
   const updatedForm = { ...EMPTY_FORM };
 
@@ -172,14 +233,21 @@ if (!file) return;
 
 if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
   setError("Only JPG, PNG and WebP images are allowed.");
+  event.target.value = "";
   return;
 }
 
 if (file.size > 5 * 1024 * 1024) {
   setError("Image size must not exceed 5 MB.");
+  event.target.value = "";
   return;
 }
 
+if (previewUrls.current[field]) {
+  URL.revokeObjectURL(previewUrls.current[field]);
+}
+const previewUrl = URL.createObjectURL(file);
+previewUrls.current[field] = previewUrl;
 setForm(previous => ({
   ...previous,
   [field]: file,
@@ -187,7 +255,7 @@ setForm(previous => ({
 
 setPreviews(previous => ({
   ...previous,
-  [field]: URL.createObjectURL(file),
+  [field]: previewUrl,
 }));
 
 setError("");
@@ -198,6 +266,10 @@ setError("");
 const handleSubmit = async (event) => {
 event.preventDefault();
 
+if (!editingId && !form.groom_photo) {
+  setError("Please upload the required Groom Photo.");
+  return;
+}
 
 try {
   setSaving(true);
@@ -211,6 +283,8 @@ try {
         key,
         value instanceof File
           ? value
+          : typeof value === "boolean"
+            ? (value ? "1" : "0")
           : String(value)
       );
     }
@@ -228,9 +302,17 @@ try {
     });
   }
 
+  if (createPage) {
+    alert("Success story created successfully!");
+    navigate("/admin/success-stories");
+    return;
+  }
+
   setModalOpen(false);
   setForm({ ...EMPTY_FORM });
   setPreviews({});
+  Object.values(previewUrls.current).forEach(URL.revokeObjectURL);
+  previewUrls.current = {};
   await fetchStories(page);
 
   alert(
@@ -294,15 +376,22 @@ try {
 
 };
 
-const closeModal = () => {
-setModalOpen(false);
-setError("");
-setPreviews({});
-};
-
 return (
   <AdminLayout currentPath="/admin/success-stories">
-    <div className="ss-admin">
+    <div className={`ss-admin ${createPage ? "ss-admin-create-mode" : ""}`}>
+      {createPage ? (
+        <SuccessStoryForm
+          form={form}
+          previews={previews}
+          saving={saving}
+          error={error}
+          onChange={handleChange}
+          onImage={handleImage}
+          onSubmit={handleSubmit}
+          onCancel={() => navigate("/admin/success-stories")}
+        />
+      ) : (
+        <>
       <div className="ss-header">
         <div>
           <span className="ss-eyebrow">CONTENT MANAGEMENT</span>
@@ -376,7 +465,7 @@ return (
         <div className="ss-error">{error}</div>
       )}
 
-      <div className="ss-table-wrapper">
+      <div className="ss-gallery-wrap">
         {loading ? (
           <div className="ss-loading">
             <Loader2 className="ss-spin" />
@@ -392,94 +481,84 @@ return (
             </button>
           </div>
         ) : (
-          <table className="ss-table">
-            <thead>
-              <tr>
-                <th>COUPLE</th>
-                <th>STORY TITLE</th>
-                <th>LOCATION</th>
-                <th>RATING</th>
-                <th>STATUS</th>
-                <th>ACTIONS</th>
-              </tr>
-            </thead>
+          <div className="ss-gallery">
+            {filteredStories.map(story => {
+              const photo = [
+                story.couple_photo,
+                story.wedding_photo,
+                story.groom_photo,
+                story.bride_photo,
+              ].find(Boolean);
 
-            <tbody>
-              {filteredStories.map(story => (
-                <tr key={story.id}>
-                  <td>
-                    <div className="ss-couple">
+              return (
+                <article className="ss-story-card" key={story.id}>
+                  <div className="ss-story-photo">
+                    <div className="ss-story-photo-empty">
+                      <HeartHandshake size={42} />
+                      <span>Couple photo not added</span>
+                    </div>
+                    {photo ? (
                       <img
-                        src={
-                          apiMediaUrl(story.couple_photo) ||
-                          apiMediaUrl(story.groom_photo) ||
-                          "/img/aaryan-manomilan-logo.png"
-                        }
-                        alt=""
+                        src={apiMediaUrl(photo)}
+                        alt={`${story.groom_name} and ${story.bride_name}`}
+                        loading="lazy"
+                        onError={event => {
+                          event.currentTarget.style.display = "none";
+                        }}
                       />
-                      <div>
-                        <strong>
-                          {story.groom_name} & {story.bride_name}
-                        </strong>
-                        <small>
-                          <Calendar size={12} />
-                          {story.marriage_date || "Date not added"}
-                        </small>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td>
-                    <div className="ss-story-title">
-                      {story.story_title}
-                      {story.is_featured && (
-                        <span className="ss-featured">FEATURED</span>
-                      )}
-                    </div>
-                  </td>
-
-                  <td>
-                    <span className="ss-location">
-                      <MapPin size={13} />
-                      {story.city || "-"}, {story.state || "-"}
-                    </span>
-                  </td>
-
-                  <td>
-                    <span className="ss-rating">
-                      <Star size={14} fill="currentColor" />
-                      {story.rating}/5
-                    </span>
-                  </td>
-
-                  <td>
+                    ) : null}
                     <button
-                      className={`ss-status ${story.status === "Active" ? "active" : "inactive"}`}
+                      type="button"
+                      className={`ss-story-status ${story.status === "Active" ? "active" : "inactive"}`}
                       onClick={() => toggleStatus(story)}
+                      title="Change story status"
                     >
                       {story.status}
                     </button>
-                  </td>
+                    {story.is_featured && (
+                      <span className="ss-story-featured">
+                        <Star size={12} fill="currentColor" /> Featured
+                      </span>
+                    )}
+                  </div>
 
-                  <td>
-                    <div className="ss-actions">
-                      <button title="View story" onClick={() => openEdit(story)}>
-                        <Eye size={17} />
-                      </button>
-
-                      <button title="Edit story" onClick={() => openEdit(story)}>
-                        <Edit size={17} />
-                      </button>
-
-                      <button title="Delete story" className="delete" onClick={() => deleteStory(story)}>
-                        <Trash2 size={17} />
-                      </button>
+                  <div className="ss-story-card-body">
+                    <h2>{story.groom_name} <span>♥</span> {story.bride_name}</h2>
+                    <div className="ss-story-location">
+                      <MapPin size={14} />
+                      {story.city || "Location not added"}{story.state ? `, ${story.state}` : ""}
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    <h3>{story.story_title}</h3>
+                    {story.short_description && (
+                      <p className="ss-story-description">{story.short_description}</p>
+                    )}
+                    <div className="ss-story-card-footer">
+                      <div className="ss-story-stars" aria-label={`${story.rating} out of 5 stars`}>
+                        {Array.from({ length: 5 }, (_, index) => (
+                          <Star
+                            key={index}
+                            size={17}
+                            fill={index < Number(story.rating) ? "currentColor" : "none"}
+                          />
+                        ))}
+                      </div>
+                      <div className="ss-actions">
+                        <button title="View story" onClick={() => openEdit(story)}>
+                          <Eye size={17} />
+                        </button>
+                        <button title="Edit story" onClick={() => openEdit(story)}>
+                          <Edit size={17} />
+                        </button>
+                        <button title="Delete story" className="delete" onClick={() => deleteStory(story)}>
+                          <Trash2 size={17} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -507,8 +586,12 @@ return (
         </div>
       )}
 
-      {modalOpen && (
-        <div className="ss-modal-overlay" onClick={closeModal}>
+      {modalOpen && createPortal(
+        <div
+          className="ss-modal-overlay"
+          onClick={closeModal}
+          role="presentation"
+        >
           <div className="ss-modal" onClick={e => e.stopPropagation()}>
             <div className="ss-modal-header">
           <div className="ss-header-icon-wrap">
@@ -526,7 +609,14 @@ return (
             </p>
           </div>
 
-          <button className="ss-close-btn" onClick={closeModal}>
+          <button
+            type="button"
+            className="ss-close-btn"
+            onClick={closeModal}
+            aria-label="Close form"
+            disabled={saving}
+          >
+            <X size={20} />
               </button>
             </div>
 
@@ -599,12 +689,15 @@ return (
                         )}
                       </div>
 
-                      <strong>{image.label}</strong>
+                      <strong>
+                        {image.label}{image.required ? " *" : ""}
+                      </strong>
                       <span>Click to upload (Max 5 MB)</span>
 
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp"
+                        aria-label={`${image.label}${image.required ? " required" : ""}`}
                         onChange={e => handleImage(e, image.name)}
                       />
                     </label>
@@ -744,7 +837,10 @@ return (
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body,
+      )}
+        </>
       )}
     </div>
   </AdminLayout>
