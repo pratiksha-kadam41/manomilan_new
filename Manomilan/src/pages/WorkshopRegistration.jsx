@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { GraduationCap, Handshake, Users } from "lucide-react";
 import { request } from "../api";
 import "./WorkshopRegistration.css";
 
@@ -14,6 +15,14 @@ export default function WorkshopRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [consent, setConsent] = useState(false);
+
+  useEffect(() => {
+    if (!submitted) return undefined;
+    const redirectTimer = window.setTimeout(() => {
+      window.location.assign("/");
+    }, 3000);
+    return () => window.clearTimeout(redirectTimer);
+  }, [submitted]);
 
   const clearError = (name) => {
     setErrors((current) => {
@@ -151,8 +160,9 @@ export default function WorkshopRegistration() {
         <section className="workshop-card workshop-success" role="status">
           <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
           <div className="workshop-success-icon" aria-hidden="true">✓</div>
-          <h1>Registration submitted successfully</h1>
+          <h1>Workshop registration Successful</h1>
           <p>Thank you for registering. Our team will verify your payment and contact you shortly.</p>
+          <p className="workshop-redirect-note">Returning you to the home page…</p>
           <a className="workshop-primary" href="/">Back to Home</a>
         </section>
       </main>
@@ -162,32 +172,36 @@ export default function WorkshopRegistration() {
   return (
     <main className="workshop-page">
       <section className="workshop-card">
-        <a className="workshop-logo" href="/" aria-label="Aaryans Manomilan home">
-          <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
-        </a>
-        <p className="workshop-tagline">येथे मनं मिळतात... नाती जुळतात</p>
-        <header className="workshop-heading">
-          <span className="workshop-kicker">Aaryans Manomilan <i /> Workshop</span>
-          <h1>Workshop Registration</h1>
-          <p>Your next step starts here. Complete the details below to reserve your place.</p>
+        <header className="workshop-brand-header">
+          <a className="workshop-logo" href="/" aria-label="Aaryans Manomilan home">
+            <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
+          </a>
+          <p className="workshop-tagline">येथे मनं मिळतात... नाती जुळतात</p>
+          <div className="workshop-heading">
+            <span className="workshop-kicker">Aaryans Manomilan <i /> Workshop</span>
+            <h1>Workshop Registration</h1>
+            <p>Your next step starts here. Complete the details below to reserve your place.</p>
+          </div>
         </header>
 
-        <ol className="workshop-steps" aria-label="Registration progress">
-          {STEPS.map((label, index) => {
-            const number = index + 1;
-            const state = number < step ? "done" : number === step ? "active" : "";
-            return (
-              <li className={state} key={label} aria-current={number === step ? "step" : undefined}>
-                <span className="workshop-step-dot">{number < step ? "✓" : number}</span>
-                <span className="workshop-step-label">{label}</span>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="workshop-layout">
+          <div className="workshop-main">
+            <ol className="workshop-steps" aria-label="Registration progress">
+              {STEPS.map((label, index) => {
+                const number = index + 1;
+                const state = number < step ? "done" : number === step ? "active" : "";
+                return (
+                  <li className={state} key={label} aria-current={number === step ? "step" : undefined}>
+                    <span className="workshop-step-dot">{number < step ? "✓" : number}</span>
+                    <span className="workshop-step-label">{label}</span>
+                  </li>
+                );
+              })}
+            </ol>
 
-        {submitError && <div className="workshop-alert" role="alert">{submitError}</div>}
+            {submitError && <div className="workshop-alert" role="alert">{submitError}</div>}
 
-        <form ref={formRef} onSubmit={handleSubmit} noValidate>
+            <form ref={formRef} onSubmit={handleSubmit} noValidate>
           <section className={`workshop-panel${step === 1 ? " active" : ""}`} aria-hidden={step !== 1}>
             <h2 className="workshop-section-title">Personal Details</h2>
             <div className="workshop-grid">
@@ -339,7 +353,36 @@ export default function WorkshopRegistration() {
               </button>
             </div>
           </section>
-        </form>
+            </form>
+          </div>
+
+          <aside className="workshop-journey" aria-label="Workshop benefits">
+            <span className="workshop-journey-ornament" aria-hidden="true">✦</span>
+            <h2>Your workshop journey</h2>
+            <p className="workshop-journey-intro">A meaningful step towards finding your life partner.</p>
+            <ul>
+              <li>
+                <span className="workshop-journey-icon"><Users size={19} aria-hidden="true" /></span>
+                <span><strong>Meet Like-Minded People</strong><small>Connect with genuine and serious candidates.</small></span>
+              </li>
+              <li>
+                <span className="workshop-journey-icon"><GraduationCap size={19} aria-hidden="true" /></span>
+                <span><strong>Gain Expert Guidance</strong><small>Get valuable insights on relationships and marriage.</small></span>
+              </li>
+              <li>
+                <span className="workshop-journey-icon"><Handshake size={19} aria-hidden="true" /></span>
+                <span><strong>Build Meaningful Connections</strong><small>Participate in interactive sessions and curated meets.</small></span>
+              </li>
+            </ul>
+            <div className="workshop-journey-art" aria-hidden="true">
+              <span className="workshop-art-spark">✦</span>
+              <span className="workshop-art-heart">♡</span>
+              <span className="workshop-art-couple"><i /><i /></span>
+              <span className="workshop-art-leaf workshop-art-leaf-left">❧</span>
+              <span className="workshop-art-leaf workshop-art-leaf-right">❧</span>
+            </div>
+          </aside>
+        </div>
       </section>
     </main>
   );

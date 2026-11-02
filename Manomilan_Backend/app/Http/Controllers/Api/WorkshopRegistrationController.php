@@ -88,8 +88,93 @@ class WorkshopRegistrationController extends Controller
             ], 403);
         }
 
-        $registrations = WorkshopRegistration::latest()->paginate((int) $request->input('per_page', 20));
+        $filters = $request->validate([
+            'name' => ['nullable', 'string', 'max:150'],
+            'mobile' => ['nullable', 'string', 'max:15'],
+            'city' => ['nullable', 'string', 'max:100'],
+            'status' => ['nullable', Rule::in(['Pending', 'Verified', 'Rejected'])],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
 
-        return response()->json(['success' => true, 'data' => $registrations]);
+        $query = WorkshopRegistration::query();
+        if (! empty($filters['name'])) {
+            $query->where('full_name', 'LIKE', '%' . $filters['name'] . '%');
+        }
+        if (! empty($filters['mobile'])) {
+            $query->where('mobile_number', 'LIKE', '%' . $filters['mobile'] . '%');
+        }
+        if (! empty($filters['city'])) {
+            $query->where('city', 'LIKE', '%' . $filters['city'] . '%');
+        }
+        if (! empty($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+
+        $registrations = $query->latest()->paginate($filters['per_page'] ?? 20);
+        $stats = WorkshopRegistration::query()
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(status = 'Pending') as pending")
+            ->selectRaw("SUM(status = 'Verified') as verified")
+            ->selectRaw("SUM(status = 'Rejected') as rejected")
+            ->first();
+
+        return response()->json([
+            'success' => true,
+            'data' => $registrations,
+            'stats' => $stats,
+        ]);
+    }
+
+    public function show(Request $request, $id)
+    {
+        if (! $request->user() || (! $request->user()->isAdmin())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden. Administrator access is required.',
+            ], 403);
+        }
+
+        $registration = WorkshopRegistration::findOrFail($id);
+        $registration->payment_screenshot_url = Storage::disk('public')->url($registration->payment_screenshot);
+
+        return response()->json(['success' => true, 'data' => $registration]);
+    }
+
+    public function updateStatus(Request $request, $id)
+    {
+        if (! $request->user() || (! $request->user()->isAdmin())) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Forbidden. Administrator access is required.',
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'status' => ['required', Rule::in(['Verified', 'Rejected'])],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $registration = WorkshopRegistration::findOrFail($id);
+        try {
+            $registration->status = $data['status'];
+            $registration->remarks = $data['status'] === 'Rejected'
+                ? ($data['remarks'] ?? null)
+                : null;
+            $registration->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Workshop registration updated successfully.',
+                'data' => $registration,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to update this workshop registration right now.',
+            ], 500);
+        }
     }
 }

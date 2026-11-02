@@ -182,6 +182,8 @@ Route::prefix('admin/success-stories')->group(function () {
     Route::put('/melava-campaigns/{id}/status', [MelavaCampaignController::class, 'updateStatus']);
 
     Route::get('/workshop-registrations', [WorkshopRegistrationController::class, 'index']);
+    Route::get('/workshop-registrations/{id}', [WorkshopRegistrationController::class, 'show'])->whereNumber('id');
+    Route::patch('/workshop-registrations/{id}/status', [WorkshopRegistrationController::class, 'updateStatus'])->whereNumber('id');
 
     Route::post('/payments/upload', [PaymentController::class, 'uploadScreenshot']);
     Route::get('/payments/my', [PaymentController::class, 'myPayments']);

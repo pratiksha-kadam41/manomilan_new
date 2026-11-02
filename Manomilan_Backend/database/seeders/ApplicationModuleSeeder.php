@@ -62,7 +62,10 @@ class ApplicationModuleSeeder extends Seeder
         'Website Registration' => [
             'key' => 'website_registration',
             'description' => 'Website Registration module for Aaryans Manomilan',
+            'route' => '/admin/workshop',
+            'frontend_routes' => ['/admin/workshop'],
             'api_prefixes' => ['/enquiries', '/workshop-registrations'],
+            'icon' => 'graduation-cap',
         ],
         'Authentication & Security' => [
             'key' => 'authentication_security',
@@ -131,7 +134,7 @@ class ApplicationModuleSeeder extends Seeder
         }
 
         foreach (self::MODULES as $moduleName => $configuration) {
-            if ($configuration['key'] === 'software_ticket_module') {
+            if (in_array($configuration['key'], ['software_ticket_module', 'website_registration'], true)) {
                 $module = Module::query()->where('module_key', $configuration['key'])->first()
                     ?? Module::query()
                         ->where('application_id', $application->id)

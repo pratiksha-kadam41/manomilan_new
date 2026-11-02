@@ -86,7 +86,9 @@ After migrations, run `php artisan db:seed` to create the Super Admin user (`use
 
 ## Workshop Registrations
 - POST /workshop-registrations (public)
-- GET /workshop-registrations (auth)
+- GET /workshop-registrations (admin) - Paginated candidate list; supports `name`, `mobile`, `city`, `status`, `page`, and `per_page` query parameters
+- GET /workshop-registrations/{id} (admin) - Candidate details and payment screenshot URL
+- PATCH /workshop-registrations/{id}/status (admin with approve permission) - Set status to `Verified` or `Rejected`; optional `remarks` for rejected registrations
 
 ## Payments
 - POST /payments/upload (auth) - multipart/form-data

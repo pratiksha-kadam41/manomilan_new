@@ -89,15 +89,25 @@ export default function Hero() {
             <h3 className="hero-h3" style={{ fontSize: 34 }}>येथे मनं मिळतात...</h3>
             <h3 className="hero-h3" style={{ fontSize: 44 }}>नाती जुळतात…</h3>
 
-            <div style={{ marginBottom: "2rem" }}>
-              <div className="hero-cta-buttons d-flex align-items-center justify-content-center">
+            <div className="hero-registration-options">
+              <div className="hero-registration-option">
                 <a href={REGISTER_URL} className="btn-melava">Melava Registration</a>
-                {SHOW_WORKSHOP_REGISTRATION && (
+                <span className="fee">
+                  Fee: ₹1500
+                  <small>(₹1200 + ₹300)</small>
+                </span>
+              </div>
+              {SHOW_WORKSHOP_REGISTRATION && (
+                <div className="hero-registration-option">
                   <a href="/workshop-registration" className="btn-workshop">
                     Workshop Registration
                   </a>
-                )}
-              </div>
+                  <span className="fee">
+                    Fee: ₹1000
+                    <small>Workshop Registration</small>
+                  </span>
+                </div>
+              )}
             </div>
 
             <h2 className="hero-tagline blinking-text">

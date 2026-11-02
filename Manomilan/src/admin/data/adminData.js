@@ -7,7 +7,6 @@ export const menuItems = [
   { label: "Melava Registrations", path: "/admin/melava" },
   { label: "Melava Events", path: "/admin/melava-campaigns" },
   { label: "Workshop Registration", path: "/admin/workshop" },
-  { label: "Candidate Requests", path: "/admin/requests" },
   { label: "Reset Passwords", path: "/admin/reset-passwords" },
   { label: "Success Stories", path: "/admin/success-stories" },
   { label: "Report", path: "/admin/report" },

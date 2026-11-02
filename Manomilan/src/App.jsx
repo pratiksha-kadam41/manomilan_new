@@ -32,6 +32,7 @@ const ProfileVerify = lazy(() => import("./admin/pages/Profiles/ProfileVerify.js
 const Receipt = lazy(() => import("./admin/pages/Profiles/Receipt.jsx"));
 const PaymentScreenshot = lazy(() => import("./admin/pages/Profiles/PaymentScreenshot.jsx"));
 const MelavaPayments = lazy(() => import("./admin/pages/MelavaPayments.jsx"));
+const WorkshopRegistrations = lazy(() => import("./admin/pages/WorkshopRegistrations.jsx"));
 const MelavaBioDataPage = lazy(() => import("./admin/pages/MelavaBioDataPage.jsx"));
 const MelavaCampaigns = lazy(() => import("./admin/pages/MelavaCampaigns.jsx"));
 const Reports = lazy(() => import("./admin/pages/Reports.jsx"));
@@ -81,6 +82,7 @@ const ROUTES = {
   "/admin/verified-profiles": Profiles,
   "/admin/unverified-profiles": Profiles,
   "/admin/melava": MelavaPayments,
+  "/admin/workshop": WorkshopRegistrations,
   "/admin/melava-campaigns": MelavaCampaigns,
   "/admin/reset-passwords": ResetPasswords,
   "/admin/report": Reports,
