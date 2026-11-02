@@ -16,6 +16,7 @@ import {
 import { Link } from "react-router-dom";
 import { clearSession, getSession } from "../../auth";
 import { menuItems } from "../data/adminData";
+import WebsiteSidebarGroup from "./WebsiteSidebarGroup";
 
 const SYSTEM_MANAGEMENT = {
   label: "System Management",
@@ -93,6 +94,7 @@ export default function Sidebar({ currentPath, onNavigate }) {
             </Link>
           );
         })}
+        <WebsiteSidebarGroup currentPath={currentPath} onNavigate={onNavigate} />
       </nav>
 
       <a

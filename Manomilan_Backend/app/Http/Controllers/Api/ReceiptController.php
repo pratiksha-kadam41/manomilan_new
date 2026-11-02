@@ -77,7 +77,6 @@ class ReceiptController extends Controller
                         default => null,
                     },
                     'city' => $verifiedMelava?->city
-                        ?: $profile->location
                         ?: $profile->professionalCity
                         ?: $profile->cityOfEducation,
                     'registration_fee' => $registrationFee,

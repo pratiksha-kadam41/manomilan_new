@@ -811,6 +811,7 @@ class ProfilesController extends Controller
     {
         $paymentScreenshot = PaymentScreenshot::findOrFail($id);
         $paymentScreenshot->update(['payment_verified' => true]);
+        Profile::find($paymentScreenshot->profile_id)?->syncDocumentVerificationStatus();
 
         return redirect()->back()->with('success', 'Payment verified successfully!');
     }
@@ -819,6 +820,7 @@ class ProfilesController extends Controller
     {
         $registration = \App\MelavaRegistration::findOrFail($id);
         $registration->update(['payment_verified' => true]);
+        Profile::find($registration->profile_id)?->syncDocumentVerificationStatus();
 
         return redirect()->back()->with('success', 'Melava payment verified successfully!');
     }
@@ -1003,7 +1005,6 @@ class ProfilesController extends Controller
             'monthlyIncome' => 'required|numeric',
             'income_currency' => 'nullable|string|in:INR,USD,EUR,GBP',
             'annualIncome' => 'nullable|numeric',
-            'hobbies' => 'required|string|max:255',
             'hasMedicalHistory' => 'required|in:Yes,No',
             'fathersName' => 'required|string|max:255',
             'fatherAlive' => 'required|in:Yes,No',
@@ -1720,7 +1721,6 @@ class ProfilesController extends Controller
             $term = $request->input('other_expectations');
             return $query->where(function ($q) use ($term) {
                 $q->where('knowAboutMyself', 'like', '%' . $term . '%')
-                    ->orWhere('hobbies', 'like', '%' . $term . '%')
                     ->orWhere('specialCases', 'like', '%' . $term . '%')
                     ->orWhere('familyValues', 'like', '%' . $term . '%')
                     ->orWhere('profession', 'like', '%' . $term . '%')

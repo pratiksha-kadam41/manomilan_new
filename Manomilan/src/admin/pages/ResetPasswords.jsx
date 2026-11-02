@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Copy, KeyRound, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, Copy, KeyRound, Search, UserCheck, Users, UserX, X } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import AdminStats from "../components/AdminStats";
+import AdminPagination from "../components/AdminPagination";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { request } from "../../api";
+import "../components/admin-ui.css";
 import "./resetPasswords.css";
 
 const loadUsers = ({ query, page }) => {
@@ -15,7 +19,6 @@ const resetPassword = (id) =>
 
 export default function ResetPasswords() {
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
@@ -29,12 +32,15 @@ export default function ResetPasswords() {
   const [notice, setNotice] = useState("");
   const requestId = useRef(0);
 
+  const debouncedSearch = useDebouncedValue(search, 350);
+  const activeQuery = debouncedSearch.trim();
+
   const load = useCallback(async () => {
     const id = ++requestId.current;
     setLoading(true);
     setError("");
     try {
-      const response = await loadUsers({ query, page });
+      const response = await loadUsers({ query: activeQuery, page });
       if (id !== requestId.current) return;
       setUsers(Array.isArray(response?.data?.data) ? response.data.data : []);
       setPagination(response?.data || null);
@@ -44,15 +50,7 @@ export default function ResetPasswords() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [query, page]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setQuery(search.trim());
-      setPage(1);
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [activeQuery, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -98,50 +96,50 @@ export default function ResetPasswords() {
     setCopied(false);
   };
 
+  const statItems = useMemo(() => [
+    { key: "total", label: "Total Accounts", value: stats?.total ?? 0, icon: Users, tone: "teal", hint: "Matching search" },
+    { key: "active", label: "Active Accounts", value: stats?.active ?? 0, icon: UserCheck, tone: "green", hint: "Can sign in" },
+    { key: "inactive", label: "Inactive Accounts", value: stats?.inactive ?? 0, icon: UserX, tone: "amber", hint: "Access disabled" },
+  ], [stats]);
+
   return (
     <AdminLayout currentPath="/admin/reset-passwords">
-      <div className="rp-page">
-        <header className="rp-heading">
+      <div className="adm-ui rp-page">
+        <div className="ui-head">
           <div>
             <h1>Reset Passwords</h1>
             <p>Reset an account to the default password. The user must change it after signing in.</p>
           </div>
-        </header>
+        </div>
 
-        <div className="rp-notice">
+        <div className="ui-alert success">
           Reset accounts receive the default password and are required to choose a new password before continuing.
         </div>
-        {error ? <div className="rp-error" role="alert">{error}</div> : null}
-        {notice ? <div className="rp-success" role="status">{notice}</div> : null}
 
-        <section className="rp-stats" aria-label="User account statistics">
-          <article className="rp-stat">
-            <span>Total users</span>
-            <strong>{stats ? stats.total.toLocaleString("en-IN") : loading ? "—" : "0"}</strong>
-          </article>
-          <article className="rp-stat active">
-            <span>Active users</span>
-            <strong>{stats ? stats.active.toLocaleString("en-IN") : loading ? "—" : "0"}</strong>
-          </article>
-          <article className="rp-stat inactive">
-            <span>Inactive users</span>
-            <strong>{stats ? stats.inactive.toLocaleString("en-IN") : loading ? "—" : "0"}</strong>
-          </article>
-        </section>
+        <AdminStats items={statItems} loading={loading && !stats} label="User account statistics" />
 
-        <section className="rp-card">
-          <label className="rp-search">
+        {error ? <div className="ui-alert" role="alert">{error}</div> : null}
+        {notice ? <div className="ui-alert success" role="status">{notice}</div> : null}
+
+        <div className="ui-card ui-toolbar">
+          <label className="ui-search">
             <Search size={17} />
             <input
+              type="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
               placeholder="Search name, username, email, or profile number"
               aria-label="Search accounts"
             />
+            {search ? (
+              <button type="button" onClick={() => { setSearch(""); setPage(1); }} aria-label="Clear search"><X size={16} /></button>
+            ) : null}
           </label>
+        </div>
 
-          <div className="rp-table-wrap">
-            <table className="rp-table">
+        <div className="ui-card ui-table-card">
+          <div className={`ui-table-scroll ${loading ? "is-loading" : ""}`}>
+            <table className="ui-table">
               <thead>
                 <tr>
                   <th>Account</th>
@@ -153,59 +151,71 @@ export default function ResetPasswords() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr><td colSpan="6" className="rp-state">Loading accounts…</td></tr>
+                {loading && !users.length ? Array.from({ length: 6 }, (_, index) => (
+                  <tr className="ui-skeleton-row" key={`skeleton-${index}`}>
+                    <td colSpan="6"><span /></td>
+                  </tr>
+                )) : null}
+
+                {!loading && !users.length ? (
+                  <tr>
+                    <td colSpan="6">
+                      <div className="ui-state">
+                        <Search size={30} />
+                        <strong>No accounts found</strong>
+                        <p>No accounts match your current search.</p>
+                      </div>
+                    </td>
+                  </tr>
                 ) : null}
-                {!loading && users.map((user) => (
+
+                {users.map((user) => (
                   <tr key={user.id}>
                     <td>
-                      <strong>{user.name || user.profile?.full_name || "Unnamed account"}</strong>
-                      <small>{user.email || "No email address"}</small>
+                      <div className="ui-person-text">
+                        <strong>{user.name || user.profile?.full_name || "Unnamed account"}</strong>
+                        <small>{user.email || "No email address"}</small>
+                      </div>
                     </td>
                     <td>
-                      {user.profile?.full_name || "No linked profile"}
-                      {user.profile?.registration_number || user.profile?.serial_no
-                        ? <small>{user.profile.registration_number || user.profile.serial_no}</small>
-                        : null}
+                      <span className="ui-person-text">
+                        <strong>{user.profile?.full_name || "No linked profile"}</strong>
+                        {user.profile?.registration_number || user.profile?.serial_no
+                          ? <small>{user.profile.registration_number || user.profile.serial_no}</small>
+                          : null}
+                      </span>
                     </td>
-                    <td>{user.username || "—"}</td>
+                    <td className="ui-muted">{user.username || "—"}</td>
                     <td>
-                      <span className={`rp-status ${["active", "inactive"].includes(String(user.status || "").toLowerCase()) ? String(user.status).toLowerCase() : "unknown"}`}>
+                      <span className={`ui-badge ${["active", "inactive"].includes(String(user.status || "").toLowerCase()) ? (String(user.status).toLowerCase() === "active" ? "ok" : "off") : "neutral"}`}>
                         {user.status || "Unknown"}
                       </span>
                     </td>
-                    <td>{user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"}</td>
+                    <td className="ui-muted">{user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"}</td>
                     <td>
-                      <button type="button" className="rp-reset-button" onClick={() => setSelected(user)} disabled={busy}>
+                      <button type="button" className="ui-btn small" onClick={() => setSelected(user)} disabled={busy}>
                         <KeyRound size={15} /> Reset
                       </button>
                     </td>
                   </tr>
                 ))}
-                {!loading && !users.length ? (
-                  <tr><td colSpan="6" className="rp-state">No accounts match your search.</td></tr>
-                ) : null}
               </tbody>
             </table>
           </div>
 
-          {pagination?.last_page > 1 ? (
-            <nav className="rp-pagination" aria-label="Account pagination">
-              <span>
-                Showing {pagination.from ?? 0}–{pagination.to ?? 0} of {pagination.total.toLocaleString("en-IN")}
-              </span>
-              <div>
-                <button type="button" onClick={() => setPage((value) => value - 1)} disabled={page <= 1 || loading} aria-label="Previous page">
-                  <ChevronLeft size={17} />
-                </button>
-                <span>Page {page} of {pagination.last_page}</span>
-                <button type="button" onClick={() => setPage((value) => value + 1)} disabled={page >= pagination.last_page || loading} aria-label="Next page">
-                  <ChevronRight size={17} />
-                </button>
-              </div>
-            </nav>
+          {pagination ? (
+            <AdminPagination
+              page={pagination.current_page || page}
+              lastPage={pagination.last_page || 1}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              onPage={setPage}
+              disabled={loading}
+              label="Account pagination"
+            />
           ) : null}
-        </section>
+        </div>
 
         {selected ? (
           <div className="rp-modal" onClick={() => !busy && setSelected(null)}>

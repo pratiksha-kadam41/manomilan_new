@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Search, Download, UserX, Pencil, CreditCard, Receipt, BadgeCheck,
-  ChevronLeft, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, Phone,
-  CheckCircle2, Clock, X, AlertTriangle, Users, RotateCcw, Archive,
+  ArrowUp, ArrowDown, ArrowUpDown, Phone, CheckCircle2, Clock, X,
+  AlertTriangle, Users, RotateCcw, Archive, UserCheck, ShieldAlert,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
+import AdminStats from "../../components/AdminStats";
+import AdminPagination from "../../components/AdminPagination";
+import AgeRangeFilter from "../../components/AgeRangeFilter";
+import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { request, download } from "../../../api";
 import { touchSession } from "../../../auth";
 import { PermissionGate, useAdminPermission } from "../../../permission-context";
+import "../../components/admin-ui.css";
 import "./profiles.css";
 
 const LINKS = {
@@ -34,10 +39,10 @@ const REG_TYPES = [
 ];
 
 const PROFILE_VIEWS = {
-  "/admin/profiles": { title: "Profile List", description: "Browse and manage registered profiles." },
-  "/admin/nri-profiles": { title: "NRI Profiles", description: "Profiles matching the existing NRI location criteria." },
-  "/admin/verified-profiles": { title: "Verified Profiles", description: "Profiles with completed identity and birth-date verification." },
-  "/admin/unverified-profiles": { title: "Unverified Profiles", description: "Profiles still waiting for verification." },
+  "/admin/profiles": { title: "Profile List", description: "Browse and manage registered profiles.", totalLabel: "Total Profiles" },
+  "/admin/nri-profiles": { title: "NRI Profiles", description: "Profiles matching the existing NRI location criteria.", totalLabel: "Total NRI Profiles" },
+  "/admin/verified-profiles": { title: "Verified Profiles", description: "Profiles with completed identity and birth-date verification.", totalLabel: "Total Verified" },
+  "/admin/unverified-profiles": { title: "Unverified Profiles", description: "Profiles still waiting for verification.", totalLabel: "Total Unverified" },
 };
 
 async function getProfiles(params) {
@@ -72,27 +77,15 @@ async function exportProfiles(params) {
   await download(`/profiles/export${qs ? `?${qs}` : ""}`, exportFallbackName());
 }
 
-/* ---------- Small helpers ---------- */
 const initials = (name = "") =>
   name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-
-function pageList(current, last) {
-  const set = new Set([1, 2, last - 1, last, current - 1, current, current + 1]);
-  const nums = [...set].filter((n) => n >= 1 && n <= last).sort((a, b) => a - b);
-  const out = [];
-  nums.forEach((n, i) => {
-    if (i && n - nums[i - 1] > 1) out.push("…" + n);
-    out.push(n);
-  });
-  return out;
-}
 
 function Avatar({ p, onOpen }) {
   const [broken, setBroken] = useState(false);
   if (!p.photo_url || broken)
-    return <div className="pf-avatar pf-avatar-fallback">{initials(p.full_name)}</div>;
+    return <div className="ui-avatar" aria-hidden="true">{initials(p.full_name)}</div>;
   return (
-    <button type="button" className="pf-avatar" onClick={() => onOpen(p)} aria-label={`View photo of ${p.full_name}`}>
+    <button type="button" className="ui-avatar ui-avatar-btn" onClick={() => onOpen(p)} aria-label={`View photo of ${p.full_name}`}>
       <img src={p.photo_url} alt="" loading="lazy" onError={() => setBroken(true)} />
     </button>
   );
@@ -103,16 +96,13 @@ function SortHead({ label, field, sort, onSort }) {
   const Icon = !active ? ArrowUpDown : sort.order === "asc" ? ArrowUp : ArrowDown;
   return (
     <th>
-      <button type="button" className={`pf-sort ${active ? "active" : ""}`} onClick={() => onSort(field)}>
-        {label} <Icon size={14} />
+      <button type="button" className={`ui-sort ${active ? "active" : ""}`} onClick={() => onSort(field)}>
+        {label} <Icon size={13} />
       </button>
     </th>
   );
 }
 
-/* ====================================================================
-   2. THE PAGE
-   ==================================================================== */
 export default function Profiles() {
   const { pathname } = useLocation();
   const currentPath = pathname.replace(/\/+$/, "") || "/";
@@ -126,8 +116,10 @@ export default function Profiles() {
         ? "unverified"
         : undefined;
   const isNriView = currentPath === "/admin/nri-profiles";
-  const [filters, setFilters] = useState({ q: "", gender: "all", reg_type: "all" });
-  const [search, setSearch] = useState("");           // typed text (sent after a short pause)
+
+  const [filters, setFilters] = useState({ gender: "all", reg_type: "all" });
+  const [search, setSearch] = useState("");
+  const [ageInput, setAgeInput] = useState({ from: "", to: "" });
   const [sort, setSort] = useState({ by: "registration_date", order: "desc" });
   const [page, setPage] = useState(1);
 
@@ -135,8 +127,8 @@ export default function Profiles() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [photo, setPhoto] = useState(null);           // photo preview popup
-  const [confirm, setConfirm] = useState(null);       // profile waiting for deactivate confirmation
+  const [photo, setPhoto] = useState(null);
+  const [confirm, setConfirm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState(null);
@@ -182,20 +174,30 @@ export default function Profiles() {
     }
   };
 
-  // Wait 400 ms after typing stops, then search
-  useEffect(() => {
-    const t = setTimeout(() => { setFilters((f) => ({ ...f, q: search.trim() })); setPage(1); }, 400);
-    return () => clearTimeout(t);
-  }, [search]);
+  const debouncedSearch = useDebouncedValue(search, 350);
+  const debouncedAge = useDebouncedValue(ageInput, 400);
+  const activeQuery = debouncedSearch.trim();
+  const ageFrom = debouncedAge.from;
+  const ageTo = debouncedAge.to;
+  const ageError = ageFrom !== "" && ageTo !== "" && Number(ageFrom) > Number(ageTo)
+    ? "Minimum age cannot be greater than maximum age."
+    : "";
 
   const reqId = useRef(0);
   const load = useCallback(async () => {
-    const id = ++reqId.current;                       // ignore out-of-date responses
+    const id = ++reqId.current;
+    if (ageError) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const data = await getProfiles({
         ...filters,
+        q: activeQuery,
+        age_from: ageFrom || undefined,
+        age_to: ageTo || undefined,
         verification_status: verificationStatus,
         nri: isNriView ? "1" : undefined,
         sort_by: sort.by,
@@ -208,14 +210,13 @@ export default function Profiles() {
     } finally {
       if (id === reqId.current) setLoading(false);
     }
-  }, [filters, sort, page, verificationStatus, isNriView]);
+  }, [filters, activeQuery, ageFrom, ageTo, ageError, sort, page, verificationStatus, isNriView]);
 
   useEffect(() => {
     const timer = setTimeout(load, 0);
     return () => clearTimeout(timer);
   }, [load]);
 
-  // Close popups with Esc
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") { setPhoto(null); setConfirm(null); } };
     window.addEventListener("keydown", onKey);
@@ -231,21 +232,31 @@ export default function Profiles() {
     setPage(1);
   };
   const hasFilters = Boolean(
-    search.trim() ||
+    activeQuery ||
     (filters.gender && filters.gender !== "all") ||
-    (filters.reg_type && filters.reg_type !== "all"),
+    (filters.reg_type && filters.reg_type !== "all") ||
+    ageFrom ||
+    ageTo,
   );
   const clearFilters = () => {
     setSearch("");
-    setFilters({ q: "", gender: "all", reg_type: "all" });
+    setAgeInput({ from: "", to: "" });
+    setFilters({ gender: "all", reg_type: "all" });
     setPage(1);
   };
 
   const handleExport = async () => {
+    if (ageError) {
+      showToast("error", ageError);
+      return;
+    }
     setExporting(true);
     try {
       await exportProfiles({
         ...filters,
+        q: activeQuery,
+        age_from: ageFrom || undefined,
+        age_to: ageTo || undefined,
         verification_status: verificationStatus,
         nri: isNriView ? "1" : undefined,
         sort_by: sort.by,
@@ -274,213 +285,217 @@ export default function Profiles() {
   };
 
   const rows = result?.data || [];
+  const stats = result?.stats || {};
+  const statsLoading = loading && !result;
+
+  const statItems = useMemo(() => [
+    { key: "total", label: view.totalLabel, value: stats.total, icon: Users, tone: "teal", hint: "Matching filters" },
+    { key: "active", label: "Active", value: stats.active, icon: UserCheck, tone: "green", hint: "Currently active" },
+    { key: "verified", label: "Verified", value: stats.verified, icon: BadgeCheck, tone: "blue", hint: "Verification completed" },
+    { key: "inactive", label: "Inactive", value: stats.inactive, icon: ShieldAlert, tone: "amber", hint: "Moved to inactive list" },
+  ], [stats.total, stats.active, stats.verified, stats.inactive, view.totalLabel]);
 
   return (
     <AdminLayout currentPath={currentPath}>
-      <div className="pf-page">
-      {/* ---------- Header ---------- */}
-      <div className="pf-head">
-        <div>
-          <h1>{view.title}</h1>
-          <p>
-            <Users size={15} /> {result
-              ? `${result.total.toLocaleString()} ${currentPath === "/admin/profiles" ? "profiles in total" : "profiles found"}`
-              : view.description}
-          </p>
+      <div className="adm-ui">
+        <div className="ui-head">
+          <div>
+            <h1>{view.title}</h1>
+            <p>
+              <Users size={15} /> {result
+                ? `${Number(stats.total ?? result.total ?? 0).toLocaleString("en-IN")} ${currentPath === "/admin/profiles" ? "profiles in total" : "profiles found"}`
+                : view.description}
+            </p>
+          </div>
+          <div className="ui-head-actions">
+            <a href={LINKS.inactive} className="ui-btn secondary"><Archive size={16} /> Inactive List</a>
+            <PermissionGate permission="export" currentPath={currentPath}>
+              <button type="button" className="ui-btn" onClick={handleExport} disabled={exporting}>
+                <Download size={16} /> {exporting ? "Exporting…" : "Export"}
+              </button>
+            </PermissionGate>
+          </div>
         </div>
-        <div className="pf-head-actions">
-          <a href={LINKS.inactive} className="pf-btn pf-btn-amber"><Archive size={16} /> Inactive List</a>
-          <PermissionGate permission="export" currentPath={currentPath}>
-            <button type="button" className="pf-btn pf-btn-green" onClick={handleExport} disabled={exporting}>
-              <Download size={16} /> {exporting ? "Exporting…" : "Export"}
-            </button>
-          </PermissionGate>
-        </div>
-      </div>
 
-      {/* ---------- Filters ---------- */}
-      <div className="pf-card pf-filters">
-        <div className="pf-search">
-          <Search size={18} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by Registration No, Name, Mobile, Date or Status"
-            autoComplete="off"
+        <AdminStats items={statItems} loading={statsLoading} label={`${view.title} statistics`} />
+
+        <div className="ui-card ui-toolbar">
+          <label className="ui-search">
+            <Search size={17} />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by Registration No, Name, Mobile, Date or Status"
+              autoComplete="off"
+              aria-label="Search profiles"
+            />
+            {search && (
+              <button type="button" onClick={() => { setSearch(""); setPage(1); }} aria-label="Clear search"><X size={16} /></button>
+            )}
+          </label>
+
+          <select className="ui-select" value={filters.gender} onChange={setFilter("gender")} aria-label="Filter by profile type">
+            {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+          </select>
+
+          <select className="ui-select" value={filters.reg_type} onChange={setFilter("reg_type")} aria-label="Filter by registration type">
+            {REG_TYPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
+          </select>
+
+          <AgeRangeFilter
+            from={ageInput.from}
+            to={ageInput.to}
+            onChange={(from, to) => { setAgeInput({ from, to }); setPage(1); }}
+            onClear={() => { setAgeInput({ from: "", to: "" }); setPage(1); }}
+            error={ageError}
+            disabled={loading && !result}
           />
-          {search && (
-            <button type="button" onClick={() => setSearch("")} aria-label="Clear search"><X size={16} /></button>
+
+          {hasFilters && (
+            <button type="button" className="ui-reset" onClick={clearFilters}>
+              <RotateCcw size={15} /> Reset
+            </button>
           )}
         </div>
 
-        <select value={filters.gender} onChange={setFilter("gender")} aria-label="Filter by profile type">
-          {GENDERS.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-        </select>
+        <div className="ui-card ui-table-card">
+          {error && (
+            <div className="ui-state error">
+              <AlertTriangle size={32} />
+              <strong>Could not load profiles</strong>
+              <p>{error}</p>
+              <button type="button" className="ui-btn small" onClick={load}>Try again</button>
+            </div>
+          )}
 
-        <select value={filters.reg_type} onChange={setFilter("reg_type")} aria-label="Filter by registration type">
-          {REG_TYPES.map((g) => <option key={g.value} value={g.value}>{g.label}</option>)}
-        </select>
+          {!error && (
+            <div className={`ui-table-scroll ${loading ? "is-loading" : ""}`}>
+              <table className="ui-table">
+                <thead>
+                  <tr>
+                    <th>No.</th>
+                    <SortHead label="Registration No." field="registration_number" sort={sort} onSort={toggleSort} />
+                    <th>Photo</th>
+                    <th>Full Name</th>
+                    <th>Mobile</th>
+                    <SortHead label="Registered On" field="registration_date" sort={sort} onSort={toggleSort} />
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading && !result &&
+                    Array.from({ length: 6 }, (_, i) => (
+                      <tr key={i} className="ui-skeleton-row">
+                        <td colSpan={8}><span /></td>
+                      </tr>
+                    ))}
 
-        {hasFilters && (
-          <button type="button" className="pf-reset" onClick={clearFilters}>
-            <RotateCcw size={15} /> Reset
-          </button>
-        )}
-      </div>
+                  {rows.map((p, i) => {
+                    const done = p.is_verified === true
+                      || ["completed", "complete", "verified", "approved", "approve"].includes(String(p.status).toLowerCase());
+                    const rowNumber = (result.from ?? 1) + i;
+                    return (
+                      <tr key={p.id}>
+                        <td className="ui-muted">{rowNumber}</td>
+                        <td><span className="ui-chip">{p.registration_number}</span></td>
+                        <td><Avatar p={p} onOpen={setPhoto} /></td>
+                        <td><Link className="ui-link" to={LINKS.view(p.id, rowNumber)}>{p.full_name}</Link></td>
+                        <td><span className="ui-muted" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Phone size={13} /> {p.mobile}</span></td>
+                        <td className="ui-muted">{p.registration_date}</td>
+                        <td>
+                          <span className={`ui-badge ${done ? "ok" : "wait"}`}>
+                            {done ? <CheckCircle2 size={13} /> : <Clock size={13} />} {p.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="ui-actions">
+                            {canEditProfiles ? <a href={LINKS.edit(p.id)} className="ui-icon-btn amber" title="Edit" aria-label="Edit"><Pencil size={15} /></a> : null}
 
-      {/* ---------- Table ---------- */}
-      <div className="pf-card pf-table-card">
-        {error && (
-          <div className="pf-state pf-state-error">
-            <AlertTriangle size={34} />
-            <p>{error}</p>
-            <button type="button" className="pf-btn pf-btn-teal" onClick={load}>Try again</button>
-          </div>
-        )}
-
-        {!error && (
-          <div className={`pf-scroll ${loading ? "is-loading" : ""}`}>
-            <table className="pf-table">
-              <thead>
-                <tr>
-                  <th>No.</th>
-                  <SortHead label="Registration No." field="registration_number" sort={sort} onSort={toggleSort} />
-                  <th>Photo</th>
-                  <th>Full Name</th>
-                  <th>Mobile</th>
-                  <SortHead label="Registered On" field="registration_date" sort={sort} onSort={toggleSort} />
-                  <th>Status</th>
-                  <th className="pf-th-actions">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading && !result &&
-                  Array.from({ length: 6 }, (_, i) => (
-                    <tr key={i} className="pf-skel">
-                      <td colSpan={8}><span /></td>
-                    </tr>
-                  ))}
-
-                {rows.map((p, i) => {
-                  const done = String(p.status).toLowerCase() === "completed";
-                  const rowNumber = (result.from ?? 1) + i;
-                  return (
-                    <tr key={p.id}>
-                      <td className="pf-muted">{rowNumber}</td>
-                      <td><span className="pf-regno">{p.registration_number}</span></td>
-                      <td><Avatar p={p} onOpen={setPhoto} /></td>
-                      <td><Link className="pf-name" to={LINKS.view(p.id, rowNumber)}>{p.full_name}</Link></td>
-                      <td><span className="pf-mobile"><Phone size={13} /> {p.mobile}</span></td>
-                      <td className="pf-muted">{p.registration_date}</td>
-                      <td>
-                        <span className={`pf-pill ${done ? "ok" : "wait"}`}>
-                          {done ? <CheckCircle2 size={14} /> : <Clock size={14} />} {p.status}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="pf-actions">
-                          {canEditProfiles ? <a href={LINKS.edit(p.id)} className="pf-act edit" title="Edit" aria-label="Edit"><Pencil size={15} /><span className="pf-lbl">Edit</span></a> : null}
-
-                          <a href={LINKS.payment(p.id)} className="pf-act pay" title="Payment" aria-label="Payment">
-                            <CreditCard size={15} /><span className="pf-lbl">Payment</span>
-                            {p.payment_verified && (
-                              <span className="pf-verified" title="Payment verified"><BadgeCheck size={16} /></span>
-                            )}
-                          </a>
-
-                          {p.payment_verified ? (
-                            <a href={LINKS.receipt(p.id)} onClick={(event) => openReceipt(event, p.id)} className="pf-act receipt" title="Receipt" aria-label="Receipt">
-                              <Receipt size={15} /><span className="pf-lbl">Receipt</span>
+                            <a href={LINKS.payment(p.id)} className="ui-icon-btn teal" title="Payment" aria-label="Payment">
+                              <CreditCard size={15} />
                             </a>
-                          ) : (
-                            <button
-                              type="button"
-                              className="pf-act receipt disabled"
-                              onClick={() => showToast("error", "Please verify the payment first.")}
-                              title="Verify the payment first"
-                            >
-                              <Receipt size={15} /><span className="pf-lbl">Receipt</span>
-                            </button>
-                          )}
 
-                          {canDeactivateProfiles ? <button type="button" className="pf-act danger" onClick={() => setConfirm(p)} title="Deactivate" aria-label="Deactivate">
-                            <UserX size={15} /><span className="pf-lbl">Deactivate</span>
-                          </button> : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                            {p.payment_verified ? (
+                              <a href={LINKS.receipt(p.id)} onClick={(event) => openReceipt(event, p.id)} className="ui-icon-btn green" title="Receipt" aria-label="Receipt">
+                                <Receipt size={15} />
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                className="ui-icon-btn"
+                                onClick={() => showToast("error", "Please verify the payment first.")}
+                                title="Verify the payment first"
+                                aria-label="Receipt unavailable"
+                              >
+                                <Receipt size={15} />
+                              </button>
+                            )}
 
-            {!loading && rows.length === 0 && (
-              <div className="pf-state">
-                <Search size={34} />
-                <p>No profiles match your search.</p>
-                {hasFilters && <button type="button" className="pf-btn pf-btn-teal" onClick={clearFilters}>Clear filters</button>}
-              </div>
-            )}
-          </div>
-        )}
+                            {canDeactivateProfiles ? <button type="button" className="ui-icon-btn red" onClick={() => setConfirm(p)} title="Deactivate" aria-label="Deactivate">
+                              <UserX size={15} />
+                            </button> : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
 
-        {/* ---------- Pagination ---------- */}
-        {result && result.last_page > 0 && (
-          <div className="pf-foot">
-            <span className="pf-muted">
-              Showing {result.from ?? 0}–{result.to ?? 0} of {result.total.toLocaleString()}
-            </span>
-            <nav className="pf-pages" aria-label="Pagination">
-              <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Previous page">
-                <ChevronLeft size={16} />
-              </button>
-              {pageList(page, result.last_page).map((n) =>
-                typeof n === "string" ? (
-                  <span key={n} className="gap">…</span>
-                ) : (
-                  <button key={n} type="button" className={n === page ? "active" : ""} onClick={() => setPage(n)}>
-                    {n}
-                  </button>
-                ),
+              {!loading && rows.length === 0 && (
+                <div className="ui-state">
+                  <Search size={32} />
+                  <strong>No profiles found</strong>
+                  <p>No profiles match your current search and filters.</p>
+                  {hasFilters && <button type="button" className="ui-btn small" onClick={clearFilters}>Clear filters</button>}
+                </div>
               )}
-              <button type="button" disabled={page >= result.last_page} onClick={() => setPage(page + 1)} aria-label="Next page">
-                <ChevronRight size={16} />
-              </button>
-            </nav>
-          </div>
-        )}
-      </div>
+            </div>
+          )}
 
-      {/* ---------- Photo preview ---------- */}
-      {photo && (
-        <div className="pf-modal" onClick={() => setPhoto(null)}>
-          <div className="pf-lightbox" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="pf-close" onClick={() => setPhoto(null)} aria-label="Close"><X size={20} /></button>
-            <img src={photo.photo_url} alt={photo.full_name} />
-            <p>{photo.full_name} · {photo.registration_number}</p>
-          </div>
+          {result && (
+            <AdminPagination
+              page={result.current_page || page}
+              lastPage={result.last_page || 1}
+              from={result.from}
+              to={result.to}
+              total={stats.total ?? result.total}
+              onPage={setPage}
+              disabled={loading}
+              label="Profile pagination"
+            />
+          )}
         </div>
-      )}
 
-      {/* ---------- Deactivate confirmation ---------- */}
-      {confirm && canDeactivateProfiles && (
-        <div className="pf-modal" onClick={() => !busy && setConfirm(null)}>
-          <div className="pf-dialog" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-            <div className="pf-dialog-icon"><AlertTriangle size={26} /></div>
-            <h3>Deactivate this profile?</h3>
-            <p><strong>{confirm.full_name}</strong> ({confirm.registration_number}) will be moved to the Inactive List.</p>
-            <div className="pf-dialog-btns">
-              <button type="button" className="pf-btn pf-btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
-              <button type="button" className="pf-btn pf-btn-red" disabled={busy} onClick={handleDeactivate}>
-                {busy ? "Deactivating…" : "Yes, deactivate"}
-              </button>
+        {photo && (
+          <div className="pf-modal" onClick={() => setPhoto(null)}>
+            <div className="pf-lightbox" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="pf-close" onClick={() => setPhoto(null)} aria-label="Close"><X size={20} /></button>
+              <img src={photo.photo_url} alt={photo.full_name} />
+              <p>{photo.full_name} · {photo.registration_number}</p>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {toast && <div className={`pf-toast ${toast.type}`} role="status">{toast.text}</div>}
+        {confirm && canDeactivateProfiles && (
+          <div className="pf-modal" onClick={() => !busy && setConfirm(null)}>
+            <div className="pf-dialog" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+              <div className="pf-dialog-icon"><AlertTriangle size={26} /></div>
+              <h3>Deactivate this profile?</h3>
+              <p><strong>{confirm.full_name}</strong> ({confirm.registration_number}) will be moved to the Inactive List.</p>
+              <div className="pf-dialog-btns">
+                <button type="button" className="pf-btn pf-btn-ghost" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
+                <button type="button" className="pf-btn pf-btn-red" disabled={busy} onClick={handleDeactivate}>
+                  {busy ? "Deactivating…" : "Yes, deactivate"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {toast && <div className={`pf-toast ${toast.type}`} role="status">{toast.text}</div>}
       </div>
     </AdminLayout>
   );

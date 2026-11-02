@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  BadgeCheck, Briefcase, Camera, CheckCircle2, FileText, GraduationCap,
+  BadgeCheck, Briefcase, Camera, CheckCircle2, Copy, FileText, GraduationCap,
   Eye, Heart, Loader2, MapPin, Save, Settings2, ShieldCheck, Sparkles,
   Trash2, Upload, UserRound, Users,
 } from "lucide-react";
@@ -53,8 +53,8 @@ const EDIT_SECTIONS = [
       { name: "language", label: "Other languages known", placeholder: "Hindi, English..." },
       { name: "special_cases", label: "Special cases", placeholder: "None / details" },
       { name: "about", label: "About you", type: "textarea", rows: 5, full: true, placeholder: "Describe yourself, your values, interests and what you are looking for." },
-      { name: "address", label: "Current address", type: "textarea", required: true, rows: 3, full: true, placeholder: "Current residential address" },
       { name: "permanent_address", label: "Permanent address", type: "textarea", required: true, rows: 3, full: true, placeholder: "Permanent address" },
+      { name: "address", label: "Current address", type: "textarea", required: true, rows: 3, full: true, placeholder: "Current residential address" },
     ],
   },
   {
@@ -69,14 +69,6 @@ const EDIT_SECTIONS = [
       { name: "horoscope_caste", label: "Horoscope community", placeholder: "Community" },
       { name: "horoscope_sub_caste", label: "Horoscope sub community", placeholder: "Sub community" },
       { name: "horoscope_dob", label: "Horoscope date of birth", type: "date" },
-      { name: "rashi", label: "Rashi", placeholder: "Rashi" },
-      { name: "nakshatra", label: "Nakshatra", placeholder: "Nakshatra" },
-      { name: "charan", label: "Charan", placeholder: "Charan" },
-      { name: "gan", label: "Gan", placeholder: "Gan" },
-      { name: "gotra", label: "Gotra", placeholder: "Gotra" },
-      { name: "nadi", label: "Nadi", placeholder: "Nadi" },
-      { name: "match_patrika", label: "Match patrika", placeholder: "Details" },
-      { name: "kundali", label: "Kundali", placeholder: "Details" },
     ],
   },
   {
@@ -110,28 +102,6 @@ const EDIT_SECTIONS = [
       { name: "length_of_employment", label: "Experience", placeholder: "5 years" },
       { name: "monthly_income", label: "Monthly income (INR)", required: true, placeholder: "Monthly income" },
       { name: "annual_income", label: "Annual income (INR)", placeholder: "Annual income" },
-    ],
-  },
-  {
-    key: "hobbies",
-    title: "Hobbies and interests",
-    subtitle: "Lifestyle and activities",
-    icon: Sparkles,
-    fields: [
-      { name: "hobbies", label: "Hobbies", required: true, type: "textarea", rows: 2, full: true, placeholder: "Reading, travelling, music..." },
-      { name: "extra_curricular", label: "Extra-curricular", type: "textarea", rows: 2, full: true, placeholder: "Activities you enjoy" },
-      { name: "achievements", label: "Achievements", type: "textarea", rows: 2, full: true, placeholder: "Notable achievements" },
-      { name: "sports", label: "Sports and fitness", placeholder: "Cricket, gym, yoga..." },
-      { name: "cooking_skills", label: "Cooking skills", placeholder: "Basic, expert..." },
-      { name: "diet", label: "Diet", placeholder: "Vegetarian / non-vegetarian" },
-      { name: "smoking", label: "Smoking", type: "select", options: [["", "Select"], ["None", "None"], ["Occasionally", "Occasionally"], ["Yes", "Yes"]] },
-      { name: "smoking_frequency", label: "Smoking frequency", placeholder: "Frequency" },
-      { name: "drinking", label: "Drinking", type: "select", options: [["", "Select"], ["None", "None"], ["Occasionally", "Occasionally"], ["Yes", "Yes"]] },
-      { name: "drinking_frequency", label: "Drinking frequency", placeholder: "Frequency" },
-      { name: "partying", label: "Partying", placeholder: "Details" },
-      { name: "active_on_social_sites", label: "Active on social sites?", type: "select", options: [["", "Select"], ["Yes", "Yes"], ["No", "No"]] },
-      { name: "instagram", label: "Instagram", placeholder: "Username or URL" },
-      { name: "facebook", label: "Facebook", placeholder: "Username or URL" },
     ],
   },
   {
@@ -171,11 +141,6 @@ const EDIT_SECTIONS = [
       { name: "family_values", label: "Family values", placeholder: "Traditional, moderate..." },
       { name: "family_financial_status", label: "Financial status", placeholder: "Middle class" },
       { name: "family_annual_income", label: "Family income (annual)", placeholder: "Annual income" },
-      { name: "home_status", label: "Home status", placeholder: "Owned / rented" },
-      { name: "owned_real_estate", label: "Owned real estate", placeholder: "Details" },
-      { name: "has_vehicle", label: "Has vehicle?", type: "select", options: [["", "Select"], ["Yes", "Yes"], ["No", "No"]] },
-      { name: "vehicle_type", label: "Vehicle type", placeholder: "Car, bike..." },
-      { name: "other_investments", label: "Other investments", placeholder: "Details" },
       { name: "profile_creator_name", label: "Profile created by", placeholder: "Creator's name" },
       { name: "profile_creator_relation", label: "Creator's relation to candidate", placeholder: "Self, parent..." },
     ],
@@ -300,14 +265,9 @@ const OVERVIEW_GROUPS = [
     ],
   },
   {
-    title: "Lifestyle",
+    title: "Other details",
     icon: Sparkles,
     rows: [
-      ["Diet", "diet"],
-      ["Smoking", "smoking"],
-      ["Drinking", "drinking"],
-      ["Hobbies", "hobbies"],
-      ["Sports", "sports"],
       ["Languages", "language"],
     ],
   },
@@ -437,8 +397,21 @@ export default function CandidateProfile() {
   const uploadedDocuments = DOCUMENT_LABELS.filter(([key]) => documents[key]?.file_url);
 
   const updateField = (name, value) => {
-    setForm((current) => ({ ...current, [name]: value }));
-    setFieldErrors((current) => ({ ...current, [name]: undefined }));
+    setForm((current) => {
+      const next = { ...current, [name]: value };
+      if (name === "monthly_income") {
+        const monthlyAmount = Number(String(value).replace(/,/g, ""));
+        next.annual_income = String(value).trim() && Number.isFinite(monthlyAmount)
+          ? String(Number((monthlyAmount * 12).toFixed(2)))
+          : "";
+      }
+      return next;
+    });
+    setFieldErrors((current) => ({
+      ...current,
+      [name]: undefined,
+      ...(name === "monthly_income" ? { annual_income: undefined } : {}),
+    }));
   };
 
   const updatePreference = (name, value) => {
@@ -674,7 +647,20 @@ export default function CandidateProfile() {
         className={field.full ? "cnd-field-wide" : ""}
       >
         {field.type === "textarea" ? (
-          <textarea {...common} rows={field.rows || 3} />
+          <>
+            {field.name === "address" ? (
+              <button
+                type="button"
+                className="cnd-btn cnd-btn-light cnd-btn-sm cnd-address-copy"
+                aria-label="Copy permanent address to current address"
+                title="Copy permanent address to current address"
+                onClick={() => onChange("address", values.permanent_address || "")}
+              >
+                <Copy size={16} aria-hidden="true" />
+              </button>
+            ) : null}
+            <textarea {...common} rows={field.rows || 3} />
+          </>
         ) : field.type === "select" ? (
           <select {...common}>
             {field.options.map(([value, label]) => <option key={`${field.name}-${value}`} value={value}>{label}</option>)}

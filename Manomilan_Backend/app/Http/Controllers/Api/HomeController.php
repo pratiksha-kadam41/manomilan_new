@@ -73,12 +73,12 @@ class HomeController extends Controller
                 $recentProfiles = Profile::where('active', 'active')
                     ->orderByDesc('created_at')
                     ->limit(8)
-                    ->get(['id', 'fullName', 'groomOrBride', 'location', 'created_at', 'registration_number', 'profileVerificationStatus'])
+                    ->get(['id', 'fullName', 'groomOrBride', 'professionalCity', 'cityOfEducation', 'created_at', 'registration_number', 'profileVerificationStatus'])
                     ->map(fn ($profile) => [
                         'id' => $profile->id,
                         'name' => $profile->fullName ?: 'Candidate',
                         'type' => ucfirst((string) $profile->groomOrBride),
-                        'location' => $profile->location ?: 'Not set',
+                        'location' => $profile->professionalCity ?: $profile->cityOfEducation ?: 'Not set',
                         'registration_number' => $profile->registration_number ?: '',
                         'status' => strtolower((string) $profile->profileVerificationStatus) === 'completed' ? 'Verified' : 'Pending',
                         'created_at' => $profile->created_at?->toDateTimeString(),
@@ -216,7 +216,7 @@ class HomeController extends Controller
                         'profile_completion' => (int) $profile->profile_completion,
                         'verification_status' => $profile->profileVerificationStatus,
                         'birth_date' => $profile->birthDate,
-                        'city' => $profile->location ?: $profile->professionalCity,
+                        'city' => $profile->professionalCity ?: $profile->cityOfEducation,
                         'education' => $profile->education,
                         'profession' => $profile->profession,
                         'has_family' => filled($profile->fathersName) && filled($profile->mothersName),

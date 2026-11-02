@@ -25,20 +25,10 @@ class AdminUserController extends Controller
         ]);
 
         $term = trim((string) ($filters['q'] ?? ''));
-        $eligibleUsers = User::query()
+        $baseQuery = User::query()
             ->whereDoesntHave('role', fn ($query) => $query
                 ->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])
-                ->orWhere('user_type', '00'));
-        $stats = (clone $eligibleUsers)
-            ->selectRaw("
-                COUNT(*) as total,
-                SUM(CASE WHEN LOWER(COALESCE(status, '')) = 'active' THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN LOWER(COALESCE(status, '')) = 'inactive' THEN 1 ELSE 0 END) as inactive
-            ")
-            ->first();
-
-        $users = (clone $eligibleUsers)
-            ->with(['profile:id,fullName,serial_no,registration_number'])
+                ->orWhere('user_type', '00'))
             ->when($term !== '', function ($query) use ($term) {
                 $query->where(function ($search) use ($term) {
                     $search->where('name', 'like', '%' . $term . '%')
@@ -50,7 +40,18 @@ class AdminUserController extends Controller
                                 ->orWhere('registration_number', 'like', '%' . $term . '%');
                         });
                 });
-            })
+            });
+
+        $stats = (clone $baseQuery)
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE WHEN LOWER(COALESCE(status, '')) = 'active' THEN 1 ELSE 0 END) as active,
+                SUM(CASE WHEN LOWER(COALESCE(status, '')) = 'inactive' THEN 1 ELSE 0 END) as inactive
+            ")
+            ->first();
+
+        $users = (clone $baseQuery)
+            ->with(['profile:id,fullName,serial_no,registration_number'])
             ->latest('users.created_at')
             ->paginate((int) ($filters['per_page'] ?? 20))
             ->through(fn (User $user) => [

@@ -3,11 +3,13 @@ import MelavaBanner from "../components/MelavaBanner.jsx";
 import WhyChoose from "../components/WhyChoose.jsx";
 import Committee from "../components/Committee.jsx";
 import Gallery from "../components/Gallery.jsx";
-import UpcomingEvents from "../components/UpcomingEvents.jsx";
+import DowntimeNotice from "../website/DowntimeNotice.jsx";
+import WebsiteUpcomingEvents from "../website/WebsiteUpcomingEvents.jsx";
 
 export default function Home() {
   return (
     <>
+      <DowntimeNotice placement="home" />
       <main>
         <Hero />
         <MelavaBanner />
@@ -15,7 +17,7 @@ export default function Home() {
         <Committee />
         <Gallery />
       </main>
-      <UpcomingEvents />
+      <WebsiteUpcomingEvents />
     </>
   );
 }

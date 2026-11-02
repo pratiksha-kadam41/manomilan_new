@@ -647,6 +647,16 @@
   cursor: pointer;
 }
 
+.melava-page .address-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 34px;
+  margin: 0 0 8px;
+  padding: 6px;
+}
+
 .melava-page .note {
   background: #fffbe6;
   border: 1px solid #f3e08a;

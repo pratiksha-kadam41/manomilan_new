@@ -315,57 +315,12 @@ return view(
         // Resolve candidate profile by id from route
         $candidateProfile = Profile::findOrFail($id);
 
-        // Update candidate profile with meeting details
-        $candidateData = [];
-        if ($request->filled('candidate_branch'))
-            $candidateData['branch'] = $request->candidate_branch;
-        if ($request->filled('candidate_location'))
-            $candidateData['location'] = $request->candidate_location;
-        if ($request->filled('candidate_meeting_date'))
-            $candidateData['meeting_date'] = $request->candidate_meeting_date;
-        if ($request->filled('candidate_day'))
-            $candidateData['day'] = $request->candidate_day;
-        if ($request->filled('candidate_meeting_time'))
-            $candidateData['meeting_time'] = $request->candidate_meeting_time;
-        if ($request->filled('candidate_remarks'))
-            $candidateData['remarks'] = $request->candidate_remarks;
-        if ($request->filled('candidate_spoke_to'))
-            $candidateData['spoke_to'] = $request->candidate_spoke_to;
-
-        if (!empty($candidateData)) {
-            $candidateProfile->update($candidateData);
-        }
-
-        // Update matched profile with meeting details if matched profile is selected
         if ($request->filled('matched_profile_id')) {
             $matchedProfile = Profile::find($request->matched_profile_id);
             if ($matchedProfile) {
-                $matchedData = [];
-                if ($request->filled('matched_branch'))
-                    $matchedData['branch'] = $request->matched_branch;
-                if ($request->filled('matched_location'))
-                    $matchedData['location'] = $request->matched_location;
-                if ($request->filled('matched_meeting_date'))
-                    $matchedData['meeting_date'] = $request->matched_meeting_date;
-                if ($request->filled('matched_day'))
-                    $matchedData['day'] = $request->matched_day;
-                if ($request->filled('matched_meeting_time'))
-                    $matchedData['meeting_time'] = $request->matched_meeting_time;
-                if ($request->filled('matched_remarks'))
-                    $matchedData['remarks'] = $request->matched_remarks;
-                if ($request->filled('matched_spoke_to'))
-                    $matchedData['spoke_to'] = $request->matched_spoke_to;
-
-                if (!empty($matchedData)) {
-                    $matchedProfile->update($matchedData);
-                }
                 // Finalised time slot
                 $finalSlot = $request->input('time_slot_finalised');
                 if ($finalSlot) {
-                    // Persist final slot to both profiles so it is disabled next render
-                    $candidateProfile->update(['meeting_time' => $finalSlot]);
-                    $matchedProfile->update(['meeting_time' => $finalSlot]);
-
                     // Send email to profile reference emails with safe guards
                     $emailsSent = false;
                     try {
@@ -1058,33 +1013,6 @@ $criteria = [
             $profile->familyValues
         ),
 
-    'diet' =>
-
-        $normalize(
-            $candidateProfile->diet
-        )
-
-        ==
-
-        $normalize(
-            $profile->diet
-        ),
-
-    'smoking' =>
-
-        $normalize(
-            $candidateProfile->smoking
-        )
-
-        ==
-
-        $normalize(
-            $profile->smoking
-        ),
-
-    'drinking' =>
-        $normalize($candidateProfile->drinking) == $normalize($profile->drinking),
-
     'marital_status' =>
         $normalize($candidateProfile->maritalStatus) == $normalize($profile->maritalStatus),
 
@@ -1312,36 +1240,6 @@ $comparison = [
             $profile->familyValues,
         'matched_status' =>
             $criteria['family_values']
-    ],
-
-    [
-        'field' => 'Diet',
-        'candidate' =>
-            $candidateProfile->diet,
-        'matched' =>
-            $profile->diet,
-        'matched_status' =>
-            $criteria['diet']
-    ],
-
-    [
-        'field' => 'Smoking',
-        'candidate' =>
-            $candidateProfile->smoking,
-        'matched' =>
-            $profile->smoking,
-        'matched_status' =>
-            $criteria['smoking']
-    ],
-
-    [
-        'field' => 'Drinking',
-        'candidate' =>
-            $candidateProfile->drinking,
-        'matched' =>
-            $profile->drinking,
-        'matched_status' =>
-            $criteria['drinking']
     ],
 
     [

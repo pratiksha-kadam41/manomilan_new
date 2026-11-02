@@ -5,13 +5,13 @@ export default function StatCard({ value, label, color, percent, icon: Icon }) {
 
   useEffect(() => {
     if (value === "—" || typeof value !== "number") {
-      setDisplayValue(value);
-      return;
+      const frame = requestAnimationFrame(() => setDisplayValue(value));
+      return () => cancelAnimationFrame(frame);
     }
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setDisplayValue(value);
-      return;
+      const frame = requestAnimationFrame(() => setDisplayValue(value));
+      return () => cancelAnimationFrame(frame);
     }
 
     let frame;

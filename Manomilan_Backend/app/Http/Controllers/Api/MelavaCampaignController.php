@@ -28,12 +28,72 @@ class MelavaCampaignController extends Controller
             return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
         }
 
+        $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'status' => ['nullable', Rule::in(['all', 'active', 'inactive'])],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:5', 'max:100'],
+        ]);
+
+        $term = trim((string) ($filters['q'] ?? ''));
+        $status = $filters['status'] ?? 'all';
+        $today = now()->toDateString();
+
+        $base = DB::table('melava_campaigns')
+            ->when($term !== '', function ($query) use ($term) {
+                $query->where(function ($search) use ($term) {
+                    $search->where('melava_code', 'like', '%' . $term . '%')
+                        ->orWhere('title', 'like', '%' . $term . '%')
+                        ->orWhere('description', 'like', '%' . $term . '%');
+                });
+            })
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status));
+
+        $stats = (clone $base)
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw("SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active")
+            ->selectRaw("SUM(CASE WHEN status = 'inactive' THEN 1 ELSE 0 END) AS inactive")
+            ->selectRaw('SUM(CASE WHEN start_date IS NOT NULL AND start_date > ? THEN 1 ELSE 0 END) AS upcoming', [$today])
+            ->selectRaw("SUM(CASE WHEN start_date IS NULL THEN 1 ELSE 0 END) AS undated")
+            ->selectRaw(
+                'SUM(CASE WHEN start_date IS NOT NULL AND COALESCE(end_date, start_date) < ? THEN 1 ELSE 0 END) AS completed',
+                [$today]
+            )
+            ->selectRaw(
+                'SUM(CASE WHEN start_date IS NOT NULL AND start_date <= ? AND COALESCE(end_date, start_date) >= ? THEN 1 ELSE 0 END) AS ongoing',
+                [$today, $today]
+            )
+            ->first();
+
+        $campaigns = (clone $base)
+            ->orderByDesc('id')
+            ->paginate(
+                (int) ($filters['per_page'] ?? 20),
+                ['*'],
+                'page',
+                (int) ($filters['page'] ?? 1)
+            );
+
         return response()->json([
             'success' => true,
-            'data' => DB::table('melava_campaigns')
-                ->orderByDesc('id')
-                ->get()
-                ->map(fn ($campaign) => $this->present($campaign, $request)),
+            'data' => $campaigns->getCollection()->map(fn ($campaign) => $this->present($campaign, $request))->values(),
+            'pagination' => [
+                'current_page' => $campaigns->currentPage(),
+                'last_page' => $campaigns->lastPage(),
+                'per_page' => $campaigns->perPage(),
+                'total' => $campaigns->total(),
+                'from' => $campaigns->firstItem(),
+                'to' => $campaigns->lastItem(),
+            ],
+            'stats' => [
+                'total' => (int) ($stats->total ?? 0),
+                'active' => (int) ($stats->active ?? 0),
+                'inactive' => (int) ($stats->inactive ?? 0),
+                'upcoming' => (int) ($stats->upcoming ?? 0),
+                'ongoing' => (int) ($stats->ongoing ?? 0),
+                'completed' => (int) ($stats->completed ?? 0),
+                'undated' => (int) ($stats->undated ?? 0),
+            ],
         ]);
     }
 

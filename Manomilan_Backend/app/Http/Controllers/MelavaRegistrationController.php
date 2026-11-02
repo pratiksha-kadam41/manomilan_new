@@ -1209,14 +1209,6 @@ public function publicRegistrationStore(Request $request)
         'lengthOfEmployment' => 'nullable|string',
         'monthlyIncome' => 'nullable|string',
         'annualIncome' => 'nullable|string',
-        'hobbies' => 'nullable|string',
-        'extraCurricularActivities' => 'nullable|string',
-        'achievements' => 'nullable|string',
-        'sportsAndFitnessLikings' => 'nullable|string',
-        'cookingSkills' => 'nullable|string',
-        'activeOnSocialSites' => 'nullable|string',
-        'instagram' => 'nullable|string',
-        'facebook' => 'nullable|string',
         'hasMedicalHistory' => 'nullable|string',
         'personalMedicalHistory' => 'nullable|string',
         'currentMedicalProblems' => 'nullable|string',
@@ -2220,15 +2212,6 @@ public function publicUploadPayment(Request $request, $token)
                 'lengthOfEmployment'        => $data['lengthOfEmployment'] ?? $profile->lengthOfEmployment,
                 'monthlyIncome'             => $data['monthlyIncome'] ?? $profile->monthlyIncome,
                 'annualIncome'              => $data['annualIncome'] ?? $profile->annualIncome,
-                // Hobbies
-                'hobbies'                   => $data['hobbies'] ?? $profile->hobbies,
-                'extraCurricularActivities' => $data['extraCurricularActivities'] ?? $profile->extraCurricularActivities,
-                'achievements'              => $data['achievements'] ?? $profile->achievements,
-                'sportsAndFitnessLikings'   => $data['sportsAndFitnessLikings'] ?? $profile->sportsAndFitnessLikings,
-                'cookingSkills'             => $data['cookingSkills'] ?? $profile->cookingSkills,
-                'activeOnSocialSites'       => $data['activeOnSocialSites'] ?? $profile->activeOnSocialSites,
-                'instagram'                 => $data['instagram'] ?? $profile->instagram,
-                'facebook'                  => $data['facebook'] ?? $profile->facebook,
                 // Medical
                 'hasMedicalHistory'         => $data['hasMedicalHistory'] ?? $profile->hasMedicalHistory,
                 'personalMedicalHistory'    => $data['personalMedicalHistory'] ?? $profile->personalMedicalHistory,
@@ -2520,15 +2503,6 @@ public function publicUploadPayment(Request $request, $token)
                 'annualIncome'              => $data['annualIncome'] ?? '',
                 'income_currency'           => 'INR',
 
-                // Hobbies
-                'hobbies'                   => $data['hobbies'] ?? '',
-                'extraCurricularActivities' => $data['extraCurricularActivities'] ?? '',
-                'achievements'              => $data['achievements'] ?? '',
-                'sportsAndFitnessLikings'   => $data['sportsAndFitnessLikings'] ?? '',
-                'cookingSkills'             => $data['cookingSkills'] ?? '',
-                'activeOnSocialSites'       => $data['activeOnSocialSites'] ?? '',
-                'instagram'                 => $data['instagram'] ?? '',
-                'facebook'                  => $data['facebook'] ?? '',
 
                 // Medical
                 'personalMedicalHistory'    => $data['personalMedicalHistory'] ?? '',
@@ -2878,4 +2852,3 @@ public function publicUploadPayment(Request $request, $token)
 }
 
 }
-

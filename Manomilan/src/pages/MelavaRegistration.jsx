@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Copy } from "lucide-react";
 import { request } from "../api";
 import { getSession, isAdminRole } from "../auth";
 import "./MelavaRegistration.css";
@@ -67,11 +68,6 @@ const PLACEHOLDERS = {
   cityOfEducation: "e.g., Pune",
   professionalCity: "e.g., Mumbai",
   designation: "e.g., Manager",
-  extraCurricularActivities: "e.g., Music, Dance",
-  achievements: "e.g., State-level winner",
-  sportsAndFitnessLikings: "e.g., Cricket, Gym",
-  instagram: "e.g., @yourname",
-  facebook: "Profile name or link",
   fathersName: "Father's full name",
   fatherContactNumber: "10-digit mobile number",
   fathersOccupation: "e.g., Business",
@@ -144,15 +140,15 @@ const STEPS = [
       F("maritalStatus", "Marital Status", "select", 3, 1, { o: ["Unmarried", "Divorced", "Widowed", "Separated"] }),
       F("birthDate", "Birth Date", "date", 3, 1),
       F("height", "Height", "height", 3, 1),
-      F("weight", "Weight in kg", "text", 3, 1, { p: "e.g., 70" }),
+      F("weight", "Weight in kg", "number", 3, 1, { min: 1, max: 500, p: "e.g., 70" }),
       F("havingSpecsLenses", "Specs / Lenses", "select", 3, 0, { o: [["Yes", "Specs"], ["No", "Lenses"], ["None", "None"]] }),
       F("bloodGroup", "Blood Group", "select", 3, 1, { o: ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] }),
       F("motherTongue", "Mother Tongue", "text", 3, 1),
       F("language", "Other Languages", "text", 3),
       F("specialCases", "Special Cases", "text", 3, 0, { p: "If any" }),
       F("knowAboutMyself", "About Myself", "textarea", 9, 0, { p: "Write a short introduction about yourself..." }),
-      F("address", "Current Address", "textarea", 6, 1),
       F("permanent_address", "Permanent Address", "textarea", 6, 1),
+      F("address", "Current Address", "textarea", 6, 1),
     ],
   },
   {
@@ -191,15 +187,6 @@ const STEPS = [
       F("lengthOfEmployment", "Length of Employment", "text", 3, 0, { p: "e.g., 2 years" }),
       F("monthlyIncome", "Monthly Income \u20B9", "text", 3, 1, { p: "e.g., 50000" }),
       F("annualIncome", "Annual Income \u20B9", "text", 3, 0, { p: "e.g., 600000" }),
-      { sec: "Hobbies" },
-      F("hobbies", "Hobbies", "text", 3, 1, { p: "e.g., Reading, Painting" }),
-      F("extraCurricularActivities", "Extra Curriculars", "text", 3),
-      F("achievements", "Achievements", "text", 3),
-      F("sportsAndFitnessLikings", "Sports / Fitness", "text", 3),
-      F("cookingSkills", "Cooking Skills", "text", 3, 0, { p: "e.g., Basic, Expert" }),
-      F("activeOnSocialSites", "Active on Social Sites?", "select", 3, 0, { o: YES_NO }),
-      F("instagram", "Instagram ID", "text", 3, 0, { id: "instagramId", ...S("activeOnSocialSites", isYes) }),
-      F("facebook", "Facebook ID", "text", 3, 0, { id: "facebookId", ...S("activeOnSocialSites", isYes) }),
     ],
   },
   {
@@ -327,9 +314,23 @@ const digitsOnly = (value, max = 15) => String(value || "").replace(/\D/g, "").s
 
 const composeHeight = (feet, inches) => (feet ? `${feet}ft ${inches || 0}in` : "");
 
+const parseHeightParts = (value) => {
+  const match = String(value || "").trim().match(
+    /^(\d{1,2})(?:\s*(?:ft|feet|')\s*(\d{1,2})?\s*(?:in|inches|")?)?$/i,
+  );
+  if (!match) return null;
+  return { feet: Number(match[1]), inches: Number(match[2] || 0) };
+};
+
 const parseHeight = (value) => {
-  const match = String(value || "").match(/(\d+)\s*(?:ft|'|feet)?\s*(\d+)/i);
-  return match ? { feet: match[1], inches: match[2] } : { feet: "", inches: "0" };
+  const height = parseHeightParts(value);
+  return height ? { feet: String(height.feet), inches: String(height.inches) } : { feet: "", inches: "0" };
+};
+
+const heightInches = (value) => {
+  const height = parseHeightParts(value);
+  if (!height || height.feet < 3 || height.feet > 8 || height.inches > 11) return null;
+  return height.feet * 12 + height.inches;
 };
 
 const parseTime = (value) => {
@@ -362,6 +363,14 @@ const calculateAge = (dateValue) => {
   return age;
 };
 
+const latestAdultBirthDate = () => {
+  const date = new Date();
+  const year = date.getFullYear() - 18;
+  const month = date.getMonth();
+  const day = Math.min(date.getDate(), new Date(year, month + 1, 0).getDate());
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
 const money = (amount, currency = "INR") => {
   try {
     return new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(amount) || 0);
@@ -387,6 +396,15 @@ const fileBucket = (field) => {
   return field.n;
 };
 
+const itemsForField = (field, files, documents) => {
+  const bucket = fileBucket(field);
+  if (["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo"].includes(bucket)) {
+    return files[bucket] ? [files[bucket]] : [];
+  }
+  if (bucket === "additionalPhotos" || bucket === "candidatePhotos") return files[bucket] || [];
+  return documents[bucket] ? [documents[bucket]] : [];
+};
+
 const fieldVisible = (field, form) => {
   if (!field.s) return true;
   const [dependency, predicate] = field.s;
@@ -401,6 +419,87 @@ const optionList = (field, form) => {
 const optionLabel = (field, form, value) => {
   const match = optionList(field, form).find(([optionValue]) => String(optionValue) === String(value));
   return match ? match[1] : value;
+};
+
+const getValueError = (field, form) => {
+  const value = String(form[field.n] ?? "").trim();
+  if (!value) return "";
+
+  if (field.t === "select" && !optionList(field, form).some(([optionValue]) => String(optionValue) === value)) {
+    return "Choose a valid option.";
+  }
+  if (field.t === "number") {
+    const number = Number(value);
+    if (field.n === "weight") {
+      if (!/^\d+(?:\.\d{1,2})?$/.test(value) || !Number.isFinite(number)) {
+        return "Enter a weight between 1 and 500 kg.";
+      }
+    } else if (!Number.isInteger(number)) {
+      return "Enter a whole number.";
+    }
+    if (number < (field.min ?? 0)) return `Enter a value of at least ${field.min ?? 0}.`;
+    if (field.max !== undefined && number > field.max) return `Enter a value no greater than ${field.max}.`;
+    if (field.n === "brothersMarried" && number > Number(form.noOfBrothers || 0)) {
+      return "Married brothers cannot exceed the total number of brothers.";
+    }
+    if (field.n === "sistersMarried" && number > Number(form.noOfSisters || 0)) {
+      return "Married sisters cannot exceed the total number of sisters.";
+    }
+  }
+  if (field.t === "tel" && !/^[6-9]\d{9}$/.test(value)) {
+    return "Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.";
+  }
+  if (field.t === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) {
+    return "Enter a valid email address.";
+  }
+  if (field.t === "date") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Enter a valid birth date.";
+    const date = new Date(`${value}T00:00:00`);
+    const dateValue = Number.isNaN(date.getTime())
+      ? ""
+      : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (dateValue !== value) {
+      return "Enter a valid birth date.";
+    }
+    const today = new Date();
+    const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (value > todayValue) return "Birth date cannot be in the future.";
+    if (calculateAge(value) < 18) return "The candidate must be at least 18 years old.";
+  }
+  if (["monthlyIncome", "annualIncome", "familyAnnualIncome"].includes(field.n)) {
+    const number = Number(value.replace(/,/g, ""));
+    const validAmount = /^(?:\d+|\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(value);
+    if (!validAmount || !Number.isFinite(number) || number < 0) {
+      return "Enter a valid non-negative income amount.";
+    }
+  }
+  if (["height_from", "height_to"].includes(field.n) && heightInches(value) === null) {
+    return "Enter a height between 3 ft and 8 ft 11 in (for example, 5ft 5in).";
+  }
+  return "";
+};
+
+const fileMatchesAccept = (file, accept) => {
+  const mime = String(file.type || "").toLowerCase();
+  const extension = file.name.includes(".") ? `.${file.name.split(".").pop().toLowerCase()}` : "";
+  const extensionsByMime = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".bmp": "image/bmp",
+    ".pdf": "application/pdf",
+  };
+  return accept.split(",").some((item) => {
+    const rule = item.trim().toLowerCase();
+    if (rule.startsWith(".")) return extension === rule;
+    if (rule.endsWith("/*")) {
+      const family = rule.slice(0, -1);
+      return mime ? mime.startsWith(family) : (extensionsByMime[extension] || "").startsWith(family);
+    }
+    return mime === rule || extensionsByMime[extension] === rule;
+  });
 };
 
 const removeFieldError = (errors, name) => {
@@ -501,23 +600,155 @@ export default function MelavaRegistration() {
 
   const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
 
+  const getFormValidationErrors = (values, fileState = files, documentState = documents) => {
+    const nextErrors = {};
+    STEPS.forEach((currentStep) => {
+      currentStep.f.forEach((field) => {
+        if (field.sec || !fieldVisible(field, values)) return;
+
+        if (field.t === "file") {
+          const items = itemsForField(field, fileState, documentState);
+          if (field.r && !items.length) nextErrors[field.n] = "Please upload this file.";
+          if (field.n === "candidate_photos[]" && items.length > 5) {
+            nextErrors[field.n] = "You can upload up to 5 candidate photos only.";
+          }
+          if (field.n === "additionalPhotos[]" && items.length > 4) {
+            nextErrors[field.n] = "You can upload up to 4 additional photos only.";
+          }
+          if (items.some((item) => item.file && (item.file.size > MAX_FILE_SIZE || !fileMatchesAccept(item.file, field.acc)))) {
+            nextErrors[field.n] = `Choose an allowed file type, no larger than 5 MB.`;
+          }
+          return;
+        }
+
+        if (field.t === "height") {
+          const feet = String(values.height_ft ?? "").trim();
+          const inches = String(values.height_in ?? "").trim();
+          if (!feet) {
+            if (field.r || inches !== "0") nextErrors.height = "Select the candidate's height.";
+            return;
+          }
+          const feetValue = Number(feet);
+          const inchesValue = inches === "" ? 0 : Number(inches);
+          if (!Number.isInteger(feetValue) || feetValue < 3 || feetValue > 8) {
+            nextErrors.height = "Height must be between 3 and 8 feet.";
+          } else if (!Number.isInteger(inchesValue) || inchesValue < 0 || inchesValue > 11) {
+            nextErrors.height = "Inches must be a whole number from 0 to 11.";
+          }
+          return;
+        }
+
+        if (field.t === "tob") {
+          const hour = Number(values.birth_hour);
+          const minute = Number(values.birth_minute);
+          if (!values.birth_hour || values.birth_minute === "") {
+            if (field.r || values.birth_hour || values.birth_minute !== "") {
+              nextErrors.timeOfBirth = "Time of birth is required.";
+            }
+          } else if (!Number.isInteger(hour) || hour < 1 || hour > 12 || !Number.isInteger(minute) || minute < 0 || minute > 59 || !["AM", "PM"].includes(values.birthTime_ampm)) {
+            nextErrors.timeOfBirth = "Enter a valid time of birth.";
+          }
+          return;
+        }
+
+        const value = String(values[field.n] ?? "").trim();
+        if (field.r && !value) {
+          nextErrors[field.n] = "This field is required.";
+          return;
+        }
+        const valueError = getValueError(field, values);
+        if (valueError) nextErrors[field.n] = valueError;
+      });
+    });
+
+    [
+      ["noOfBrothers", "brothersMarried", "brothers"],
+      ["noOfSisters", "sistersMarried", "sisters"],
+    ].forEach(([totalKey, marriedKey, relation]) => {
+      const marriedValue = String(values[marriedKey] ?? "").trim();
+      if (!marriedValue) return;
+      const marriedCount = Number(marriedValue);
+      const totalCount = Number(values[totalKey]);
+      if (!Number.isInteger(marriedCount) || marriedCount < 0) {
+        nextErrors[marriedKey] = "Enter a whole number of 0 or more.";
+        if (!fieldVisible(STEPS[3].f.find((field) => field.n === marriedKey), values)) {
+          nextErrors[totalKey] = `Check the saved married ${relation} count.`;
+        }
+      } else if (marriedCount > totalCount) {
+        if (totalCount > 0) {
+          nextErrors[marriedKey] = `Married ${relation} cannot exceed the total number of ${relation}.`;
+        } else {
+          nextErrors[totalKey] = `Number of ${relation} must be at least ${marriedCount}.`;
+        }
+      }
+    });
+
+    if (values.age_from && values.age_to && Number(values.age_from) > Number(values.age_to)) {
+      nextErrors.age_to = "Age To must be greater than or equal to Age From.";
+    }
+    if (values.height_from && values.height_to && heightInches(values.height_from) > heightInches(values.height_to)) {
+      nextErrors.height_to = "Height To must be greater than or equal to Height From.";
+    }
+    return nextErrors;
+  };
+
   const update = (name, value) => {
     let nextValue = value;
     if (name === "username") nextValue = cleanMobile(value);
     else if (CONTACT_FIELDS.includes(name)) nextValue = digitsOnly(value);
 
-    setForm((previous) => {
-      const next = { ...previous, [name]: nextValue };
-      if (name === "username" && nextValue !== previous.username) {
-        next.is_existing_website_user = "";
-        setPaidRegistration(false);
-      }
-      if (name === "caste") next.subCaste = "";
-      if (name === "preferred_caste") next.preferred_sub_caste = "";
+    const nextForm = { ...form, [name]: nextValue };
+    if (name === "username" && nextValue !== form.username) {
+      nextForm.is_existing_website_user = "";
+      setPaidRegistration(false);
+    }
+    if (name === "monthlyIncome") {
+      const monthlyAmount = Number(String(nextValue).replace(/,/g, ""));
+      nextForm.annualIncome = String(nextValue).trim() && Number.isFinite(monthlyAmount)
+        ? String(Number((monthlyAmount * 12).toFixed(2)))
+        : "";
+    }
+    if (name === "caste") nextForm.subCaste = "";
+    if (name === "preferred_caste") nextForm.preferred_sub_caste = "";
+    if (name === "noOfBrothers" && Number(nextValue) === 0) nextForm.brothersMarried = "0";
+    if (name === "noOfSisters" && Number(nextValue) === 0) nextForm.sistersMarried = "0";
+    setForm(nextForm);
+
+    const affectedFields = new Set([name]);
+    if (name === "monthlyIncome") affectedFields.add("annualIncome");
+    STEPS.flatMap((currentStep) => currentStep.f).forEach((field) => {
+      if (field.s?.[0] === name) affectedFields.add(field.n);
+    });
+    if (["noOfBrothers", "brothersMarried"].includes(name)) {
+      affectedFields.add("noOfBrothers");
+      affectedFields.add("brothersMarried");
+    }
+    if (["noOfSisters", "sistersMarried"].includes(name)) {
+      affectedFields.add("noOfSisters");
+      affectedFields.add("sistersMarried");
+    }
+    if (["height_ft", "height_in"].includes(name)) affectedFields.add("height");
+    if (["birth_hour", "birth_minute", "birthTime_ampm"].includes(name)) affectedFields.add("timeOfBirth");
+    if (["age_from", "age_to"].includes(name)) {
+      affectedFields.add("age_from");
+      affectedFields.add("age_to");
+    }
+    if (["height_from", "height_to"].includes(name)) {
+      affectedFields.add("height_from");
+      affectedFields.add("height_to");
+    }
+
+    const validationErrors = getFormValidationErrors(nextForm);
+    setErrors((previous) => {
+      const next = { ...previous };
+      affectedFields.forEach((field) => {
+        delete next[field];
+        if (validationErrors[field]) next[field] = validationErrors[field];
+      });
+      if (name === "privacyPolicyCheck" && nextForm.privacyPolicyCheck) delete next.privacyPolicyCheck;
+      if (name === "termsCheck" && nextForm.termsCheck) delete next.termsCheck;
       return next;
     });
-
-    setErrors((previous) => removeFieldError(previous, name));
 
     if (name === "username") {
       setLookup({ status: "", message: "", tone: "" });
@@ -820,6 +1051,11 @@ export default function MelavaRegistration() {
       setErrors((previous) => ({ ...previous, [field.n]: "Each file must be 5 MB or smaller." }));
       return;
     }
+    if (selected.some((file) => !fileMatchesAccept(file, field.acc))) {
+      const allowedType = field.acc.includes("image/") ? "an allowed image file" : "a PDF, JPG, JPEG, or PNG file";
+      setErrors((previous) => ({ ...previous, [field.n]: `Choose ${allowedType}.` }));
+      return;
+    }
 
     const bucket = fileBucket(field);
 
@@ -862,57 +1098,49 @@ export default function MelavaRegistration() {
     if (["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo"].includes(bucket)) setFiles((previous) => ({ ...previous, [bucket]: null }));
     else if (bucket === "additionalPhotos" || bucket === "candidatePhotos") setFiles((previous) => ({ ...previous, [bucket]: [] }));
     else setDocuments((previous) => ({ ...previous, [bucket]: null }));
+    setErrors((previous) => field.r
+      ? { ...previous, [field.n]: "Please upload this file." }
+      : removeFieldError(previous, field.n));
   };
 
   const fileItems = (field) => {
-    const bucket = fileBucket(field);
-    if (["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo"].includes(bucket)) return files[bucket] ? [files[bucket]] : [];
-    if (bucket === "additionalPhotos") return files.additionalPhotos;
-    if (bucket === "candidatePhotos") return files.candidatePhotos;
-    return documents[bucket] ? [documents[bucket]] : [];
+    return itemsForField(field, files, documents);
   };
 
   const validateStep = (index) => {
     if (index >= PREVIEW_STEP) return true;
-    const nextErrors = {};
+    const allErrors = getFormValidationErrors(form);
+    const stepFields = new Set(STEPS[index].f.map((field) => field.n));
 
     if (index === 0) {
-      if (!["existing", "new"].includes(lookup.status)) {
-        nextErrors.username = lookup.status === "error" ? lookup.message : "Search your mobile number first.";
-      }
       if (!/^[6-9]\d{9}$/.test(cleanMobile(form.username))) {
-        nextErrors.username = "Enter a valid 10-digit mobile number.";
-      }
-      if (form.birthDate && Number(calculateAge(form.birthDate)) < 18) {
-        nextErrors.birthDate = "The candidate must be at least 18 years old.";
+        allErrors.username = "Enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.";
+      } else if (!["existing", "new"].includes(lookup.status)) {
+        allErrors.username = lookup.status === "error" ? lookup.message : "Search your mobile number first.";
       }
     }
 
-    STEPS[index].f.forEach((field) => {
-      if (field.sec || !field.r || !fieldVisible(field, form)) return;
-
-      if (field.t === "file") {
-        if (!fileItems(field).length) nextErrors[field.n] = "Please upload this file.";
-      } else if (field.t === "height") {
-        if (!heightText) nextErrors.height = "Select the candidate's height.";
-      } else if (field.t === "tob") {
-        if (!form.birth_hour || form.birth_minute === "") nextErrors.timeOfBirth = "Time of birth is required.";
-      } else if (!String(form[field.n] ?? "").trim()) {
-        nextErrors[field.n] = "This field is required.";
-      }
-    });
-
-    CONTACT_FIELDS.forEach((key) => {
-      if (form[key] && String(form[key]).length !== 10) nextErrors[key] = "Enter a valid 10-digit mobile number.";
+    const nextErrors = {};
+    Object.entries(allErrors).forEach(([key, message]) => {
+      if (stepFields.has(key)) nextErrors[key] = message;
     });
 
     const firstError = Object.keys(nextErrors)[0];
     if (firstError) {
-      setErrors((previous) => ({ ...previous, ...nextErrors }));
+      setErrors((previous) => {
+        const next = { ...previous };
+        stepFields.forEach((field) => delete next[field]);
+        return { ...next, ...nextErrors };
+      });
       setStep(index);
       focusField(firstError);
       return false;
     }
+    setErrors((previous) => {
+      const next = { ...previous };
+      stepFields.forEach((field) => delete next[field]);
+      return next;
+    });
     return true;
   };
 
@@ -1146,6 +1374,10 @@ export default function MelavaRegistration() {
       setPaymentError("The screenshot must be 5 MB or smaller.");
       return;
     }
+    if (!fileMatchesAccept(file, "image/*,.pdf")) {
+      setPaymentError("Choose an image or PDF payment screenshot.");
+      return;
+    }
     setPaymentFile({ file, preview: makeObjectUrl(file) });
     setPaymentError("");
   };
@@ -1235,8 +1467,8 @@ export default function MelavaRegistration() {
         <div className="f w3" key={key} data-field="height">
           <label>{field.l}<b>*</b></label>
           <div className="r2">
-            <input type="number" min="3" max="8" placeholder="Feet" aria-label="Feet" value={form.height_ft} onChange={(event) => update("height_ft", event.target.value)} />
-            <input type="number" min="0" max="11" placeholder="Inches" aria-label="Inches" value={form.height_in} onChange={(event) => update("height_in", event.target.value)} />
+            <input type="number" min="3" max="8" step="1" placeholder="Feet" aria-label="Feet" value={form.height_ft} onChange={(event) => update("height_ft", event.target.value)} />
+            <input type="number" min="0" max="11" step="1" placeholder="Inches" aria-label="Inches" value={form.height_in} onChange={(event) => update("height_in", event.target.value)} />
           </div>
           <small>Feet and inches</small>
           <FieldError message={errors.height} />
@@ -1285,6 +1517,17 @@ export default function MelavaRegistration() {
       return (
         <div className={`f w${field.w}`} key={key} data-field={key}>
           {label}
+          {key === "address" ? (
+            <button
+              type="button"
+              className="mini address-copy"
+              aria-label="Copy permanent address to current address"
+              title="Copy permanent address to current address"
+              onClick={() => update("address", form.permanent_address || "")}
+            >
+              <Copy size={16} aria-hidden="true" />
+            </button>
+          ) : null}
           <textarea id={id} name={key} rows="3" placeholder={placeholder} value={form[key] ?? ""} onChange={(event) => update(key, event.target.value)} />
           <FieldError message={errors[key]} />
         </div>
@@ -1302,8 +1545,21 @@ export default function MelavaRegistration() {
           value={form[key] ?? ""}
           readOnly={Boolean(field.ro)}
           maxLength={field.max}
-          inputMode={field.max || field.t === "number" ? "numeric" : undefined}
+          inputMode={
+            field.t === "number" || ["monthlyIncome", "annualIncome", "familyAnnualIncome"].includes(key)
+              ? "decimal"
+              : field.max
+              ? "numeric"
+              : undefined
+          }
           min={field.min}
+          max={
+            field.max
+            ?? (key === "brothersMarried" ? form.noOfBrothers : undefined)
+            ?? (key === "sistersMarried" ? form.noOfSisters : undefined)
+            ?? (key === "birthDate" ? latestAdultBirthDate() : undefined)
+          }
+          step={field.n === "weight" ? "any" : field.t === "number" ? "1" : undefined}
           onChange={(event) => update(key, event.target.value)}
         />
         {field.h ? <small>{field.h}</small> : null}

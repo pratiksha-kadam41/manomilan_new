@@ -93,7 +93,6 @@ class NriController extends Controller
                 $term = $request->input('other_expectations');
                 return $query->where(function ($q) use ($term) {
                     $q->where('profiles.knowAboutMyself', 'like', '%' . $term . '%')
-                        ->orWhere('profiles.hobbies', 'like', '%' . $term . '%')
                         ->orWhere('profiles.specialCases', 'like', '%' . $term . '%')
                         ->orWhere('profiles.familyValues', 'like', '%' . $term . '%')
                         ->orWhere('profiles.profession', 'like', '%' . $term . '%')

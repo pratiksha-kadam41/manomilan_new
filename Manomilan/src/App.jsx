@@ -8,6 +8,7 @@ import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 import { request } from "./api.js";
 import { AdminPermissionContext } from "./permission-context.jsx";
 import { getCandidateProfile, invalidateCandidateProfileCache } from "./candidate/api.js";
+import { getPublicWebsiteSettings } from "./website/api.js";
 
 const Home = lazy(() => import("./pages/Home.jsx"));
 const About = lazy(() => import("./pages/About.jsx"));
@@ -36,6 +37,11 @@ const Reports = lazy(() => import("./admin/pages/Reports.jsx"));
 const ResetPasswords = lazy(() => import("./admin/pages/ResetPasswords.jsx"));
 const SystemManagement = lazy(() => import("./admin/pages/SystemManagement.jsx"));
 const ProfileDetail = lazy(() => import("./pages/ProfileDetail.jsx"));
+const WebsiteOverview = lazy(() => import("./admin/pages/website/WebsiteOverview.jsx"));
+const UpcomingEventsSettings = lazy(() => import("./admin/pages/website/UpcomingEventsSettings.jsx"));
+const DowntimeManagement = lazy(() => import("./admin/pages/website/DowntimeManagement.jsx"));
+const FullMaintenanceMode = lazy(() => import("./admin/pages/website/FullMaintenanceMode.jsx"));
+const Maintenance = lazy(() => import("./website/Maintenance.jsx"));
 
 // Add a page here: "/url-name": Component
 const ROUTES = {
@@ -71,6 +77,11 @@ const ROUTES = {
   "/admin/reset-passwords": ResetPasswords,
   "/admin/report": Reports,
   "/admin/system-management": SystemManagement,
+  "/admin/website": WebsiteOverview,
+  "/admin/website/upcoming-events": UpcomingEventsSettings,
+  "/admin/website/downtime": DowntimeManagement,
+  "/admin/website/maintenance": FullMaintenanceMode,
+  "/maintenance": Maintenance,
 };
 
 // Pages whose URL contains an id (only digits are accepted)
@@ -121,9 +132,20 @@ export default function App() {
     status: "idle",
     error: "",
   });
+  const [websiteSettings, setWebsiteSettings] = useState(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
+  }, [path]);
+
+  useEffect(() => {
+    let active = true;
+    getPublicWebsiteSettings().then((data) => {
+      if (active) setWebsiteSettings(data);
+    });
+    return () => {
+      active = false;
+    };
   }, [path]);
 
   const session = getSession();
@@ -234,6 +256,9 @@ export default function App() {
   const isCandidatePath = path.startsWith("/candidate");
   const isLogin = path === "/login" || path === "/register";
   const isMelavaRegistration = path === "/melava-registration";
+  const isMaintenancePath = path === "/maintenance";
+  const isPublicPath = !isAdminPath && !isCandidatePath && path !== "/login" && !isMaintenancePath;
+  const maintenanceActive = Boolean(websiteSettings?.maintenance?.active);
 
   // Only admin and candidate pages require an authenticated session.
   const needsLogin = (isAdminPath || isCandidatePath) && !session;
@@ -318,7 +343,12 @@ export default function App() {
   if (wrongRole) return null;
   if (mustChangePassword) return null;
   if (checkingCandidateProfile) {
-    return <main className="app-loading" role="status">Checking your candidate profile…</main>;
+    return (
+      <main className="app-loading" role="status" aria-live="polite">
+        <span className="app-loading-mark" aria-hidden="true" />
+        <span className="app-loading-label">Checking your candidate profile…</span>
+      </main>
+    );
   }
   if (candidateProfileCheckEnabled && candidateProfileStatus === "error") {
     return (
@@ -345,14 +375,32 @@ export default function App() {
   // CHANGED: find the page (and the id from the URL, if any)
   const { Page: Matched, params } = matchRoute(path);
   const Page = needsLogin ? Login : Matched;
-  const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration;
+  const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration || isMaintenancePath;
+
+  if (maintenanceActive && isPublicPath) {
+    return (
+      <Suspense fallback={(
+        <main className="app-loading" role="status" aria-live="polite">
+          <span className="app-loading-mark" aria-hidden="true" />
+          <span className="app-loading-label">Loading...</span>
+        </main>
+      )}>
+        <Maintenance settings={websiteSettings?.maintenance} />
+      </Suspense>
+    );
+  }
 
   return (
     <>
       {!hideChrome && <Header />}
       {Page ? (
         <AdminPermissionContext.Provider value={permissionContext}>
-          <Suspense fallback={<main className="app-loading" role="status">Loading…</main>}>
+          <Suspense fallback={(
+            <main className="app-loading" role="status" aria-live="polite">
+              <span className="app-loading-mark" aria-hidden="true" />
+              <span className="app-loading-label">Loading…</span>
+            </main>
+          )}>
             <Page key={`${path}-${params.id || ""}`} params={params} />
           </Suspense>
         </AdminPermissionContext.Provider>

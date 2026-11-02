@@ -1,7 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CalendarPlus, ImagePlus, Pencil, RefreshCw, Search, Trash2, ToggleLeft, ToggleRight, X } from "lucide-react";
+import {
+  CalendarCheck,
+  CalendarDays,
+  CalendarPlus,
+  CheckCircle2,
+  Clock,
+  ImagePlus,
+  Layers,
+  Pencil,
+  RefreshCw,
+  Search,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  X,
+  XCircle,
+} from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import AdminStats from "../components/AdminStats";
+import AdminPagination from "../components/AdminPagination";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { request } from "../../api";
+import "../components/admin-ui.css";
 import "./melavaCampaigns.css";
 
 const EMPTY_FORM = {
@@ -15,6 +35,16 @@ const EMPTY_FORM = {
   booklet_available: false,
   booklet_fee: "",
   qr_image: null,
+};
+
+const EMPTY_STATS = {
+  total: 0,
+  active: 0,
+  inactive: 0,
+  upcoming: 0,
+  ongoing: 0,
+  completed: 0,
+  undated: 0,
 };
 
 const amount = (value, currency) =>
@@ -32,6 +62,15 @@ const formatDate = (value) => {
     : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
+const scheduleTone = (status) => {
+  switch (String(status || "").toLowerCase()) {
+    case "ongoing": return "ok";
+    case "upcoming": return "info";
+    case "completed": return "neutral";
+    default: return "neutral";
+  }
+};
+
 export default function MelavaCampaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
@@ -43,39 +82,43 @@ export default function MelavaCampaigns() {
   const [editingId, setEditingId] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
+  const [stats, setStats] = useState(EMPTY_STATS);
   const formRef = useRef(null);
   const formPanelRef = useRef(null);
+  const requestId = useRef(0);
 
-  const load = useCallback(async () => {
+  const debouncedSearch = useDebouncedValue(search, 350);
+  const activeQuery = debouncedSearch.trim();
+
+  const load = useCallback(async (overrides = {}) => {
+    const targetPage = overrides.page ?? page;
+    const id = ++requestId.current;
     setLoading(true);
     setError("");
     try {
-      const response = await request("/melava-campaigns");
+      const params = new URLSearchParams({ per_page: "20", page: String(targetPage) });
+      if (activeQuery) params.set("q", activeQuery);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      const response = await request(`/melava-campaigns?${params}`);
+      if (id !== requestId.current) return;
       setCampaigns(Array.isArray(response?.data) ? response.data : []);
+      setPagination(response?.pagination || null);
+      setStats({ ...EMPTY_STATS, ...(response?.stats || {}) });
     } catch (requestError) {
-      setError(requestError.message || "Unable to load Melava events.");
+      if (id === requestId.current) setError(requestError.message || "Unable to load Melava events.");
     } finally {
-      setLoading(false);
+      if (id === requestId.current) setLoading(false);
     }
-  }, []);
+  }, [activeQuery, statusFilter, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
-
-  const visibleCampaigns = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    return campaigns.filter((campaign) => {
-      if (statusFilter !== "all" && campaign.status !== statusFilter) return false;
-      if (!term) return true;
-      return [campaign.melava_code, campaign.title, campaign.description]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term));
-    });
-  }, [campaigns, query, statusFilter]);
 
   const setField = (event) => {
     const { name, value, checked, files } = event.target;
@@ -134,7 +177,8 @@ export default function MelavaCampaigns() {
       formElement.reset();
       setFormOpen(false);
       setNotice("Melava event created. It is now available on the registration form.");
-      await load();
+      setPage(1);
+      await load({ page: 1 });
     } catch (requestError) {
       setError(requestError.message || "Unable to create the Melava event.");
     } finally {
@@ -211,7 +255,9 @@ export default function MelavaCampaigns() {
       if (editingId === campaign.id) cancelEdit();
       setDeleteTarget(null);
       setNotice("Melava event deleted.");
-      await load();
+      const nextPage = campaigns.length === 1 && page > 1 ? page - 1 : page;
+      setPage(nextPage);
+      await load({ page: nextPage });
     } catch (requestError) {
       setError(requestError.message || "Unable to delete the Melava event.");
     } finally {
@@ -237,6 +283,7 @@ export default function MelavaCampaigns() {
           ? "Event opened for registration."
           : "Event closed. Existing registrations remain available for payment review.",
       );
+      await load();
     } catch (requestError) {
       setError(requestError.message || "Unable to update event status.");
     } finally {
@@ -244,18 +291,35 @@ export default function MelavaCampaigns() {
     }
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setStatusFilter("all");
+    setPage(1);
+  };
+
+  const hasFilters = Boolean(search.trim() || statusFilter !== "all");
+
+  const statItems = useMemo(() => [
+    { key: "total", label: "Total Events", value: stats.total, icon: Layers, tone: "teal", hint: "Matching filters" },
+    { key: "active", label: "Active", value: stats.active, icon: CheckCircle2, tone: "green", hint: "Open for registration" },
+    { key: "inactive", label: "Inactive", value: stats.inactive, icon: XCircle, tone: "amber", hint: "Closed events" },
+    { key: "upcoming", label: "Upcoming", value: stats.upcoming, icon: Clock, tone: "blue", hint: "Scheduled ahead" },
+    { key: "ongoing", label: "Ongoing", value: stats.ongoing, icon: CalendarDays, tone: "magenta", hint: "Running today" },
+    { key: "completed", label: "Completed", value: stats.completed, icon: CalendarCheck, tone: "slate", hint: "Past events" },
+  ], [stats]);
+
   return (
     <AdminLayout currentPath="/admin/melava-campaigns">
-      <div className="mc-page">
-        <header className="mc-heading">
+      <div className="adm-ui mc-page">
+        <div className="ui-head">
           <div>
             <h1>Melava Events</h1>
             <p>Manage Melava batches, registration prices, and event availability.</p>
           </div>
-          <div className="mc-heading-actions">
+          <div className="ui-head-actions">
             <button
               type="button"
-              className="mc-button primary"
+              className="ui-btn"
               onClick={() => formOpen
                 ? formPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
                 : openCreateForm()}
@@ -263,267 +327,284 @@ export default function MelavaCampaigns() {
             >
               <CalendarPlus size={17} /> {formOpen ? "Form is open" : "Add new Melava"}
             </button>
-            <button type="button" className="mc-button secondary" onClick={load} disabled={loading || saving || busyId !== null}>
-              <RefreshCw size={16} /> Refresh
+            <button type="button" className="ui-btn secondary" onClick={() => load()} disabled={loading || saving || busyId !== null}>
+              <RefreshCw size={16} className={loading ? "ui-spin" : ""} /> Refresh
             </button>
           </div>
-        </header>
+        </div>
 
-        {error ? <div className="mc-alert error" role="alert">{error}</div> : null}
-        {notice ? <div className="mc-alert success" role="status">{notice}</div> : null}
+        <AdminStats items={statItems} loading={loading && !pagination} label="Melava event statistics" />
+
+        {error ? <div className="ui-alert" role="alert"><span>{error}</span></div> : null}
+        {notice ? <div className="ui-alert success" role="status">{notice}</div> : null}
 
         {formOpen ? (
-        <section className="mc-panel mc-form-panel" ref={formPanelRef}>
-          <div className="mc-panel-title">
-            <CalendarPlus size={20} />
-            <div>
-              <h2>{editingId ? "Edit Melava batch" : "Create a Melava batch"}</h2>
-              <p>New active batches and their server-managed prices appear on the public registration form.</p>
+          <section className="mc-panel mc-form-panel" ref={formPanelRef}>
+            <div className="mc-panel-title">
+              <CalendarPlus size={20} />
+              <div>
+                <h2>{editingId ? "Edit Melava batch" : "Create a Melava batch"}</h2>
+                <p>New active batches and their server-managed prices appear on the public registration form.</p>
+              </div>
             </div>
-          </div>
 
-          <form ref={formRef} className="mc-form" onSubmit={editingId ? saveCampaign : createCampaign}>
-            <div className="mc-form-grid mc-event-details">
-              <label>
-                Melava number / code <span>*</span>
-                <input
-                  name="melava_code"
-                  value={form.melava_code}
-                  onChange={setField}
-                  placeholder="e.g. MM-04"
-                  pattern="MM-[0-9]{2}"
-                  maxLength={20}
-                  required
-                />
-                <small>Use a unique two-digit number, for example MM-04.</small>
-              </label>
-              <label>
-                Melava batch / event title <span>*</span>
-                <input
-                  name="title"
-                  value={form.title}
-                  onChange={setField}
-                  placeholder="e.g. Melava 4 - October 2026"
-                  maxLength={255}
-                  required
-                />
-              </label>
-            </div>
-            <div className="mc-form-grid mc-event-dates">
-              <label>
-                Event start date
-                <input
-                  name="start_date"
-                  type="date"
-                  value={form.start_date}
-                  onChange={setField}
-                  aria-label="Event start date"
-                />
-              </label>
-              <label>
-                Event end date
-                <input
-                  name="end_date"
-                  type="date"
-                  min={form.start_date || undefined}
-                  value={form.end_date}
-                  onChange={setField}
-                />
-              </label>
-            </div>
-            <label>
-              Description <small className="mc-field-hint">Optional details shown with this event.</small>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={setField}
-                placeholder="Add event details, venue, or any instructions for candidates."
-                rows={3}
-                maxLength={5000}
-              />
-            </label>
-            <div className="mc-form-grid">
-              <label>
-                Currency
-                <select name="currency" value={form.currency} onChange={setField}>
-                  <option value="INR">INR - Indian Rupee</option>
-                </select>
-              </label>
-              <label>
-                Registration price <span>*</span>
-                <input
-                  name="registration_fee"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.registration_fee}
-                  onChange={setField}
-                  placeholder="e.g. 500"
-                  required
-                />
-              </label>
-              <label className="mc-check">
-                <input name="booklet_available" type="checkbox" checked={form.booklet_available} onChange={setField} />
-                Offer a booklet for this event
-              </label>
-              {form.booklet_available ? (
+            <form ref={formRef} className="mc-form" onSubmit={editingId ? saveCampaign : createCampaign}>
+              <div className="mc-form-grid mc-event-details">
                 <label>
-                  Booklet price <span>*</span>
+                  Melava number / code <span>*</span>
                   <input
-                    name="booklet_fee"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.booklet_fee}
+                    name="melava_code"
+                    value={form.melava_code}
                     onChange={setField}
-                    placeholder="e.g. 100"
+                    placeholder="e.g. MM-04"
+                    pattern="MM-[0-9]{2}"
+                    maxLength={20}
+                    required
+                  />
+                  <small>Use a unique two-digit number, for example MM-04.</small>
+                </label>
+                <label>
+                  Melava batch / event title <span>*</span>
+                  <input
+                    name="title"
+                    value={form.title}
+                    onChange={setField}
+                    placeholder="e.g. Melava 4 - October 2026"
+                    maxLength={255}
                     required
                   />
                 </label>
-              ) : null}
-            </div>
-            <label>
-              Payment QR image {!editingId ? <span>*</span> : null}
-              <div className="mc-upload">
-                <ImagePlus size={19} />
-                <input name="qr_image" type="file" accept="image/png,image/jpeg,image/webp" onChange={setField} required={!editingId} />
               </div>
-              <small>
-                {form.qr_image
-                  ? `Selected: ${form.qr_image.name}`
-                  : editingId
-                    ? "Optional when editing. Leave empty to keep the current QR image."
-                    : "Choose a PNG, JPG, or WebP image up to 5 MB."}
-              </small>
-            </label>
-            <div className="mc-form-actions">
-              <button type="submit" className="mc-button primary" disabled={saving || busyId !== null}>
-                {saving ? "Saving..." : editingId ? "Save changes" : "Create event"}
-              </button>
-              <button type="button" className="mc-button secondary" onClick={cancelEdit} disabled={saving || busyId !== null}>Cancel</button>
-            </div>
-          </form>
-        </section>
+              <div className="mc-form-grid mc-event-dates">
+                <label>
+                  Event start date
+                  <input
+                    name="start_date"
+                    type="date"
+                    value={form.start_date}
+                    onChange={setField}
+                    aria-label="Event start date"
+                  />
+                </label>
+                <label>
+                  Event end date
+                  <input
+                    name="end_date"
+                    type="date"
+                    min={form.start_date || undefined}
+                    value={form.end_date}
+                    onChange={setField}
+                  />
+                </label>
+              </div>
+              <label>
+                Description <small className="mc-field-hint">Optional details shown with this event.</small>
+                <textarea
+                  name="description"
+                  value={form.description}
+                  onChange={setField}
+                  placeholder="Add event details, venue, or any instructions for candidates."
+                  rows={3}
+                  maxLength={5000}
+                />
+              </label>
+              <div className="mc-form-grid">
+                <label>
+                  Currency
+                  <select name="currency" value={form.currency} onChange={setField}>
+                    <option value="INR">INR - Indian Rupee</option>
+                  </select>
+                </label>
+                <label>
+                  Registration price <span>*</span>
+                  <input
+                    name="registration_fee"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.registration_fee}
+                    onChange={setField}
+                    placeholder="e.g. 500"
+                    required
+                  />
+                </label>
+                <label className="mc-check">
+                  <input name="booklet_available" type="checkbox" checked={form.booklet_available} onChange={setField} />
+                  Offer a booklet for this event
+                </label>
+                {form.booklet_available ? (
+                  <label>
+                    Booklet price <span>*</span>
+                    <input
+                      name="booklet_fee"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.booklet_fee}
+                      onChange={setField}
+                      placeholder="e.g. 100"
+                      required
+                    />
+                  </label>
+                ) : null}
+              </div>
+              <label>
+                Payment QR image {!editingId ? <span>*</span> : null}
+                <div className="mc-upload">
+                  <ImagePlus size={19} />
+                  <input name="qr_image" type="file" accept="image/png,image/jpeg,image/webp" onChange={setField} required={!editingId} />
+                </div>
+                <small>
+                  {form.qr_image
+                    ? `Selected: ${form.qr_image.name}`
+                    : editingId
+                      ? "Optional when editing. Leave empty to keep the current QR image."
+                      : "Choose a PNG, JPG, or WebP image up to 5 MB."}
+                </small>
+              </label>
+              <div className="mc-form-actions">
+                <button type="submit" className="ui-btn" disabled={saving || busyId !== null}>
+                  {saving ? "Saving..." : editingId ? "Save changes" : "Create event"}
+                </button>
+                <button type="button" className="ui-btn secondary" onClick={cancelEdit} disabled={saving || busyId !== null}>Cancel</button>
+              </div>
+            </form>
+          </section>
         ) : null}
 
-        <section className="mc-panel mc-list-panel">
-          <div className="mc-panel-title">
-            <div><h2>Existing events</h2><p>Only active events are shown to registrants.</p></div>
-          </div>
-
-          <div className="mc-list-tools">
-            <label className="mc-search">
-              <Search size={17} />
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search event code or title"
-                aria-label="Search Melava events"
-              />
-            </label>
-            <div className="mc-status-filters" role="group" aria-label="Filter events by registration status">
-              {[
-                ["all", "All"],
-                ["active", "Active"],
-                ["inactive", "Inactive"],
-              ].map(([value, label]) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={statusFilter === value ? "active" : ""}
-                  aria-pressed={statusFilter === value}
-                  onClick={() => setStatusFilter(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {loading ? <p className="mc-muted" role="status">Loading events…</p> : null}
-          {!loading && error ? (
-            <div className="mc-list-error" role="alert">
-              <span>Events could not be loaded.</span>
-              <button type="button" className="mc-button secondary" onClick={load}>Try again</button>
-            </div>
+        <div className="ui-card ui-toolbar">
+          <label className="ui-search">
+            <Search size={17} />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+              placeholder="Search event code, title, or description"
+              aria-label="Search Melava events"
+            />
+            {search ? (
+              <button type="button" onClick={() => { setSearch(""); setPage(1); }} aria-label="Clear search"><X size={16} /></button>
+            ) : null}
+          </label>
+          <select
+            className="ui-select"
+            value={statusFilter}
+            onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}
+            aria-label="Filter events by registration status"
+          >
+            <option value="all">All statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+          {hasFilters ? (
+            <button type="button" className="ui-reset" onClick={clearFilters}>Reset</button>
           ) : null}
-          {!loading && !error && campaigns.length === 0 ? <p className="mc-muted">No events have been created yet.</p> : null}
-          {!loading && !error && campaigns.length > 0 && visibleCampaigns.length === 0 ? (
-            <p className="mc-muted">No events match these filters.</p>
-          ) : null}
-          {!loading && !error && visibleCampaigns.length > 0 ? (
-            <div className="mc-table-wrap">
-              <table className="mc-table">
+        </div>
+
+        <div className="ui-card ui-table-card">
+          <div className={`ui-table-scroll ${loading ? "is-loading" : ""}`}>
+            <table className="ui-table">
               <thead>
                 <tr>
                   <th scope="col">Melava event</th>
                   <th scope="col">Schedule</th>
                   <th scope="col">Price</th>
                   <th scope="col">Registration</th>
-                  <th scope="col" className="mc-actions-heading">Actions</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
-            {visibleCampaigns.map((campaign) => (
-              <tr key={campaign.id}>
-                <td data-label="Melava event">
-                  <div className="mc-event-cell">
-                    <img src={campaign.qr_image_url} alt="" />
-                    <div>
-                      <strong>{campaign.melava_code} - {campaign.title}</strong>
-                      {campaign.description ? <small>{campaign.description}</small> : null}
-                    </div>
-                  </div>
-                </td>
-                <td data-label="Schedule">
-                  <strong>{formatDate(campaign.start_date)}</strong>
-                  {campaign.end_date && campaign.end_date !== campaign.start_date
-                    ? <small>to {formatDate(campaign.end_date)}</small>
-                    : null}
-                  <small>{campaign.schedule_status || "Undated"}</small>
-                </td>
-                <td data-label="Price">
-                  <strong>{amount(campaign.registration_fee, campaign.currency)}</strong>
-                  <small>
-                    {campaign.booklet_available
-                      ? `Booklet: ${amount(campaign.booklet_fee, campaign.currency)}`
-                      : "Booklet not offered"}
-                  </small>
-                </td>
-                <td data-label="Registration">
-                  <span className={`mc-status ${campaign.status}`}>{campaign.status}</span>
-                </td>
-                <td data-label="Actions">
-                  <div className="mc-event-actions">
-                    <button
-                      type="button"
-                      className={`mc-button ${campaign.status === "active" ? "status-active" : "status-inactive"}`}
-                      onClick={() => changeStatus(campaign)}
-                      disabled={busyId !== null || saving}
-                      aria-label={`${campaign.status === "active" ? "Deactivate" : "Activate"} ${campaign.melava_code}`}
-                    >
-                      {campaign.status === "active" ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
-                      {busyId === campaign.id
-                        ? "Saving..."
-                        : campaign.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
-                    <button type="button" className="mc-button secondary" onClick={() => startEdit(campaign)} disabled={busyId !== null || saving}>
-                      <Pencil size={16} /> Edit
-                    </button>
-                    <button type="button" className="mc-button danger" onClick={() => setDeleteTarget(campaign)} disabled={busyId !== null || saving}>
-                      <Trash2 size={16} /> Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                {loading && !campaigns.length ? Array.from({ length: 6 }, (_, index) => (
+                  <tr className="ui-skeleton-row" key={`skeleton-${index}`}>
+                    <td colSpan="5"><span /></td>
+                  </tr>
+                )) : null}
+
+                {!loading && !campaigns.length ? (
+                  <tr>
+                    <td colSpan="5">
+                      <div className="ui-state">
+                        <CalendarDays size={30} />
+                        <strong>No events found</strong>
+                        <p>{hasFilters ? "No Melava events match your current filters." : "No events have been created yet."}</p>
+                        {hasFilters ? <button type="button" className="ui-btn small" onClick={clearFilters}>Clear filters</button> : null}
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+
+                {campaigns.map((campaign) => (
+                  <tr key={campaign.id}>
+                    <td>
+                      <div className="mc-event-cell">
+                        {campaign.qr_image_url ? <img src={campaign.qr_image_url} alt="" loading="lazy" /> : null}
+                        <div>
+                          <strong>{campaign.melava_code} - {campaign.title}</strong>
+                          {campaign.description ? <small>{campaign.description}</small> : null}
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <strong>{formatDate(campaign.start_date)}</strong>
+                      {campaign.end_date && campaign.end_date !== campaign.start_date
+                        ? <small>to {formatDate(campaign.end_date)}</small>
+                        : null}
+                      <span className={`ui-badge ${scheduleTone(campaign.schedule_status)}`}>{campaign.schedule_status || "Undated"}</span>
+                    </td>
+                    <td>
+                      <strong>{amount(campaign.registration_fee, campaign.currency)}</strong>
+                      <small>
+                        {campaign.booklet_available
+                          ? `Booklet: ${amount(campaign.booklet_fee, campaign.currency)}`
+                          : "Booklet not offered"}
+                      </small>
+                    </td>
+                    <td>
+                      <span className={`ui-badge ${campaign.status === "active" ? "ok" : "off"}`}>{campaign.status}</span>
+                    </td>
+                    <td>
+                      <div className="ui-actions">
+                        <button
+                          type="button"
+                          className="ui-btn small secondary"
+                          onClick={() => changeStatus(campaign)}
+                          disabled={busyId !== null || saving}
+                          aria-label={`${campaign.status === "active" ? "Deactivate" : "Activate"} ${campaign.melava_code}`}
+                        >
+                          {campaign.status === "active" ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
+                          {busyId === campaign.id
+                            ? "Saving..."
+                            : campaign.status === "active" ? "Deactivate" : "Activate"}
+                        </button>
+                        <button type="button" className="ui-btn small secondary" onClick={() => startEdit(campaign)} disabled={busyId !== null || saving}>
+                          <Pencil size={15} /> Edit
+                        </button>
+                        <button type="button" className="ui-btn small danger" onClick={() => setDeleteTarget(campaign)} disabled={busyId !== null || saving}>
+                          <Trash2 size={15} /> Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
-              </table>
-            </div>
+            </table>
+          </div>
+
+          {pagination ? (
+            <AdminPagination
+              page={pagination.current_page || page}
+              lastPage={pagination.last_page || 1}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              onPage={setPage}
+              disabled={loading}
+              label="Melava event pagination"
+            />
           ) : null}
-        </section>
+        </div>
       </div>
+
       {deleteTarget ? (
         <div className="mc-modal" onClick={() => !busyId && setDeleteTarget(null)}>
           <section
@@ -541,8 +622,8 @@ export default function MelavaCampaigns() {
               {deleteTarget.melava_code} — {deleteTarget.title}. Events with registrations cannot be deleted.
             </p>
             <div className="mc-dialog-actions">
-              <button type="button" className="mc-button secondary" onClick={() => setDeleteTarget(null)} disabled={busyId !== null}>Cancel</button>
-              <button type="button" className="mc-button danger" onClick={deleteCampaign} disabled={busyId !== null}>
+              <button type="button" className="ui-btn secondary" onClick={() => setDeleteTarget(null)} disabled={busyId !== null}>Cancel</button>
+              <button type="button" className="ui-btn danger" onClick={deleteCampaign} disabled={busyId !== null}>
                 {busyId !== null ? "Deleting…" : "Delete event"}
               </button>
             </div>

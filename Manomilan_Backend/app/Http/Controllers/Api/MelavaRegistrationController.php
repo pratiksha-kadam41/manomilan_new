@@ -9,6 +9,7 @@ use App\Models\User;
 use App\PaymentScreenshot;
 use App\Preference;
 use App\Profile;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -67,9 +68,24 @@ class MelavaRegistrationController extends Controller
             'melava_number' => ['nullable', 'string', 'max:255'],
             'include_filters' => ['nullable', 'boolean'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'age_from' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'age_to' => ['nullable', 'integer', 'min:1', 'max:120'],
         ]);
 
-        $query = MelavaRegistration::with('profile')
+        $ageFrom = $request->filled('age_from') ? (int) $request->input('age_from') : null;
+        $ageTo = $request->filled('age_to') ? (int) $request->input('age_to') : null;
+
+        if ($ageFrom !== null && $ageTo !== null && $ageFrom > $ageTo) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Minimum age cannot be greater than maximum age.',
+                'errors' => ['age_from' => ['Minimum age cannot be greater than maximum age.']],
+            ], 422);
+        }
+
+        $today = Carbon::today();
+
+        $baseQuery = MelavaRegistration::query()
             ->when(! empty($filters['q']), function ($query) use ($filters) {
                 $term = trim($filters['q']);
                 $query->where(function ($search) use ($term) {
@@ -111,23 +127,34 @@ class MelavaRegistrationController extends Controller
             })
             ->when(isset($filters['melava_number']), function ($query) use ($filters) {
                 $query->where('melava_number', $filters['melava_number']);
+            })
+            ->when($ageFrom !== null, function ($query) use ($ageFrom, $today) {
+                $query->whereNotNull('birthDate')
+                    ->whereDate('birthDate', '<=', $today->copy()->subYears($ageFrom)->toDateString());
+            })
+            ->when($ageTo !== null, function ($query) use ($ageTo, $today) {
+                $query->whereNotNull('birthDate')
+                    ->whereDate('birthDate', '>', $today->copy()->subYears($ageTo + 1)->toDateString());
             });
 
-        $registrations = $query
+        $stats = (clone $baseQuery)
+            ->selectRaw('COUNT(*) AS total')
+            ->selectRaw("SUM(CASE WHEN LOWER(groomOrBride) IN ('groom', 'male', 'm', 'var') THEN 1 ELSE 0 END) AS groom")
+            ->selectRaw("SUM(CASE WHEN LOWER(groomOrBride) IN ('bride', 'female', 'f', 'vadhu') THEN 1 ELSE 0 END) AS bride")
+            ->selectRaw('SUM(CASE WHEN is_booklet_req = 1 THEN 1 ELSE 0 END) AS booklet')
+            ->selectRaw('SUM(CASE WHEN payment_verified = 1 THEN 1 ELSE 0 END) AS verified')
+            ->selectRaw('SUM(CASE WHEN payment_verified = 0 THEN 1 ELSE 0 END) AS pending')
+            ->selectRaw("SUM(CASE WHEN attendance_status = 'present' THEN 1 ELSE 0 END) AS attended")
+            ->first();
+
+        $registrations = (clone $baseQuery)
+            ->with('profile')
             ->latest()
             ->paginate((int) ($filters['per_page'] ?? 20));
 
         $registrations->getCollection()->transform(
             fn (MelavaRegistration $registration) => $this->presentRegistration($registration)
         );
-
-        $allRegistrations = DB::table('melava_registrations');
-        $stats = $allRegistrations
-            ->selectRaw('COUNT(*) AS total')
-            ->selectRaw("SUM(CASE WHEN LOWER(groomOrBride) IN ('groom', 'male', 'm', 'var') THEN 1 ELSE 0 END) AS groom")
-            ->selectRaw("SUM(CASE WHEN LOWER(groomOrBride) IN ('bride', 'female', 'f', 'vadhu') THEN 1 ELSE 0 END) AS bride")
-            ->selectRaw('SUM(CASE WHEN is_booklet_req = 1 THEN 1 ELSE 0 END) AS booklet')
-            ->first();
 
         $response = [
             'success' => true,
@@ -137,6 +164,9 @@ class MelavaRegistrationController extends Controller
                 'groom' => (int) ($stats->groom ?? 0),
                 'bride' => (int) ($stats->bride ?? 0),
                 'booklet' => (int) ($stats->booklet ?? 0),
+                'verified' => (int) ($stats->verified ?? 0),
+                'pending' => (int) ($stats->pending ?? 0),
+                'attended' => (int) ($stats->attended ?? 0),
             ],
         ];
 
@@ -272,6 +302,10 @@ class MelavaRegistrationController extends Controller
                         ->update(['payment_verified' => (bool) $data['payment_verified']]);
                 }
             });
+
+            if ($registration->profile_id) {
+                Profile::find($registration->profile_id)?->syncDocumentVerificationStatus();
+            }
 
             return response()->json([
                 'success' => true,
@@ -594,14 +628,6 @@ class MelavaRegistrationController extends Controller
             'monthlyIncome' => ['nullable', 'string', 'max:255'],
             'annualIncome' => ['nullable', 'string', 'max:255'],
             'income_currency' => ['nullable', 'string', 'max:10'],
-            'hobbies' => ['nullable', 'string', 'max:5000'],
-            'extraCurricularActivities' => ['nullable', 'string', 'max:5000'],
-            'achievements' => ['nullable', 'string', 'max:5000'],
-            'sportsAndFitnessLikings' => ['nullable', 'string', 'max:5000'],
-            'cookingSkills' => ['nullable', 'string', 'max:255'],
-            'activeOnSocialSites' => ['nullable', 'string', 'max:20'],
-            'instagram' => ['nullable', 'string', 'max:255'],
-            'facebook' => ['nullable', 'string', 'max:255'],
             'hasMedicalHistory' => ['nullable', 'string', 'max:20'],
             'personalMedicalHistory' => ['nullable', 'string', 'max:5000'],
             'currentMedicalProblems' => ['nullable', 'string', 'max:5000'],
@@ -1021,9 +1047,7 @@ class MelavaRegistrationController extends Controller
             'degreeDiplomaName1', 'degreeDiplomaName2', 'specialisation1', 'specialisation2',
             'universityBoardCollege', 'additionalEducation1', 'additionalEducation2',
             'cityOfEducation', 'fieldOfWorking', 'organisationWorkingIn', 'designation',
-            'lengthOfEmployment', 'monthlyIncome', 'annualIncome', 'income_currency', 'hobbies',
-            'extraCurricularActivities', 'achievements', 'sportsAndFitnessLikings',
-            'cookingSkills', 'activeOnSocialSites', 'instagram', 'facebook',
+            'lengthOfEmployment', 'monthlyIncome', 'annualIncome', 'income_currency',
             'personalMedicalHistory', 'currentMedicalProblems', 'medications', 'parents_contact',
             'fathersName', 'fatherAlive', 'fatherContactNumber', 'fathersOccupation',
             'fathersNativePlace', 'mothersName', 'motherAlive', 'motherContactNumber',
@@ -1420,9 +1444,7 @@ class MelavaRegistrationController extends Controller
             'specialisation2', 'universityBoardCollege', 'additionalEducation1',
             'additionalEducation2', 'cityOfEducation', 'profession', 'fieldOfWorking',
             'organisationWorkingIn', 'designation', 'lengthOfEmployment', 'monthlyIncome',
-            'annualIncome', 'hobbies', 'extraCurricularActivities', 'achievements',
-            'sportsAndFitnessLikings', 'cookingSkills', 'activeOnSocialSites', 'instagram',
-            'facebook', 'personalMedicalHistory', 'currentMedicalProblems',
+            'annualIncome', 'personalMedicalHistory', 'currentMedicalProblems',
             'medications', 'fathersName', 'fatherAlive', 'fatherContactNumber',
             'fathersOccupation', 'fathersNativePlace', 'mothersName', 'motherAlive',
             'motherContactNumber', 'mothersOccupation', 'mothersNativePlace', 'noOfBrothers',
@@ -1492,9 +1514,7 @@ class MelavaRegistrationController extends Controller
             'degreeDiplomaName2', 'specialisation1', 'specialisation2', 'universityBoardCollege',
             'additionalEducation1', 'additionalEducation2', 'cityOfEducation', 'profession',
             'fieldOfWorking', 'organisationWorkingIn', 'professionalCity', 'designation',
-            'lengthOfEmployment', 'monthlyIncome', 'annualIncome', 'income_currency', 'hobbies',
-            'extraCurricularActivities', 'achievements', 'sportsAndFitnessLikings',
-            'cookingSkills', 'activeOnSocialSites', 'instagram', 'facebook',
+            'lengthOfEmployment', 'monthlyIncome', 'annualIncome', 'income_currency',
             'personalMedicalHistory', 'currentMedicalProblems', 'medications', 'fathersName',
             'fatherAlive', 'fatherContactNumber', 'fathersOccupation', 'fathersNativePlace',
             'mothersName', 'motherAlive', 'motherContactNumber', 'mothersOccupation',

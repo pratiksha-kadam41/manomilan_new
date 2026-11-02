@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
-import { FaLinkedinIn, FaFacebookF, FaInstagram } from "react-icons/fa";
+import {
+  Eye,
+  EyeOff,
+  AlertCircle,
+  Loader2,
+  User,
+  Lock,
+  Users,
+  LogIn,
+  ArrowRight,
+} from "lucide-react";
 import {
   loginUser,
   registerUser,
@@ -8,10 +17,11 @@ import {
   getSession,
   homeForRole,
 } from "../auth";
+import DowntimeNotice from "../website/DowntimeNotice.jsx";
 import "./Login.css";
 
 /* ---------- Validation rules ---------- */
-// Admin usernames: start with a letter, then letters / numbers / . _ -  (3 to 30 characters)
+// Usernames: start with a letter, then letters / numbers / . _ -  (3 to 30 characters)
 const USERNAME_RE = /^[A-Za-z][A-Za-z0-9._-]{2,29}$/;
 
 const validate = ({ username, password, name, email }, registering = false) => {
@@ -27,15 +37,18 @@ const validate = ({ username, password, name, email }, registering = false) => {
   } else if (!username) {
     errors.username = "Mobile number or username is required.";
   } else if (/^\d+$/.test(username)) {
-    if (username.length !== 10) errors.username = "Enter a valid 10-digit mobile number.";
-    else if (!/^[6-9]/.test(username)) errors.username = "Mobile number must start with 6, 7, 8 or 9.";
+    if (username.length !== 10)
+      errors.username = "Enter a valid 10-digit mobile number.";
+    else if (!/^[6-9]/.test(username))
+      errors.username = "Mobile number must start with 6, 7, 8 or 9.";
   } else if (!USERNAME_RE.test(username)) {
     errors.username =
       "Username must start with a letter (3-30 characters) and use only letters, numbers, dot, dash or underscore.";
   }
 
   if (!password) errors.password = "Password is required.";
-  else if (password.length < 6) errors.password = "Password must be at least 6 characters.";
+  else if (registering && password.length < 6)
+    errors.password = "Password must be at least 6 characters.";
 
   return errors;
 };
@@ -47,7 +60,8 @@ const cleanUsername = (value) => {
   return (match ? match[1] : v).slice(0, 30);
 };
 
-const LIVE_LOGO = "https://aaryansmanomilan.com/website/Mano_Milan_Final_Website.png";
+const LIVE_LOGO =
+  "https://aaryansmanomilan.com/website/Mano_Milan_Final_Website.png";
 
 export default function Login() {
   const [values, setValues] = useState({
@@ -60,7 +74,9 @@ export default function Login() {
     window.location.pathname.startsWith("/register"),
   );
   const [touched, setTouched] = useState({});
-  const [remember, setRemember] = useState(!!localStorage.getItem("rememberedUser"));
+  const [remember, setRemember] = useState(
+    !!localStorage.getItem("rememberedUser"),
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -121,10 +137,12 @@ export default function Login() {
         localStorage.setItem("rememberedUser", values.username);
       else localStorage.removeItem("rememberedUser");
 
-      const mustChangePassword = !isRegistering && user?.is_password_changed === false;
-      const passwordChangePath = role === "admin"
-        ? "/admin/change-password"
-        : "/candidate/change-password";
+      const mustChangePassword =
+        !isRegistering && user?.is_password_changed === false;
+      const passwordChangePath =
+        role === "admin"
+          ? "/admin/change-password"
+          : "/candidate/change-password";
       const nextPath = isRegistering
         ? "/candidate/profile"
         : mustChangePassword
@@ -142,24 +160,41 @@ export default function Login() {
 
   return (
     <div className="login-page">
-      <a className="login-logo" href="/">
-        <img
-          src="/stories/Mano_Milan_Final_Website.png"
-          alt="Aaryans Manomilan"
-          onError={(e) => {
-            e.currentTarget.onerror = null;   // if the local file is missing, use the live site logo
-            e.currentTarget.src = LIVE_LOGO;
-          }}
-        />
-      </a>
+      {/* ---------- Left hero panel ---------- */}
+      <section className="login-hero">
+        <a className="login-logo" href="/">
+          <img
+            src="/stories/Mano_Milan_Final_Website.png"
+            alt="Aaryans Manomilan"
+            onError={(e) => {
+              e.currentTarget.onerror = null; // local file missing -> use live logo
+              e.currentTarget.src = LIVE_LOGO;
+            }}
+          />
+        </a>
+        <h1 className="login-welcome">
+          Welcome <em>Back!</em>
+        </h1>
+        <p className="login-welcome-sub">
+          Login to continue your
+          <br />
+          <strong>Melava</strong> journey...
+        </p>
+      </section>
 
+      {/* ---------- Right card ---------- */}
       <div className="login-main">
-        <form onSubmit={handleSubmit} noValidate>
+        <DowntimeNotice placement="login" />
+        <form className="login-card" onSubmit={handleSubmit} noValidate>
+          <div className="login-badge" aria-hidden="true">
+            <Users size={34} />
+          </div>
+
           <h2>{isRegistering ? "Create your account" : "Sign in to account"}</h2>
           <p className="login-sub">
             {isRegistering
               ? "Enter your details to register"
-              : "Enter your username &amp; password to login"}
+              : "Enter your username & password to login"}
           </p>
 
           {serverError && (
@@ -172,13 +207,17 @@ export default function Login() {
           {isRegistering && (
             <>
               <div className="login-field">
-                <label htmlFor="name">Full name</label>
-                <div className="login-control">
+                <label htmlFor="name">
+                  <User size={16} /> Full name
+                </label>
+                <div className={`login-control ${showError("name") ? "invalid" : ""}`}>
+                  <User size={18} className="login-ico" />
                   <input
                     id="name"
                     name="name"
                     type="text"
                     autoComplete="name"
+                    placeholder="Enter your full name"
                     value={values.name}
                     onChange={handleChange}
                     onBlur={handleBlur}
@@ -186,17 +225,24 @@ export default function Login() {
                   />
                 </div>
                 {showError("name") && (
-                  <small className="login-error" role="alert">{errors.name}</small>
+                  <small className="login-error" role="alert">
+                    {errors.name}
+                  </small>
                 )}
               </div>
+
               <div className="login-field">
-                <label htmlFor="email">Email</label>
-                <div className="login-control">
+                <label htmlFor="email">
+                  <User size={16} /> Email
+                </label>
+                <div className={`login-control ${showError("email") ? "invalid" : ""}`}>
+                  <User size={18} className="login-ico" />
                   <input
                     id="email"
                     name="email"
                     type="email"
                     autoComplete="email"
+                    placeholder="Enter your email"
                     value={values.email}
                     onChange={handleChange}
                     onBlur={handleBlur}
@@ -204,15 +250,21 @@ export default function Login() {
                   />
                 </div>
                 {showError("email") && (
-                  <small className="login-error" role="alert">{errors.email}</small>
+                  <small className="login-error" role="alert">
+                    {errors.email}
+                  </small>
                 )}
               </div>
             </>
           )}
 
+          {/* Username */}
           <div className="login-field">
-            <label htmlFor="username">{isRegistering ? "Mobile number" : "Username"}</label>
+            <label htmlFor="username">
+              <User size={16} /> {isRegistering ? "Mobile number" : "Username"}
+            </label>
             <div className={`login-control ${showError("username") ? "invalid" : ""}`}>
+              <User size={18} className="login-ico" />
               <input
                 ref={userRef}
                 id="username"
@@ -224,7 +276,9 @@ export default function Login() {
                 autoCorrect="off"
                 spellCheck={false}
                 maxLength={30}
-                placeholder={isRegistering ? "10-digit mobile number" : "Mobile Number / Username"}
+                placeholder={
+                  isRegistering ? "Enter 10-digit mobile number" : "Enter your username"
+                }
                 value={values.username}
                 onChange={handleChange}
                 onBlur={handleBlur}
@@ -241,18 +295,26 @@ export default function Login() {
 
           {/* Password */}
           <div className="login-field">
-            <label htmlFor="password">Password</label>
-            <div className={`login-control has-eye ${showError("password") ? "invalid" : ""}`}>
+            <label htmlFor="password">
+              <Lock size={16} /> Password
+            </label>
+            <div
+              className={`login-control has-eye ${showError("password") ? "invalid" : ""}`}
+            >
+              <Lock size={18} className="login-ico" />
               <input
                 ref={passRef}
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="*********"
+                autoComplete={isRegistering ? "new-password" : "current-password"}
+                placeholder="Enter your password"
                 value={values.password}
                 onChange={handleChange}
-                onBlur={(e) => { handleBlur(e); setCapsOn(false); }}
+                onBlur={(e) => {
+                  handleBlur(e);
+                  setCapsOn(false);
+                }}
                 onKeyUp={(e) => setCapsOn(e.getModifierState("CapsLock"))}
                 aria-invalid={!!showError("password")}
                 aria-describedby="password-error"
@@ -263,7 +325,7 @@ export default function Login() {
                 onClick={() => setShowPassword(!showPassword)}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
               </button>
             </div>
             {showError("password") && (
@@ -276,7 +338,7 @@ export default function Login() {
 
           {/* Remember + Forgot */}
           {!isRegistering && (
-            <>
+            <div className="login-row">
               <label className="login-check">
                 <input
                   type="checkbox"
@@ -285,63 +347,30 @@ export default function Login() {
                 />
                 <span>Remember password</span>
               </label>
-              <a href="/forgot-password" className="login-forgot">Forgot password?</a>
-            </>
+              <a href="/forgot-password" className="login-forgot">
+                Forgot password?
+              </a>
+            </div>
           )}
 
           <button type="submit" className="login-btn" disabled={loading}>
             {loading ? (
               <>
-                <Loader2 size={16} className="login-spin" /> {isRegistering ? "Creating account..." : "Signing in..."}
+                <Loader2 size={18} className="login-spin" />
+                {isRegistering ? "Creating account..." : "Signing in..."}
               </>
             ) : (
-              isRegistering ? "Create account" : "Sign in"
+              <>
+                <LogIn size={18} />
+                {isRegistering ? "Create account" : "Sign in"}
+              </>
             )}
           </button>
-
-          {!isRegistering && (
-          <>
-          <div className="login-divider">Or Sign in with</div>
-
-          <ul className="login-social">
-            <li>
-              <a
-                href="https://www.linkedin.com/in/aaryans-manomilan-257615388/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="LinkedIn"
-              >
-                <FaLinkedinIn />
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://www.facebook.com/share/19sczFNKnf/"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Facebook"
-              >
-                <FaFacebookF />
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://www.instagram.com/aaryansmanomilan?igsh=Y3p0cGd4b3I3a284"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Instagram"
-              >
-                <FaInstagram />
-              </a>
-            </li>
-          </ul>
-          </>
-          )}
 
           <p className="login-foot">
             {isRegistering ? "Already have an account?" : "Don't have account?"}
             <a
-              href="/login"
+              href={isRegistering ? "/login" : "/register"}
               onClick={(event) => {
                 event.preventDefault();
                 setIsRegistering(!isRegistering);
@@ -350,6 +379,7 @@ export default function Login() {
               }}
             >
               {isRegistering ? "Sign in" : "Create Account"}
+              <ArrowRight size={16} />
             </a>
           </p>
         </form>

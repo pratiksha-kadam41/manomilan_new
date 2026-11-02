@@ -166,6 +166,8 @@ class PaymentController extends Controller
                 }
             });
 
+            Profile::find($profileId)?->syncDocumentVerificationStatus();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Payment verified successfully.',
@@ -345,6 +347,8 @@ class PaymentController extends Controller
                 $payment->payment_verified = $data['status'] === 'approved';
                 $payment->save();
             });
+
+            Profile::find($payment->profile_id)?->syncDocumentVerificationStatus();
 
             return response()->json([
                 'success' => true,

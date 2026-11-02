@@ -1,0 +1,461 @@
+.website-event-btn {
+  position: fixed;
+  z-index: 1000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--website-event-bg, #c4144f);
+  color: var(--website-event-color, #fff);
+  font: inherit;
+  font-weight: 800;
+  font-size: 0.9rem;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.28);
+  animation: websiteEventFloat 2.4s ease-in-out infinite;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.website-event-btn.bottom-right {
+  right: 20px;
+  bottom: 20px;
+}
+
+.website-event-btn.bottom-left {
+  left: 20px;
+  bottom: 20px;
+}
+
+.website-event-btn:hover {
+  transform: translateY(-2px) scale(1.04);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.34);
+}
+
+.website-event-btn.static {
+  cursor: default;
+}
+
+@keyframes websiteEventFloat {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -6px; }
+}
+
+.website-downtime-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 3vw, 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: rgba(36, 10, 22, 0.72);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: websiteDowntimeOverlayIn 0.25s ease both;
+}
+
+.website-downtime-modal {
+  position: relative;
+  width: min(620px, 100%);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(28px, 5vw, 46px) clamp(20px, 5vw, 48px) clamp(24px, 4vw, 38px);
+  border: 1px solid rgba(201, 154, 91, 0.55);
+  border-radius: clamp(22px, 4vw, 34px);
+  background:
+    radial-gradient(circle at 50% -12%, rgba(255, 255, 255, 0.96), transparent 48%),
+    linear-gradient(155deg, #fff8fb 0%, #fde7ef 48%, #f8d5e2 100%);
+  box-shadow:
+    0 36px 90px rgba(38, 7, 20, 0.42),
+    0 0 0 6px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  color: #4a1027;
+  text-align: center;
+  animation: websiteDowntimeModalIn 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 22, 56, 0.35) transparent;
+}
+
+.website-downtime-modal::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.website-downtime-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(122, 22, 56, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  color: #7a1638;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.website-downtime-close:hover {
+  background: #fff;
+  transform: rotate(6deg) scale(1.04);
+  box-shadow: 0 8px 20px rgba(122, 22, 56, 0.16);
+}
+
+.website-downtime-close:focus-visible,
+.website-downtime-action:focus-visible,
+.website-downtime-detail:focus-visible {
+  outline: 3px solid rgba(201, 154, 91, 0.7);
+  outline-offset: 3px;
+}
+
+.website-downtime-lotus {
+  width: 68px;
+  margin: 0 auto 8px;
+  color: #b98243;
+}
+
+.website-downtime-lotus svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.website-downtime-blessing {
+  margin: 0 0 12px;
+  color: #9a6a32;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.website-downtime-title {
+  max-width: 15ch;
+  margin: 0 auto;
+  color: #5b0f2a;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.65rem, 4.8vw, 2.55rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.website-downtime-message {
+  max-width: 46ch;
+  margin: 14px auto 0;
+  color: #6b2943;
+  font-size: clamp(0.9rem, 2.4vw, 1rem);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.website-downtime-art {
+  width: min(320px, 82%);
+  margin: 14px auto 4px;
+  filter: drop-shadow(0 18px 26px rgba(122, 22, 56, 0.14));
+}
+
+.website-downtime-art svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.website-downtime-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.website-downtime-detail {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 9px 13px;
+  border: 1px solid rgba(122, 22, 56, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
+  color: #6b2943;
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.3;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.website-downtime-detail.countdown {
+  border-color: rgba(185, 130, 67, 0.28);
+  background: rgba(255, 250, 240, 0.8);
+  color: #7a4a00;
+}
+
+.website-downtime-detail:hover {
+  background: #fff;
+}
+
+.website-downtime-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 190px;
+  min-height: 48px;
+  margin-top: 24px;
+  padding: 0 34px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7a1638 0%, #4a0b23 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 16px 30px rgba(74, 11, 35, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.website-downtime-action:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow: 0 20px 36px rgba(74, 11, 35, 0.34);
+}
+
+.website-downtime-action:active {
+  transform: translateY(0);
+}
+
+@keyframes websiteDowntimeOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes websiteDowntimeModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .website-downtime-overlay,
+  .website-downtime-modal {
+    animation: none;
+  }
+}
+
+.maintenance-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.16), transparent 34%),
+    radial-gradient(circle at 85% 80%, rgba(14, 116, 144, 0.12), transparent 36%),
+    #f6fbf9;
+  color: #0f172a;
+}
+
+.maintenance-card {
+  width: min(620px, 100%);
+  padding: 44px 38px;
+  border: 1px solid #d9efe7;
+  border-radius: 26px;
+  background: #fff;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1);
+}
+
+.maintenance-icon {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  margin: 0 auto 18px;
+  border-radius: 22px;
+  background: #e7f8f1;
+  color: #0f766e;
+}
+
+.maintenance-eyebrow {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #edfdf6;
+  color: #0f766e;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.maintenance-card h1 {
+  margin: 0;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  letter-spacing: -0.03em;
+}
+
+.maintenance-card p {
+  margin: 14px auto 0;
+  max-width: 470px;
+  color: #5b6779;
+  line-height: 1.7;
+  font-size: 0.95rem;
+  white-space: pre-line;
+}
+
+.maintenance-countdown {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #f1fbf7;
+  color: #0f766e;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.maintenance-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 26px;
+}
+
+.maintenance-actions button,
+.maintenance-actions a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #d7e9e2;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f766e;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.maintenance-actions button {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+
+.maintenance-actions button:hover,
+.maintenance-actions a:hover {
+  filter: brightness(0.97);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .website-event-btn {
+    padding: 10px 16px;
+    font-size: 0.8rem;
+  }
+
+  .website-event-btn.bottom-right {
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .website-event-btn.bottom-left {
+    left: 12px;
+    bottom: 12px;
+  }
+
+  .website-downtime-overlay {
+    padding: 10px;
+  }
+
+  .website-downtime-modal {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+    padding: 30px 18px 22px;
+    border-radius: 24px;
+  }
+
+  .website-downtime-close {
+    top: 10px;
+    right: 10px;
+    width: 34px;
+    height: 34px;
+  }
+
+  .website-downtime-lotus {
+    width: 54px;
+    margin-top: 2px;
+  }
+
+  .website-downtime-blessing {
+    margin-bottom: 10px;
+    font-size: 0.66rem;
+    letter-spacing: 0.15em;
+  }
+
+  .website-downtime-title {
+    max-width: 18ch;
+    font-size: clamp(1.45rem, 7vw, 1.9rem);
+  }
+
+  .website-downtime-message {
+    margin-top: 11px;
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .website-downtime-art {
+    width: min(250px, 88%);
+    margin-top: 10px;
+  }
+
+  .website-downtime-details {
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .website-downtime-detail {
+    padding: 8px 11px;
+    font-size: 0.74rem;
+  }
+
+  .website-downtime-action {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 20px;
+  }
+
+  .maintenance-card {
+    padding: 34px 22px;
+  }
+}

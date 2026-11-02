@@ -219,6 +219,12 @@ class Profile extends Model
         'religion',
         'address',
         'permanent_address',
+        'country',
+        'state',
+        'district',
+        'taluka',
+        'village',
+        'pincode',
         // Educational Details
         'education',
         'degreeDiplomaName1',
@@ -241,22 +247,7 @@ class Profile extends Model
         'income_currency',
         'original_monthly_income',
         'original_annual_income',
-        // Hobbies and Extra Curriculars
-        'hobbies',
-        'extraCurricularActivities',
-        'achievements',
-        'sportsAndFitnessLikings',
-        'cookingSkills',
         // Habits and Lifestyle
-        'diet',
-        'smoking',
-        'smokingFrequency',
-        'drinking',
-        'drinkingFrequency',
-        'partying',
-        'activeOnSocialSites',
-        'instagram', // not updated in database
-        'facebook', // not updated in database
         // Medical Details
         'hasMedicalHistory',
         'personalMedicalHistory',
@@ -269,20 +260,7 @@ class Profile extends Model
         'placeOfBirth',
         'timeOfBirth',
         'birthTime_ampm',
-        'rashi',
-        'nakshatra',
-        'charan',
-        'gan',
-        'gotra',
-        'nadi',
-        'matchPatrika',
-        'kundali',
         // Investment Details
-        'homeStatus',
-        'ownedRealEstate',
-        'hasVehicle',
-        'vehicleType',
-        'otherInvestments',
         // Family Details
         'fathersName',
         'fatherAlive',
@@ -321,14 +299,6 @@ class Profile extends Model
         'casteCertificate',
         'medicalFitnessCertificate',
         'additional_photos',
-        // Meeting Schedule Details
-        'branch',
-        'location',
-        'meeting_date',
-        'day',
-        'meeting_time',
-        'remarks',
-        'spoke_to',
         // Non-fillable by default (status columns) — explicitly added for Melava flow
         'profileVerificationStatus',
         'profile_completion',
@@ -350,18 +320,130 @@ class Profile extends Model
         'additional_photos' => 'array',
     ];
 
+    public const VERIFICATION_DOCUMENT_KEYS = [
+        'identificationProof',
+        'birthDateProof',
+        'addressProof',
+        'educationProof',
+        'professionProof',
+        'incomeProof',
+        'casteCertificate',
+        'medicalFitnessCertificate',
+        'selfieVerification',
+    ];
+
+    public function documentVerification()
+    {
+        return $this->hasOne(DocumentVerification::class, 'profile_id');
+    }
+
+    private function isVerifiedDocumentStatus($status): bool
+    {
+        return in_array(strtolower(trim((string) $status)), [
+            'verified', 'approved', 'approve', 'complete', 'completed',
+        ], true);
+    }
+
+    public function hasVerifiedPayment(): bool
+    {
+        if ($this->hasAttribute('has_verified_payment_screenshot') || $this->hasAttribute('has_verified_melava_payment')) {
+            return (bool) $this->getAttribute('has_verified_payment_screenshot')
+                || (bool) $this->getAttribute('has_verified_melava_payment');
+        }
+
+        $paymentsLoaded = $this->relationLoaded('paymentScreenshots');
+        $melavaLoaded = $this->relationLoaded('melavaRegistrations');
+
+        if ($paymentsLoaded && $melavaLoaded) {
+            return $this->paymentScreenshots->contains(fn ($payment) => (bool) $payment->payment_verified)
+                || $this->melavaRegistrations->contains(fn ($registration) => (bool) $registration->payment_verified);
+        }
+
+        return PaymentScreenshot::where('profile_id', $this->id)
+                ->where('payment_verified', true)
+                ->exists()
+            || MelavaRegistration::where('profile_id', $this->id)
+                ->where('payment_verified', true)
+                ->exists();
+    }
+
+    public function verificationSummary(): array
+    {
+        $verification = $this->relationLoaded('documentVerification')
+            ? $this->documentVerification
+            : $this->documentVerification()->first();
+
+        $uploaded = [];
+        $verified = [];
+
+        foreach (self::VERIFICATION_DOCUMENT_KEYS as $key) {
+            if (filled($this->{$key})) {
+                $uploaded[] = $key;
+
+                if ($this->isVerifiedDocumentStatus($verification?->{$key.'_status'})) {
+                    $verified[] = $key;
+                }
+            }
+        }
+
+        $required = ['identificationProof', 'birthDateProof'];
+        $missingRequired = array_values(array_diff($required, $uploaded));
+        $unverifiedDocuments = array_values(array_diff($uploaded, $verified));
+        $documentsAllVerified = empty($missingRequired) && empty($unverifiedDocuments);
+        $paymentVerified = $this->hasVerifiedPayment();
+        $fullyVerified = $documentsAllVerified && $paymentVerified;
+
+        return [
+            'status' => $fullyVerified ? 'Completed' : 'Pending',
+            'display_status' => $fullyVerified ? 'Verified' : 'Pending',
+            'is_verified' => $fullyVerified,
+            'documents_total' => count($uploaded),
+            'documents_verified' => count($verified),
+            'documents_pending' => count($uploaded) - count($verified),
+            'documents_all_verified' => $documentsAllVerified,
+            'missing_required_documents' => $missingRequired,
+            'unverified_documents' => $unverifiedDocuments,
+            'payment_verified' => $paymentVerified,
+        ];
+    }
+
+    public function registrationSummary(): array
+    {
+        $type = strtolower(trim((string) $this->registration_type));
+        $hasMelavaRecord = $this->hasAttribute('melava_registration_exists')
+            ? (bool) $this->getAttribute('melava_registration_exists')
+            : ($this->relationLoaded('melavaRegistrations')
+                ? $this->melavaRegistrations->isNotEmpty()
+                : $this->melavaRegistrations()->exists());
+        $hasMelava = $type === 'melava'
+            || filled($this->melava_batch)
+            || $hasMelavaRecord;
+        $hasProfile = $type !== 'melava' || ! $hasMelava;
+
+        if ($hasProfile && $hasMelava) {
+            $label = 'Both';
+        } elseif ($hasMelava) {
+            $label = 'Melava Registration';
+        } else {
+            $label = 'Profile';
+        }
+
+        return [
+            'label' => $label,
+            'is_profile' => $hasProfile,
+            'is_melava' => $hasMelava,
+        ];
+    }
+
     public function syncDocumentVerificationStatus(): bool
     {
-        $verification = DocumentVerification::where('profile_id', $this->id)->first();
-        $normalizedStatus = static function ($status) {
-            return strtolower(trim((string) $status));
-        };
+        $this->unsetRelation('documentVerification');
+        $this->unsetRelation('paymentScreenshots');
+        $this->unsetRelation('melavaRegistrations');
 
-        $completed = $verification
-            && $normalizedStatus($verification->identificationProof_status) === 'verified'
-            && $normalizedStatus($verification->birthDateProof_status) === 'verified';
+        $summary = $this->verificationSummary();
+        $status = $summary['status'];
 
-        $status = $completed ? 'Completed' : 'Pending';
         if ($this->profileVerificationStatus !== $status) {
             $this->profileVerificationStatus = $status;
             $this->save();
@@ -425,7 +507,7 @@ class Profile extends Model
      * profile that has every field of that form filled reaches 100%.
      *
      * Conditional fields (sub caste, parent contact details, medical details,
-     * social handles, ...) are only counted when they apply to the candidate,
+     * ...) are only counted when they apply to the candidate,
      * so answering "No" / "0" never penalises the score.
      */
     public function calculateCompletionPercentage()
@@ -476,13 +558,6 @@ class Profile extends Model
             'lengthOfEmployment',
             'monthlyIncome',
             'annualIncome',
-            // Hobbies and Extra Curriculars
-            'hobbies',
-            'extraCurricularActivities',
-            'achievements',
-            'sportsAndFitnessLikings',
-            'cookingSkills',
-            'activeOnSocialSites',
             // Medical Details
             'hasMedicalHistory',
             // Family Details
@@ -545,10 +620,6 @@ class Profile extends Model
             $conditionalFields[] = 'personalMedicalHistory';
             $conditionalFields[] = 'currentMedicalProblems';
             $conditionalFields[] = 'medications';
-        }
-        if ($this->activeOnSocialSites === 'Yes') {
-            $conditionalFields[] = 'instagram';
-            $conditionalFields[] = 'facebook';
         }
         if ($this->parentsIntercasteMarriage === 'Yes') {
             $conditionalFields[] = 'parentsDifferentCaste';
@@ -655,7 +726,6 @@ class Profile extends Model
             'fieldOfWorking',
             'professionalCity',
             'monthlyIncome',
-            'hobbies',
             'fathersName',
             'fatherAlive',
             'mothersName',

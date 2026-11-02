@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             ApplicationModuleSeeder::class,
+            WebsiteManagementModuleSeeder::class,
             RbacSeeder::class,
             CandidateRoleAccessSeeder::class,
             SuperAdminSeeder::class,

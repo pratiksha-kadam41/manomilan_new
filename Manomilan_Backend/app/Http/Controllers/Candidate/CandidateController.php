@@ -175,10 +175,6 @@ abstract class CandidateController extends Controller
             'organisation' => $profile->organisationWorkingIn,
             'designation' => $profile->designation,
             'annual_income' => $profile->annualIncome,
-            'diet' => $profile->diet,
-            'smoking' => $profile->smoking,
-            'drinking' => $profile->drinking,
-            'hobbies' => $profile->hobbies,
             'about' => $profile->knowAboutMyself,
             'family' => [
                 'father_name' => $profile->fathersName,
@@ -269,18 +265,6 @@ abstract class CandidateController extends Controller
             'length_of_employment' => 'lengthOfEmployment',
             'monthly_income' => 'monthlyIncome',
             'annual_income' => 'annualIncome',
-            'hobbies' => 'hobbies',
-            'extra_curricular' => 'extraCurricularActivities',
-            'achievements' => 'achievements',
-            'sports' => 'sportsAndFitnessLikings',
-            'cooking_skills' => 'cookingSkills',
-            'diet' => 'diet',
-            'smoking' => 'smoking',
-            'smoking_frequency' => 'smokingFrequency',
-            'drinking' => 'drinking',
-            'drinking_frequency' => 'drinkingFrequency',
-            'partying' => 'partying',
-            'active_on_social_sites' => 'activeOnSocialSites',
             'has_medical_history' => 'hasMedicalHistory',
             'personal_medical_history' => 'personalMedicalHistory',
             'current_medical_problems' => 'currentMedicalProblems',
@@ -312,21 +296,6 @@ abstract class CandidateController extends Controller
             'horoscope_caste' => 'horoscopeCaste',
             'horoscope_sub_caste' => 'horoscopeSubCaste',
             'horoscope_dob' => 'horoscopeDob',
-            'rashi' => 'rashi',
-            'nakshatra' => 'nakshatra',
-            'charan' => 'charan',
-            'gan' => 'gan',
-            'gotra' => 'gotra',
-            'nadi' => 'nadi',
-            'match_patrika' => 'matchPatrika',
-            'kundali' => 'kundali',
-            'home_status' => 'homeStatus',
-            'owned_real_estate' => 'ownedRealEstate',
-            'has_vehicle' => 'hasVehicle',
-            'vehicle_type' => 'vehicleType',
-            'other_investments' => 'otherInvestments',
-            'instagram' => 'instagram',
-            'facebook' => 'facebook',
         ];
 
         $columns = Schema::getColumnListing((new Profile)->getTable());
@@ -474,7 +443,7 @@ abstract class CandidateController extends Controller
             return null;
         }
 
-        return $profile->location ?: $profile->professionalCity ?: $profile->cityOfEducation;
+        return $profile->professionalCity ?: $profile->cityOfEducation;
     }
 
     protected function fileUrl(?string $path, string $mediaType = 'image'): string

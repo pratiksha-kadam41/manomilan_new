@@ -1899,6 +1899,10 @@ body.candidate-mode *::after {
   line-height: 1.55;
 }
 
+.cnd-address-copy {
+  margin: 0 0 8px;
+}
+
 .cnd-field input::placeholder,
 .cnd-field textarea::placeholder {
   color: #b9a3ab;

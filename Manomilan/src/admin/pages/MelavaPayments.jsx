@@ -1,27 +1,48 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ChevronLeft,
-  ChevronRight,
+  BadgeCheck,
+  BookOpen,
+  Clock,
   Download,
   FileText,
+  Heart,
   RefreshCw,
   Search,
+  User,
+  Users,
   Wallet,
   X,
 } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import AdminStats from "../components/AdminStats";
+import AdminPagination from "../components/AdminPagination";
+import AgeRangeFilter from "../components/AgeRangeFilter";
+import useDebouncedValue from "../hooks/useDebouncedValue";
 import { useAdminPermission } from "../../permission-context";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
 import { request } from "../../api";
+import "../components/admin-ui.css";
 import "./melavaPayments.css";
 
-const fetchRegistrations = ({ query, booklet, gender, melavaNumber, page, includeFilters }) => {
+const EMPTY_STATS = {
+  total: 0,
+  groom: 0,
+  bride: 0,
+  booklet: 0,
+  verified: 0,
+  pending: 0,
+  attended: 0,
+};
+
+const fetchRegistrations = ({ query, booklet, gender, melavaNumber, age, page, includeFilters }) => {
   const params = new URLSearchParams({ per_page: "20", page: String(page) });
   if (query) params.set("q", query);
   if (booklet !== "all") params.set("booklet", booklet);
   if (gender !== "all") params.set("gender", gender);
   if (melavaNumber !== "all") params.set("melava_number", melavaNumber);
+  if (age.from) params.set("age_from", age.from);
+  if (age.to) params.set("age_to", age.to);
   if (includeFilters) params.set("include_filters", "1");
   return request(`/melava-registrations?${params}`);
 };
@@ -36,13 +57,13 @@ const formatDate = (value) => {
 export default function MelavaPayments() {
   const canApprovePayments = useAdminPermission("approve", "/admin/melava");
   const [registrations, setRegistrations] = useState([]);
-  const [stats, setStats] = useState({ total: 0, groom: 0, bride: 0, booklet: 0 });
+  const [stats, setStats] = useState(EMPTY_STATS);
   const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
   const [booklet, setBooklet] = useState("all");
   const [gender, setGender] = useState("all");
   const [melavaNumber, setMelavaNumber] = useState("all");
   const [melavaNumbers, setMelavaNumbers] = useState([]);
+  const [ageInput, setAgeInput] = useState({ from: "", to: "" });
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -58,16 +79,30 @@ export default function MelavaPayments() {
   const requestId = useRef(0);
   const filtersLoaded = useRef(false);
 
+  const debouncedSearch = useDebouncedValue(search, 300);
+  const debouncedAge = useDebouncedValue(ageInput, 400);
+  const activeQuery = debouncedSearch.trim();
+  const ageFrom = debouncedAge.from;
+  const ageTo = debouncedAge.to;
+  const ageError = ageFrom !== "" && ageTo !== "" && Number(ageFrom) > Number(ageTo)
+    ? "Minimum age cannot be greater than maximum age."
+    : "";
+
   const load = useCallback(async () => {
     const id = ++requestId.current;
+    if (ageError) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const response = await fetchRegistrations({
-        query,
+        query: activeQuery,
         booklet,
         gender,
         melavaNumber,
+        age: { from: ageFrom, to: ageTo },
         page,
         includeFilters: !filtersLoaded.current,
       });
@@ -75,7 +110,7 @@ export default function MelavaPayments() {
       const result = response?.data;
       setRegistrations(Array.isArray(result?.data) ? result.data : []);
       setPagination(result || null);
-      setStats(response?.stats || { total: result?.total || 0, groom: 0, bride: 0, booklet: 0 });
+      setStats({ ...EMPTY_STATS, ...(response?.stats || {}) });
       if (!filtersLoaded.current) {
         setMelavaNumbers(Array.isArray(response?.melava_numbers) ? response.melava_numbers : []);
         filtersLoaded.current = true;
@@ -87,22 +122,25 @@ export default function MelavaPayments() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [query, booklet, gender, melavaNumber, page]);
-
-  useEffect(() => {
-    const trimmedSearch = search.trim();
-    const delay = /^\d+$/.test(trimmedSearch) ? 80 : 180;
-    const timer = window.setTimeout(() => {
-      setQuery(search.trim());
-      setPage(1);
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [search]);
+  }, [activeQuery, booklet, gender, melavaNumber, ageFrom, ageTo, ageError, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const hasFilters = Boolean(
+    activeQuery || booklet !== "all" || gender !== "all" || melavaNumber !== "all" || ageFrom || ageTo,
+  );
+
+  const clearFilters = () => {
+    setSearch("");
+    setBooklet("all");
+    setGender("all");
+    setMelavaNumber("all");
+    setAgeInput({ from: "", to: "" });
+    setPage(1);
+  };
 
   const openPayment = (row) => {
     setSelectedRegistration(row);
@@ -195,181 +233,196 @@ export default function MelavaPayments() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const statItems = useMemo(() => [
+    { key: "total", label: "Total Registrations", value: stats.total, icon: Users, tone: "teal", hint: "Matching filters" },
+    { key: "verified", label: "Approved Payments", value: stats.verified, icon: BadgeCheck, tone: "green", hint: "Payment verified" },
+    { key: "pending", label: "Pending Payments", value: stats.pending, icon: Clock, tone: "amber", hint: "Awaiting review" },
+    { key: "booklet", label: "Booklet Requests", value: stats.booklet, icon: BookOpen, tone: "magenta", hint: "Booklet requested" },
+    { key: "groom", label: "Grooms", value: stats.groom, icon: User, tone: "blue", hint: "Male candidates" },
+    { key: "bride", label: "Brides", value: stats.bride, icon: Heart, tone: "magenta", hint: "Female candidates" },
+  ], [stats]);
+
   return (
     <AdminLayout currentPath="/admin/melava">
-      <div className="mp-page">
-        <div className="mp-head">
+      <div className="adm-ui mp-page">
+        <div className="ui-head">
           <div>
             <h1>Melava Registrations</h1>
             <p>Manage candidate registrations, biodata, and Melava payments.</p>
           </div>
-          <button type="button" className="mp-btn mp-btn-ghost" onClick={load} disabled={loading}>
-            <RefreshCw size={16} className={loading ? "mp-spin" : ""} /> Refresh
-          </button>
+          <div className="ui-head-actions">
+            <button type="button" className="ui-btn secondary" onClick={load} disabled={loading}>
+              <RefreshCw size={16} className={loading ? "ui-spin" : ""} /> Refresh
+            </button>
+          </div>
         </div>
 
-        <div className="mp-stats" aria-label="Melava registration statistics">
-          <article className="mp-stat"><span>Total registrations</span><strong>{stats.total.toLocaleString("en-IN")}</strong></article>
-          <article className="mp-stat"><span>Grooms</span><strong>{stats.groom.toLocaleString("en-IN")}</strong></article>
-          <article className="mp-stat"><span>Brides</span><strong>{stats.bride.toLocaleString("en-IN")}</strong></article>
-          <article className="mp-stat"><span>Booklet requests</span><strong>{stats.booklet.toLocaleString("en-IN")}</strong></article>
-        </div>
+        <AdminStats items={statItems} loading={loading && !pagination} label="Melava registration statistics" />
 
-        <div className="mp-tools">
-          <label className="mp-search">
+        <div className="ui-card ui-toolbar">
+          <label className="ui-search">
             <Search size={17} />
             <input
               type="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
               placeholder="Search registration no., name, mobile or city"
               aria-label="Search Melava registrations"
             />
+            {search ? (
+              <button type="button" onClick={() => { setSearch(""); setPage(1); }} aria-label="Clear search"><X size={16} /></button>
+            ) : null}
           </label>
-          <label className="mp-booklet">
-            <span>Booklet</span>
-            <select
-              value={booklet}
-              onChange={(event) => {
-                setBooklet(event.target.value);
-                setPage(1);
-              }}
-              aria-label="Filter by booklet"
-            >
-              <option value="all">All users</option>
-              <option value="yes">Booklet requested</option>
-              <option value="no">No booklet</option>
-            </select>
-          </label>
-          <label className="mp-filter">
-            <span>Groom / Bride</span>
-            <select
-              value={gender}
-              onChange={(event) => {
-                setGender(event.target.value);
-                setPage(1);
-              }}
-              aria-label="Filter by groom or bride"
-            >
-              <option value="all">All</option>
-              <option value="groom">Groom</option>
-              <option value="bride">Bride</option>
-            </select>
-          </label>
-          <label className="mp-filter">
-            <span>Melava number</span>
-            <select
-              value={melavaNumber}
-              onChange={(event) => {
-                setMelavaNumber(event.target.value);
-                setPage(1);
-              }}
-              aria-label="Filter by Melava number"
-            >
-              <option value="all">All Melavas</option>
-              {melavaNumbers.map((number) => (
-                <option key={number} value={number}>{number}</option>
-              ))}
-            </select>
-          </label>
+          <select
+            className="ui-select"
+            value={booklet}
+            onChange={(event) => { setBooklet(event.target.value); setPage(1); }}
+            aria-label="Filter by booklet"
+          >
+            <option value="all">All users</option>
+            <option value="yes">Booklet requested</option>
+            <option value="no">No booklet</option>
+          </select>
+          <select
+            className="ui-select"
+            value={gender}
+            onChange={(event) => { setGender(event.target.value); setPage(1); }}
+            aria-label="Filter by groom or bride"
+          >
+            <option value="all">All genders</option>
+            <option value="groom">Groom</option>
+            <option value="bride">Bride</option>
+          </select>
+          <select
+            className="ui-select"
+            value={melavaNumber}
+            onChange={(event) => { setMelavaNumber(event.target.value); setPage(1); }}
+            aria-label="Filter by Melava number"
+          >
+            <option value="all">All Melavas</option>
+            {melavaNumbers.map((number) => (
+              <option key={number} value={number}>{number}</option>
+            ))}
+          </select>
+          <AgeRangeFilter
+            from={ageInput.from}
+            to={ageInput.to}
+            onChange={(from, to) => { setAgeInput({ from, to }); setPage(1); }}
+            onClear={() => { setAgeInput({ from: "", to: "" }); setPage(1); }}
+            error={ageError}
+            disabled={loading && !pagination}
+          />
+          {hasFilters ? (
+            <button type="button" className="ui-reset" onClick={clearFilters}>Clear filters</button>
+          ) : null}
         </div>
 
         {error ? (
-          <div className="mp-alert er" role="alert">
+          <div className="ui-alert" role="alert">
             <span>{error}</span>
-            <button type="button" className="mp-btn mp-btn-ghost" onClick={load} disabled={loading}>Try again</button>
+            <button type="button" className="ui-btn small secondary" onClick={load} disabled={loading}>Try again</button>
           </div>
         ) : null}
 
-        <div className="mp-card">
-          <div className="mp-table-scroll">
-            <table className="mp-table">
+        <div className="ui-card ui-table-card">
+          <div className={`ui-table-scroll ${loading ? "is-loading" : ""}`}>
+            <table className="ui-table">
               <thead>
                 <tr>
                   <th>Candidate</th>
                   <th>Type</th>
-                  <th>Melava number</th>
+                  <th>Melava Number</th>
                   <th>City</th>
-                  <th>Registration type</th>
-                  <th>Date of registration</th>
+                  <th>Registration Type</th>
+                  <th>Registered On</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {loading && !registrations.length ? Array.from({ length: 5 }, (_, index) => (
-                  <tr className="mp-skeleton" key={`skeleton-${index}`}>
+                {loading && !registrations.length ? Array.from({ length: 6 }, (_, index) => (
+                  <tr className="ui-skeleton-row" key={`skeleton-${index}`}>
                     <td colSpan="7"><span /></td>
                   </tr>
                 )) : null}
-                {loading && registrations.length ? (
-                  <tr className="mp-updating-row"><td colSpan="7">Updating results…</td></tr>
-                ) : null}
                 {!loading && !registrations.length ? (
-                  <tr><td className="mp-empty" colSpan="7">No Melava registrations match this view.</td></tr>
-                ) : null}
-                {registrations.map((row, index) => (
-                  <tr key={row.id}>
-                    <td>
-                      <div className="mp-candidate">
-                        {row.profile_photo_url ? (
-                          <img src={row.profile_photo_url} alt="" className="mp-avatar" loading="lazy" />
-                        ) : (
-                          <span className="mp-avatar mp-avatar-fallback" aria-hidden="true">
-                            {(row.fullName || row.profile?.fullName || "?").trim().charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                        <strong>{row.fullName || row.profile?.fullName || "Unnamed candidate"}</strong>
-                      </div>
-                    </td>
-                    <td><span className={`mp-gender ${String(row.groomOrBride).toLowerCase() === "bride" ? "bride" : "groom"}`}>{row.groomOrBride || "-"}</span></td>
-                    <td><span className="mp-number-chip">{row.melava_number || row.melava_title || "-"}</span></td>
-                    <td>{row.profile?.professionalCity || row.city || "-"}</td>
-                    <td>{row.profile?.registration_type === "existing" ? "Existing" : "Melava"}</td>
-                    <td>{formatDate(row.melava_registered_at || row.created_at)}</td>
-                    <td>
-                      <div className="mp-actions">
-                        <button
-                          type="button"
-                          className="mp-btn mp-btn-biodata"
-                          onClick={() => showBiodata(row, (pagination?.from || 1) + index)}
-                          disabled={!row.profile_id}
-                          title={row.profile_id
-                            ? "Choose a template and preview candidate BioData"
-                            : "A candidate profile is not linked to this registration"}
-                        >
-                          <FileText size={15} /> BioData
-                        </button>
-                        {canApprovePayments ? (
-                          <button type="button" className="mp-btn mp-btn-payment" onClick={() => openPayment(row)}>
-                            <Wallet size={15} /> Payment
-                          </button>
-                        ) : null}
-                        <Link className="mp-btn mp-btn-edit" to={`/melava-registration?admin_edit=${row.id}`}>Edit</Link>
+                  <tr>
+                    <td colSpan="7">
+                      <div className="ui-state">
+                        <Search size={30} />
+                        <strong>No registrations found</strong>
+                        <p>No Melava registrations match your current filters.</p>
+                        {hasFilters ? <button type="button" className="ui-btn small" onClick={clearFilters}>Clear filters</button> : null}
                       </div>
                     </td>
                   </tr>
-                ))}
+                ) : null}
+                {registrations.map((row, index) => {
+                  const name = row.fullName || row.profile?.fullName || "Unnamed candidate";
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="ui-person">
+                          {row.profile_photo_url ? (
+                            <span className="ui-avatar"><img src={row.profile_photo_url} alt="" loading="lazy" /></span>
+                          ) : (
+                            <span className="ui-avatar" aria-hidden="true">{name.trim().charAt(0).toUpperCase()}</span>
+                          )}
+                          <span className="ui-person-text">
+                            <strong>{name}</strong>
+                            <small>{row.username || "Mobile unavailable"}</small>
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`ui-badge ${String(row.groomOrBride).toLowerCase() === "bride" ? "brand" : "info"}`}>
+                          {row.groomOrBride || "-"}
+                        </span>
+                      </td>
+                      <td><span className="ui-chip">{row.melava_number || row.melava_title || "-"}</span></td>
+                      <td>{row.profile?.professionalCity || row.city || "-"}</td>
+                      <td>{row.profile?.registration_type === "existing" ? "Existing" : "Melava"}</td>
+                      <td className="ui-muted">{formatDate(row.melava_registered_at || row.created_at)}</td>
+                      <td>
+                        <div className="ui-actions">
+                          <button
+                            type="button"
+                            className="ui-btn small secondary"
+                            onClick={() => showBiodata(row, (pagination?.from || 1) + index)}
+                            disabled={!row.profile_id}
+                            title={row.profile_id
+                              ? "Choose a template and preview candidate BioData"
+                              : "A candidate profile is not linked to this registration"}
+                          >
+                            <FileText size={14} /> BioData
+                          </button>
+                          {canApprovePayments ? (
+                            <button type="button" className="ui-btn small" onClick={() => openPayment(row)}>
+                              <Wallet size={14} /> Payment
+                            </button>
+                          ) : null}
+                          <Link className="ui-btn small secondary" to={`/melava-registration?admin_edit=${row.id}`}>Edit</Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        </div>
 
-        {pagination && pagination.last_page > 1 ? (
-          <nav className="mp-pagination" aria-label="Pagination">
-            <span>
-              Showing {pagination.from ?? 0}–{pagination.to ?? 0} of {pagination.total.toLocaleString("en-IN")}
-            </span>
-            <div>
-              <button type="button" onClick={() => setPage((value) => value - 1)} disabled={page <= 1 || loading} aria-label="Previous page">
-                <ChevronLeft size={17} />
-              </button>
-              <span>Page {page} of {pagination.last_page}</span>
-              <button type="button" onClick={() => setPage((value) => value + 1)} disabled={page >= pagination.last_page || loading} aria-label="Next page">
-                <ChevronRight size={17} />
-              </button>
-            </div>
-          </nav>
-        ) : null}
+          {pagination ? (
+            <AdminPagination
+              page={pagination.current_page || page}
+              lastPage={pagination.last_page || 1}
+              from={pagination.from}
+              to={pagination.to}
+              total={pagination.total}
+              onPage={setPage}
+              disabled={loading}
+              label="Melava registration pagination"
+            />
+          ) : null}
+        </div>
       </div>
 
       {selectedRegistration && canApprovePayments ? (

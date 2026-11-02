@@ -1,8 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileText, RefreshCw } from "lucide-react";
+import {
+  BadgeCheck,
+  CalendarDays,
+  Clock,
+  Download,
+  FileText,
+  Heart,
+  Receipt,
+  RefreshCw,
+  Ticket,
+  User,
+  UserCheck,
+  Users,
+  Wallet,
+} from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import AdminStats from "../components/AdminStats";
 import { getAdminDashboard } from "../../auth";
 import { PermissionGate } from "../../permission-context";
+import "../components/admin-ui.css";
 import "./reports.css";
 
 const PERIODS = [
@@ -24,6 +40,19 @@ const REPORTS = [
   ["verified_melava_payments", "Verified payments"],
   ["pending_melava_payments", "Payments pending verification"],
 ];
+
+const METRIC_UI = {
+  total_users: { icon: Users, tone: "teal" },
+  total_profiles: { icon: UserCheck, tone: "blue" },
+  verified_profiles: { icon: BadgeCheck, tone: "green" },
+  pending_profiles: { icon: Clock, tone: "amber" },
+  groom_profiles: { icon: User, tone: "blue" },
+  bride_profiles: { icon: Heart, tone: "magenta" },
+  melava_campaigns: { icon: CalendarDays, tone: "teal" },
+  melava_registrations: { icon: Ticket, tone: "magenta" },
+  verified_melava_payments: { icon: Wallet, tone: "green" },
+  pending_melava_payments: { icon: Receipt, tone: "amber" },
+};
 
 const csvCell = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
 
@@ -89,18 +118,19 @@ export default function Reports() {
     };
   }, [period, from, to, rangeReady, refreshKey]);
 
-  const reportRows = useMemo(
+  const reportItems = useMemo(
     () => REPORTS.map(([key, label]) => ({
       key,
       label,
       value: Number(data?.[key] || 0),
+      ...(METRIC_UI[key] || { tone: "slate" }),
     })),
     [data],
   );
 
   return (
     <AdminLayout currentPath="/admin/report">
-      <div className="ar-page">
+      <div className="ar-page adm-ui">
         <header className="ar-heading">
           <div>
             <h1>Reports</h1>
@@ -170,14 +200,7 @@ export default function Reports() {
               <p>Counts returned by the existing Admin dashboard endpoint.</p>
             </div>
           </div>
-          <div className="ar-grid">
-            {reportRows.map((row) => (
-              <article className="ar-metric" key={row.key}>
-                <span>{row.label}</span>
-                <strong>{data ? row.value.toLocaleString("en-IN") : loading ? "—" : "0"}</strong>
-              </article>
-            ))}
-          </div>
+          <AdminStats items={reportItems} loading={loading} label="Report summary" />
           {!loading && !data && !error ? <div className="ar-empty">No report data is available.</div> : null}
         </section>
       </div>

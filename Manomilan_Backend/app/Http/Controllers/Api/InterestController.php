@@ -125,7 +125,7 @@ class InterestController extends Controller
             'full_name' => $profile->fullName,
             'photo_url' => $profile->profilePhoto ? url(ltrim($profile->profilePhoto, '/')) : '',
             'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
-            'city' => $profile->location ?: $profile->professionalCity ?: $profile->cityOfEducation,
+            'city' => $profile->professionalCity ?: $profile->cityOfEducation,
             'education' => $profile->education,
             'profession' => $profile->profession,
             'gender' => $profile->groomOrBride,

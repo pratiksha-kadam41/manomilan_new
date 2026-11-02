@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   BadgeCheck, Briefcase, Check, GraduationCap, Heart, Loader2, MapPin,
-  Sparkles, UserRound, Users,
+  UserRound, Users,
 } from "lucide-react";
 import { getMatch, sendInterest } from "../api";
 import { Avatar, EmptyState, ErrorState, InlineNote, Modal, Skeleton } from "./Ui";
@@ -47,16 +47,6 @@ const detailGroups = (profile) => [
       ["Sisters", profile.family?.sisters],
       ["Family values", profile.family?.family_values],
       ["Financial status", profile.family?.financial_status],
-    ],
-  },
-  {
-    title: "Lifestyle",
-    icon: Sparkles,
-    rows: [
-      ["Diet", profile.diet],
-      ["Smoking", profile.smoking],
-      ["Drinking", profile.drinking],
-      ["Hobbies", profile.hobbies],
     ],
   },
 ];

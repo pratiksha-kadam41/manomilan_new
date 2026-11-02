@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReceiptController;
 use App\Http\Controllers\Api\SystemManagementController;
 use App\Http\Controllers\Api\TicketController;
+use App\Http\Controllers\Api\WebsiteManagementController;
 use App\Http\Controllers\Api\WorkshopRegistrationController;
 use App\Http\Controllers\Candidate\DashboardController as CandidateDashboardController;
 use App\Http\Controllers\Candidate\InterestController as CandidateInterestController;
@@ -25,16 +26,20 @@ use App\Http\Controllers\Candidate\ProfileController as CandidateProfileControll
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:5,1');
 Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:5,1');
 
-Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('throttle:10,1');
-Route::get('/melava-registrations/settings', [MelavaRegistrationController::class, 'settings']);
-Route::get('/melava-campaigns/active', [MelavaCampaignController::class, 'active']);
-Route::get('/melava-registrations/check', [MelavaRegistrationController::class, 'check'])->middleware('throttle:20,1');
-Route::post('/melava-registrations/draft', [MelavaRegistrationController::class, 'saveDraft'])->middleware('throttle:60,1');
-Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
-Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
+Route::get('/website/settings', [WebsiteManagementController::class, 'publicSettings']);
+
+Route::middleware('website.availability')->group(function () {
+    Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:5,1');
+    Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('throttle:10,1');
+    Route::get('/melava-registrations/settings', [MelavaRegistrationController::class, 'settings']);
+    Route::get('/melava-campaigns/active', [MelavaCampaignController::class, 'active']);
+    Route::get('/melava-registrations/check', [MelavaRegistrationController::class, 'check'])->middleware('throttle:20,1');
+    Route::post('/melava-registrations/draft', [MelavaRegistrationController::class, 'saveDraft'])->middleware('throttle:60,1');
+    Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
+    Route::post('/workshop-registrations', [WorkshopRegistrationController::class, 'store'])->middleware('throttle:10,1');
+});
 
 Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function () {
     Route::get('/user', function (Request $request) {
@@ -44,6 +49,16 @@ Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function (
     Route::put('/change-password', [ChangePasswordController::class, 'changePassword']);
 
     Route::get('/system/my-permissions', [SystemManagementController::class, 'myPermissions']);
+
+    Route::prefix('website-management')->group(function () {
+        Route::get('/overview', [WebsiteManagementController::class, 'overview']);
+        Route::get('/upcoming-events', [WebsiteManagementController::class, 'showUpcomingEvents']);
+        Route::put('/upcoming-events', [WebsiteManagementController::class, 'updateUpcomingEvents']);
+        Route::get('/downtime', [WebsiteManagementController::class, 'showDowntime']);
+        Route::put('/downtime', [WebsiteManagementController::class, 'updateDowntime']);
+        Route::get('/maintenance', [WebsiteManagementController::class, 'showMaintenance']);
+        Route::put('/maintenance', [WebsiteManagementController::class, 'updateMaintenance']);
+    });
     Route::prefix('system')->middleware('superadmin')->group(function () {
         Route::get('/', [SystemManagementController::class, 'index']);
         Route::get('/roles/{role}/permissions', [SystemManagementController::class, 'showRolePermissions'])->whereNumber('role');
@@ -75,6 +90,8 @@ Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function (
 
     Route::get('/profiles', [ProfileController::class, 'index']);
     Route::get('/profiles/{id}', [ProfileController::class, 'show']);
+    Route::put('/profiles/{id}', [ProfileController::class, 'update']);
+    Route::post('/profiles/{id}/update', [ProfileController::class, 'update']);
     Route::get('/profiles/{id}/biodata-preview', [ProfileController::class, 'biodataPreview']);
     Route::get('/profiles/{id}/documents/{docId}/file', [ProfileController::class, 'showDocument']);
     Route::delete('/profiles/{id}/documents/{docId}', [ProfileController::class, 'deleteDocument']);

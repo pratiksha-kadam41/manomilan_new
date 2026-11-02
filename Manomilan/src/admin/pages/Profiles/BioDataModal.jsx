@@ -41,7 +41,6 @@ function BioDataPaper({ profile, template, orientation, paperRef }) {
     ["Occupation", display(profile.profession)],
     ["Monthly Income", Number.isFinite(Number(profile.monthly_income)) && profile.monthly_income !== null && profile.monthly_income !== ""
       ? `₹${Number(profile.monthly_income).toLocaleString("en-IN")}` : display(profile.monthly_income)],
-    ["Hobbies", display(profile.hobbies)],
   ];
   const siblingCount = [profile.brothers, profile.sisters]
     .filter((count) => count !== null && count !== undefined && String(count).trim() !== "")

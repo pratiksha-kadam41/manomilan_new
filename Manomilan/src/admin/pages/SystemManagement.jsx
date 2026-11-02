@@ -1,10 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Edit3, Plus, RefreshCw, Save, Trash2 } from "lucide-react";
+import { Boxes, Download, Edit3, History, KeyRound, Plus, RefreshCw, Save, ShieldCheck, Trash2, UserCheck } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import AdminStats from "../components/AdminStats";
 import { download, request } from "../../api";
+import "../components/admin-ui.css";
 import "./system-management.css";
 
 const TABS = ["Roles", "Modules", "Permissions", "User access", "Audit log"];
+
+const STAT_META = {
+  roles: { label: "Roles", icon: ShieldCheck, tone: "teal" },
+  modules: { label: "Modules", icon: Boxes, tone: "blue" },
+  active_users: { label: "Active Users", icon: UserCheck, tone: "green" },
+  assigned_permissions: { label: "Assigned Permissions", icon: KeyRound, tone: "magenta" },
+  audit_activities: { label: "Audit Activities", icon: History, tone: "amber" },
+};
 
 const messageFrom = (error) =>
   error?.status === 403 ? "You do not have permission to manage system settings." : error?.message || "Request failed.";
@@ -111,6 +121,17 @@ export default function SystemManagement() {
       actions: module.permissions.filter((permission) => permission.granted).map((permission) => permission.key),
     })),
     [permissionModules],
+  );
+
+  const statItems = useMemo(
+    () => Object.entries(snapshot?.statistics || {}).map(([key, value]) => ({
+      key,
+      label: STAT_META[key]?.label || key.replaceAll("_", " "),
+      value,
+      icon: STAT_META[key]?.icon,
+      tone: STAT_META[key]?.tone || "slate",
+    })),
+    [snapshot],
   );
 
   const run = async (operation, successMessage) => {
@@ -241,7 +262,7 @@ export default function SystemManagement() {
 
   return (
     <AdminLayout currentPath="/admin/system-management" contentClassName="sm-content">
-      <div className="sm-page">
+      <div className="sm-page adm-ui">
         <header className="sm-heading">
           <div>
             <h1>System Management</h1>
@@ -258,14 +279,7 @@ export default function SystemManagement() {
 
         {snapshot ? (
           <>
-            <section className="sm-stats">
-              {Object.entries(snapshot.statistics || {}).map(([key, value]) => (
-                <article className="sm-stat" key={key}>
-                  <span>{key.replaceAll("_", " ")}</span>
-                  <strong>{value}</strong>
-                </article>
-              ))}
-            </section>
+            <AdminStats items={statItems} label="System statistics" />
 
             <nav className="sm-tabs" aria-label="System management sections">
               {TABS.map((tab) => (

@@ -1,213 +1,117 @@
-// src/pages/ProfileDetail.jsx  (page + backend calls in one file)
-// npm install react-icons react-router-dom
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
-  FaArrowLeft, FaBirthdayCake, FaBriefcase, FaCalendarAlt, FaCommentDots, FaDownload,
-  FaEdit, FaFileAlt, FaGraduationCap, FaHeartbeat, FaHome, FaIdCard, FaInfoCircle,
-  FaImages, FaListUl, FaMapMarkerAlt, FaPhoneAlt, FaRedo, FaRulerVertical, FaStar, FaTrash,
-  FaUserTie, FaUsers, FaVenusMars, FaWeight, FaAddressBook,
+  FaAddressBook, FaArrowLeft, FaBriefcase, FaCalendarAlt, FaChevronLeft,
+  FaChevronRight, FaCommentDots, FaDownload, FaEdit, FaFileAlt, FaGraduationCap,
+  FaHeartbeat, FaHome, FaIdCard, FaImages, FaInfoCircle, FaListUl, FaMapMarkerAlt,
+  FaPause, FaPhoneAlt, FaPlay, FaRedo, FaStar, FaTrash, FaUsers,
 } from "react-icons/fa";
+import AdminLayout from "../../components/AdminLayout";
+import { ApiError, apiMediaUrl, download, request } from "../../../api";
+import "../../components/admin-ui.css";
 import "./ProfileDetail.css";
 
-/* =====================================================================
-   0. BACKEND CALLS + VALIDATION (was profileService.js)
-   ===================================================================== */
-// All backend calls + validation for the Profile Detail page.
-// Set these in .env:  VITE_API_URL=https://aaryansmanomilan.com   VITE_ASSET_URL=https://aaryansmanomilan.com
+const NA = "N/A";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
-const ASSET_BASE = (import.meta.env.VITE_ASSET_URL || "").replace(/\/+$/, "");
-
-class ApiError extends Error {
-  constructor(message, status = 0) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
-
-/* ---------------- validation / safety helpers ---------------- */
-
-// Only positive whole numbers are allowed as an id (blocks "abc", "-1", "1;DROP", etc.)
 const isValidId = (id) => /^\d{1,12}$/.test(String(id ?? "")) && Number(id) > 0;
 
-// Turns "uploads/x.png" into a full URL
-const assetUrl = (path) => {
-  if (!path || typeof path !== "string") return "";
-  if (/^https?:\/\//i.test(path)) return path;
-  return `${ASSET_BASE}/${path.replace(/^\/+/, "")}`;
-};
-
-// Allows only http/https links (blocks javascript: and data: links)
 const safeUrl = (url) => {
   try {
-    const u = new URL(url, window.location.origin);
-    return ["http:", "https:"].includes(u.protocol) ? u.href : "";
+    const parsed = new URL(url, window.location.origin);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
   } catch {
     return "";
   }
 };
 
-/* ---------------- request wrapper ---------------- */
-
-const authHeaders = () => {
-  try {
-    const token = localStorage.getItem("token"); // change if your admin token is stored elsewhere
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
+const normalizeUrl = (value) => {
+  if (!value || typeof value !== "string") return "";
+  return safeUrl(apiMediaUrl(value));
 };
 
-const FALLBACK_MESSAGES = {
-  401: "Your session has expired. Please log in again.",
-  403: "You do not have permission to do this.",
-  404: "Profile not found.",
-  429: "Too many requests. Please wait a moment and try again.",
+const pick = (obj, path) => String(path).split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
+
+const parseDate = (value) => {
+  if (!value) return null;
+  const text = String(value).trim();
+  const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(text);
+  const date = match ? new Date(+match[3], +match[2] - 1, +match[1]) : new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
 };
 
-async function request(path, { method = "GET", signal, expect = "json" } = {}) {
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method,
-      signal,
-      credentials: "include",
-      headers: { Accept: expect === "json" ? "application/json" : "*/*", ...authHeaders() },
-    });
-  } catch (err) {
-    if (err.name === "AbortError") throw err;
-    throw new ApiError("Cannot reach the server. Check your internet connection and try again.");
+const ageFrom = (date) => {
+  const today = new Date();
+  let age = today.getFullYear() - date.getFullYear();
+  if (today.getMonth() < date.getMonth() || (today.getMonth() === date.getMonth() && today.getDate() < date.getDate())) age--;
+  return age >= 0 && age < 120 ? age : null;
+};
+
+const longDate = (date) => `${date.getDate()} ${date.toLocaleString("en-GB", { month: "short" })}, ${date.getFullYear()}`;
+
+const fmt = (value, type) => {
+  if (value === null || value === undefined || (typeof value === "object" && !Array.isArray(value))) return null;
+  if (Array.isArray(value)) value = value.filter(Boolean).join(", ");
+  const text = String(value).trim();
+  if (!text) return null;
+  if (type === "money") {
+    const number = Number(text.replace(/,/g, ""));
+    return Number.isFinite(number) ? `₹ ${number.toLocaleString("en-IN")}` : text;
   }
-
-  if (!res.ok) {
-    let serverMessage = "";
-    try {
-      serverMessage = (await res.json())?.message || "";
-    } catch {
-      /* response was not JSON */
-    }
-    let message;
-    if (res.status >= 500) message = "Server error. Please try again in a moment.";
-    else if (res.status === 401) message = FALLBACK_MESSAGES[401];
-    else message = serverMessage || FALLBACK_MESSAGES[res.status] || `Request failed (${res.status}).`;
-    throw new ApiError(message, res.status);
+  if (type === "date") {
+    const date = parseDate(text);
+    return date ? longDate(date) : text;
   }
+  return text;
+};
 
-  if (expect === "blob") return res;
-  try {
-    return await res.json();
-  } catch {
-    throw new ApiError("The server sent an invalid response.", res.status);
-  }
-}
-
-/* ---------------- public API ---------------- */
-
-function normalizeProfile(p) {
-  const docs = Array.isArray(p.documents) ? p.documents : [];
+function normalizeProfile(profile) {
+  const documents = Array.isArray(profile.documents) ? profile.documents : [];
   return {
-    ...p,
-    _photo: assetUrl(p.profile_photo || p.photo || ""),
-    photos: (Array.isArray(p.photos) ? p.photos : [])
+    ...profile,
+    _photo: normalizeUrl(profile.profile_photo || profile.photo || ""),
+    photos: (Array.isArray(profile.photos) ? profile.photos : [])
       .filter((photo) => photo && typeof photo === "object")
-      .map((photo, i) => ({
-        id: photo.id ?? i,
-        label: String(photo.label || `Photo ${i + 1}`),
-        url: safeUrl(assetUrl(photo.url || photo.path || "")),
+      .map((photo, index) => ({
+        id: photo.id ?? index,
+        label: String(photo.label || `Photo ${index + 1}`),
+        url: normalizeUrl(photo.url || photo.path || ""),
       }))
       .filter((photo) => photo.url),
-    documents: docs
-      .filter((d) => d && typeof d === "object")
-      .map((d, i) => ({
-        id: d.id ?? i,
-        label: String(d.label || d.type || d.name || "Document"),
-        url: d.url || d.file_path || d.path || "",
+    documents: documents
+      .filter((document) => document && typeof document === "object")
+      .map((document, index) => ({
+        id: document.id ?? index,
+        label: String(document.label || document.type || document.name || "Document"),
+        url: document.url || document.file_path || document.path || "",
       })),
   };
 }
 
 async function getProfile(id, signal) {
   if (!isValidId(id)) throw new ApiError("This profile link is not valid.", 400);
-  const json = await request(`/api/profiles/${id}`, { signal });
-  const profile = json?.data ?? json;
+  const response = await request(`/profiles/${id}`, { signal });
+  const profile = response?.data ?? response;
   if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
     throw new ApiError("The server sent an invalid response.");
   }
   return normalizeProfile(profile);
 }
 
-async function deleteDocument(profileId, docId) {
-  if (!isValidId(profileId) || !/^[\w-]{1,64}$/.test(String(docId))) {
+async function deleteDocument(profileId, documentId) {
+  if (!isValidId(profileId) || !/^[\w-]{1,64}$/.test(String(documentId))) {
     throw new ApiError("Invalid document.", 400);
   }
-  await request(`/api/profiles/${profileId}/documents/${docId}`, { method: "DELETE" });
+  await request(`/profiles/${profileId}/documents/${documentId}`, { method: "DELETE" });
 }
 
-async function downloadBiodata(profileId, regNo) {
+async function downloadBiodata(profileId, registrationNo) {
   if (!isValidId(profileId)) throw new ApiError("Invalid profile.", 400);
-  const res = await request(`/api/profiles/${profileId}/biodata`, { expect: "blob" });
-  const blob = await res.blob();
-  if (!blob.size) throw new ApiError("The BioData file is empty. Please try again.");
-
-  const name = `BioData_${String(regNo || profileId).replace(/[^\w-]/g, "")}.pdf`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const filename = `BioData_${String(registrationNo || profileId).replace(/[^\w-]/g, "")}.pdf`;
+  await download(`/profiles/${profileId}/biodata`, filename);
 }
 
-/* =====================================================================
-   1. HELPERS
-   ===================================================================== */
-const NA = "N/A";
-
-// read "a.b.c" paths safely
-const pick = (obj, path) => String(path).split(".").reduce((o, k) => (o == null ? undefined : o[k]), obj);
-
-const parseDate = (v) => {
-  if (!v) return null;
-  const s = String(v).trim();
-  const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(s); // 29-01-1997
-  const d = m ? new Date(+m[3], +m[2] - 1, +m[1]) : new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
-const ageFrom = (d) => {
-  const t = new Date();
-  let a = t.getFullYear() - d.getFullYear();
-  if (t.getMonth() < d.getMonth() || (t.getMonth() === d.getMonth() && t.getDate() < d.getDate())) a--;
-  return a >= 0 && a < 120 ? a : null;
-};
-const longDate = (d) => `${d.getDate()} ${d.toLocaleString("en-GB", { month: "short" })}, ${d.getFullYear()}`;
-
-// format a raw backend value for display; returns null when empty
-const fmt = (v, type) => {
-  if (v === null || v === undefined || typeof v === "object" && !Array.isArray(v)) return null;
-  if (Array.isArray(v)) v = v.filter(Boolean).join(", ");
-  const s = String(v).trim();
-  if (!s) return null;
-  if (type === "money") {
-    const n = Number(s.replace(/,/g, ""));
-    return Number.isFinite(n) ? `₹ ${n.toLocaleString("en-IN")}` : s;
-  }
-  if (type === "date") {
-    const d = parseDate(s);
-    return d ? longDate(d) : s;
-  }
-  return s;
-};
-
-/* =====================================================================
-   2. FIELD CONFIG  — change only the  k:  value to match your backend field names
-      l = label, k = backend key (dotted path allowed), t = type, wide = full width
-   ===================================================================== */
-const referenceSub = (p) => {
-  const text = [fmt(pick(p, "reference_name")), fmt(pick(p, "reference_relation"))].filter(Boolean).join(" - ");
+const referenceSub = (profile) => {
+  const text = [fmt(pick(profile, "reference_name")), fmt(pick(profile, "reference_relation"))].filter(Boolean).join(" - ");
   return text ? `(${text})` : "";
 };
 
@@ -215,61 +119,107 @@ const TABS = [
   {
     id: "personal", label: "Personal",
     sections: [
-      { title: "About", icon: <FaInfoCircle />, fields: [
-        { l: "Marital Status", k: "marital_status" }, { l: "Caste", k: "caste" }, { l: "Sub Caste", k: "sub_caste" },
-        { l: "Mother Tongue", k: "mother_tongue" }, { l: "Languages Known", k: "languages_known" },
-      ] },
-      { title: "Contact Details", icon: <FaAddressBook />, fields: [
-        { l: "Contact No", k: "mobile" }, { l: "Address", k: "address", wide: true },
-        { l: "Father's Contact", k: "father_phone" }, { l: "Mother's Contact", k: "mother_phone" },
-        { l: "Reference Contact", k: "reference_phone", sub: referenceSub },
-      ] },
-      { title: "Health & Lifestyle", icon: <FaHeartbeat />, fields: [
-        { l: "Blood Group", k: "blood_group" }, { l: "Spectacles/Lenses", k: "spectacles" },
-        { l: "Diet", k: "diet" }, { l: "Smoking", k: "smoking" }, { l: "Drinking", k: "drinking" },
-      ] },
+      {
+        title: "About", icon: <FaInfoCircle />, fields: [
+          { l: "About Me", k: "about", wide: true },
+          { l: "Marital Status", k: "marital_status" },
+          { l: "Religion", k: "religion" },
+          { l: "Caste", k: "caste" },
+          { l: "Sub Caste", k: "sub_caste" },
+          { l: "Mother Tongue", k: "mother_tongue" },
+          { l: "Languages Known", k: "languages_known" },
+          { l: "Special Cases", k: "special_cases", wide: true },
+        ],
+      },
+      {
+        title: "Contact Details", icon: <FaAddressBook />, fields: [
+          { l: "Contact No", k: "mobile" },
+          { l: "Email", k: "email" },
+          { l: "Current Address", k: "address", wide: true },
+          { l: "Permanent Address", k: "permanent_address", wide: true },
+          { l: "Father's Contact", k: "father_phone" },
+          { l: "Mother's Contact", k: "mother_phone" },
+          { l: "Reference Contact", k: "reference_phone", sub: referenceSub },
+        ],
+      },
+      {
+        title: "Health & Lifestyle", icon: <FaHeartbeat />, fields: [
+          { l: "Blood Group", k: "blood_group" },
+          { l: "Spectacles/Lenses", k: "spectacles" },
+          { l: "Medical History", k: "personal_medical_history", wide: true },
+          { l: "Current Medical Problems", k: "current_medical_problems", wide: true },
+          { l: "Medications", k: "medications", wide: true },
+        ],
+      },
     ],
   },
   {
     id: "professional", label: "Professional",
     sections: [
-      { title: "Education", icon: <FaGraduationCap />, fields: [
-        { l: "Highest Education", k: "education" }, { l: "University / College", k: "university" },
-        { l: "Additional Education 1", k: "additional_education_1" }, { l: "Additional Education 2", k: "additional_education_2" },
-      ] },
-      { title: "Profession", icon: <FaBriefcase />, fields: [
-        { l: "Profession", k: "profession" }, { l: "Designation", k: "designation" }, { l: "Organisation", k: "organisation" },
-        { l: "Field of Working", k: "field_of_working" }, { l: "Length of Employment", k: "length_of_employment" },
-        { l: "Monthly Income", k: "monthly_income", t: "money" }, { l: "Annual Income", k: "annual_income", t: "money" },
-      ] },
+      {
+        title: "Education", icon: <FaGraduationCap />, fields: [
+          { l: "Highest Education", k: "education" },
+          { l: "University / College", k: "university" },
+          { l: "Degree / Diploma 1", k: "degree_diploma_name_1" },
+          { l: "Specialisation 1", k: "specialisation_1" },
+          { l: "Degree / Diploma 2", k: "degree_diploma_name_2" },
+          { l: "Specialisation 2", k: "specialisation_2" },
+          { l: "Additional Education 1", k: "additional_education_1" },
+          { l: "Additional Education 2", k: "additional_education_2" },
+          { l: "City of Education", k: "city_of_education" },
+        ],
+      },
+      {
+        title: "Profession", icon: <FaBriefcase />, fields: [
+          { l: "Profession", k: "profession" },
+          { l: "Designation", k: "designation" },
+          { l: "Organisation", k: "organisation" },
+          { l: "Field of Working", k: "field_of_working" },
+          { l: "Length of Employment", k: "length_of_employment" },
+          { l: "Monthly Income", k: "monthly_income", t: "money" },
+          { l: "Annual Income", k: "annual_income", t: "money" },
+        ],
+      },
     ],
   },
   {
     id: "family", label: "Family",
     sections: [
-      { title: "Family Details", icon: <FaUsers />, fields: [
-        { l: "Father's Name", k: "father_name", suffix: "father_living" }, { l: "Father's Occupation", k: "father_occupation" },
-        { l: "Father's Native Place", k: "father_native_place" }, { l: "Father's Contact", k: "father_phone" },
-        { l: "Mother's Name", k: "mother_name", suffix: "mother_living" }, { l: "Mother's Occupation", k: "mother_occupation" },
-        { l: "Mother's Native Place", k: "mother_native_place" }, { l: "Mother's Contact", k: "mother_phone" },
-        { l: "Brothers", k: "brothers" }, { l: "Brothers Married", k: "brothers_married" },
-        { l: "Sisters", k: "sisters" }, { l: "Sisters Married", k: "sisters_married" },
-        { l: "Parents Intercaste Marriage", k: "parents_intercaste" }, { l: "Parents Different Caste", k: "parents_different_caste" },
-        { l: "Family Financial Status", k: "family_financial_status" }, { l: "Family Annual Income", k: "family_income", t: "money" },
-        { l: "Family Values", k: "family_values" },
-      ] },
+      {
+        title: "Family Details", icon: <FaUsers />, fields: [
+          { l: "Father's Name", k: "father_name", suffix: "father_living" },
+          { l: "Father's Occupation", k: "father_occupation" },
+          { l: "Father's Native Place", k: "father_native_place" },
+          { l: "Father's Contact", k: "father_phone" },
+          { l: "Mother's Name", k: "mother_name", suffix: "mother_living" },
+          { l: "Mother's Occupation", k: "mother_occupation" },
+          { l: "Mother's Native Place", k: "mother_native_place" },
+          { l: "Mother's Contact", k: "mother_phone" },
+          { l: "Brothers", k: "brothers" },
+          { l: "Brothers Married", k: "brothers_married" },
+          { l: "Sisters", k: "sisters" },
+          { l: "Sisters Married", k: "sisters_married" },
+          { l: "Parents Intercaste Marriage", k: "parents_intercaste" },
+          { l: "Parents Different Caste", k: "parents_different_caste" },
+          { l: "Family Financial Status", k: "family_financial_status" },
+          { l: "Family Annual Income", k: "family_income", t: "money" },
+          { l: "Family Values", k: "family_values" },
+        ],
+      },
     ],
   },
   {
     id: "horoscope", label: "Horoscope",
     sections: [
-      { title: "Horoscope Details", icon: <FaStar />, fields: [
-        { l: "Date of Birth", k: "horoscope_dob", t: "date" }, { l: "Time of Birth", k: "birth_time" }, { l: "Place of Birth", k: "birth_place" },
-        { l: "Rashi", k: "rashi" }, { l: "Nakshatra", k: "nakshatra" }, { l: "Nadi", k: "nadi" },
-        { l: "Gan", k: "gan" }, { l: "Gotra", k: "gotra" }, { l: "Kundali", k: "kundali" },
-        { l: "Horoscope Caste", k: "horoscope_caste" }, { l: "Horoscope Sub Caste", k: "horoscope_sub_caste" }, { l: "Charan", k: "charan" },
-        { l: "Match Patrika", k: "match_patrika" },
-      ] },
+      {
+        title: "Horoscope Details", icon: <FaStar />, fields: [
+          { l: "Date of Birth", k: "horoscope_dob", t: "date" },
+          { l: "Time of Birth", k: "birth_time" },
+          { l: "Place of Birth", k: "birth_place" },
+          { l: "Horoscope Caste", k: "horoscope_caste" },
+          { l: "Horoscope Sub Caste", k: "horoscope_sub_caste" },
+        ],
+      },
     ],
   },
   { id: "photos", label: "Photos" },
@@ -277,30 +227,37 @@ const TABS = [
   {
     id: "preference", label: "Preference",
     sections: [
-      { title: "Partner Preferences", icon: <FaListUl />, fields: [
-        { l: "Age Range", k: "pref_age_range" }, { l: "Height Range", k: "pref_height_range" },
-        { l: "Preferred Religion", k: "pref_religion" }, { l: "Preferred Caste", k: "pref_caste" },
-        { l: "Preferred Sub-Caste", k: "pref_sub_caste" }, { l: "Preferred Education", k: "pref_education" },
-        { l: "Working Partner", k: "pref_working_partner" }, { l: "Preferred Working Field", k: "pref_working_field" },
-        { l: "Expected Income", k: "pref_income" }, { l: "Family Type", k: "pref_family_type" },
-        { l: "Financial Background", k: "pref_financial_background" }, { l: "Family Values", k: "pref_family_values" },
-        { l: "Preferred Country", k: "pref_country" }, { l: "Preferred State", k: "pref_state" }, { l: "Preferred City", k: "pref_city" },
-      ] },
+      {
+        title: "Partner Preferences", icon: <FaListUl />, fields: [
+          { l: "Age Range", k: "pref_age_range" },
+          { l: "Height Range", k: "pref_height_range" },
+          { l: "Preferred Religion", k: "pref_religion" },
+          { l: "Preferred Caste", k: "pref_caste" },
+          { l: "Preferred Sub-Caste", k: "pref_sub_caste" },
+          { l: "Preferred Education", k: "pref_education" },
+          { l: "Working Partner", k: "pref_working_partner" },
+          { l: "Preferred Working Field", k: "pref_working_field" },
+          { l: "Expected Income", k: "pref_income" },
+          { l: "Family Type", k: "pref_family_type" },
+          { l: "Financial Background", k: "pref_financial_background" },
+          { l: "Family Values", k: "pref_family_values" },
+          { l: "Preferred Country", k: "pref_country" },
+          { l: "Preferred State", k: "pref_state" },
+          { l: "Preferred City", k: "pref_city" },
+        ],
+      },
       { title: "Other Expectations", icon: <FaCommentDots />, kind: "text", k: "other_expectations", empty: "No other specific expectations mentioned." },
     ],
   },
 ];
 
-/* =====================================================================
-   3. SMALL COMPONENTS
-   ===================================================================== */
-function Field({ f, profile }) {
-  const value = fmt(pick(profile, f.k), f.t);
-  const suffix = f.suffix ? fmt(pick(profile, f.suffix)) : null;
-  const sub = value && f.sub ? f.sub(profile) : "";
+function Field({ field, profile }) {
+  const value = fmt(pick(profile, field.k), field.t);
+  const suffix = field.suffix ? fmt(pick(profile, field.suffix)) : null;
+  const sub = value && field.sub ? field.sub(profile) : "";
   return (
-    <div className={`pd-field${f.wide ? " pd-wide" : ""}`}>
-      <span className="pd-label">{f.l}</span>
+    <div className={`pd-field${field.wide ? " pd-wide" : ""}`}>
+      <span className="pd-label">{field.l}</span>
       <span className={`pd-value${value ? "" : " pd-empty"}`}>
         {value ? <>{value}{suffix && <em> ({suffix})</em>}</> : NA}
       </span>
@@ -309,52 +266,96 @@ function Field({ f, profile }) {
   );
 }
 
-function Section({ s, profile }) {
+function Section({ section, profile }) {
   return (
     <section className="pd-section">
-      <h3 className="pd-section-title"><span className="pd-section-ic">{s.icon}</span>{s.title}</h3>
-      {s.kind === "text" ? (
-        <p className="pd-text">{fmt(pick(profile, s.k)) || s.empty}</p>
+      <h3 className="pd-section-title"><span className="pd-section-ic">{section.icon}</span>{section.title}</h3>
+      {section.kind === "text" ? (
+        <p className="pd-text">{fmt(pick(profile, section.k)) || section.empty}</p>
       ) : (
         <div className="pd-grid">
-          {s.fields.map((f) => <Field key={f.k + f.l} f={f} profile={profile} />)}
+          {section.fields.map((field) => <Field key={field.k + field.l} field={field} profile={profile} />)}
         </div>
       )}
     </section>
   );
 }
 
-function Documents({ docs, onDelete, deletingId }) {
+function PhotoGallery({ photos, name }) {
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const count = photos.length;
+
+  useEffect(() => {
+    if (!playing || count < 2) return undefined;
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % count);
+    }, 4000);
+    return () => window.clearInterval(timer);
+  }, [playing, count]);
+
+  if (!count) {
+    return (
+      <section className="pd-gallery ui-card">
+        <div className="pd-gallery-empty">
+          <FaImages />
+          <strong>No photos uploaded</strong>
+          <p>This candidate has not uploaded any photos yet.</p>
+        </div>
+      </section>
+    );
+  }
+
+  const safeIndex = Math.min(index, count - 1);
+  const current = photos[safeIndex];
+  const move = (step) => setIndex((currentIndex) => (currentIndex + step + count) % count);
+
   return (
-    <section className="pd-section">
-      <h3 className="pd-section-title"><span className="pd-section-ic"><FaFileAlt /></span>Uploaded Documents</h3>
-      {docs.length === 0 ? (
-        <p className="pd-text">No documents have been uploaded yet.</p>
-      ) : (
-        <ul className="pd-docs">
-          {docs.map((d) => {
-            const url = safeUrl(assetUrl(d.url));
-            return (
-              <li key={d.id}>
-                <span className="pd-doc-ic">{/birth/i.test(d.label) ? <FaCalendarAlt /> : <FaIdCard />}</span>
-                {url ? <a href={url} target="_blank" rel="noopener noreferrer">{d.label}</a> : <span>{d.label}</span>}
-                <button type="button" className="pd-icon-btn" aria-label={`Delete ${d.label}`}
-                  disabled={deletingId === d.id} onClick={() => onDelete(d)}>
-                  <FaTrash />
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+    <section className="pd-gallery ui-card" aria-label="Candidate photo slideshow">
+      <div className="pd-stage">
+        <img src={current.url} alt={current.label || name} />
+        {count > 1 && (
+          <>
+            <button type="button" className="pd-nav prev" onClick={() => move(-1)} aria-label="Previous photo">
+              <FaChevronLeft />
+            </button>
+            <button type="button" className="pd-nav next" onClick={() => move(1)} aria-label="Next photo">
+              <FaChevronRight />
+            </button>
+          </>
+        )}
+        <span className="pd-counter">{safeIndex + 1} / {count}</span>
+        <span className="pd-stage-label">{current.label}</span>
+      </div>
+      <div className="pd-gallery-bar">
+        <div className="pd-thumbs" role="tablist" aria-label="All candidate photos">
+          {photos.map((photo, photoIndex) => (
+            <button
+              type="button"
+              key={photo.id ?? photoIndex}
+              className={`pd-thumb${photoIndex === safeIndex ? " active" : ""}`}
+              onClick={() => setIndex(photoIndex)}
+              aria-label={`Show ${photo.label}`}
+              aria-pressed={photoIndex === safeIndex}
+            >
+              <img src={photo.url} alt="" loading="lazy" />
+            </button>
+          ))}
+        </div>
+        {count > 1 && (
+          <button type="button" className="ui-btn small secondary pd-play" onClick={() => setPlaying((value) => !value)}>
+            {playing ? <FaPause /> : <FaPlay />} {playing ? "Pause" : "Slideshow"}
+          </button>
+        )}
+      </div>
     </section>
   );
 }
 
-function Photos({ photos }) {
+function PhotoGrid({ photos }) {
   return (
     <section className="pd-section">
-      <h3 className="pd-section-title"><span className="pd-section-ic"><FaImages /></span>Photos Uploaded by Candidate</h3>
+      <h3 className="pd-section-title"><span className="pd-section-ic"><FaImages /></span>All Photos Uploaded by Candidate</h3>
       {photos.length === 0 ? (
         <p className="pd-text">No photos have been uploaded for this profile.</p>
       ) : (
@@ -371,43 +372,99 @@ function Photos({ photos }) {
   );
 }
 
-function Sidebar({ p, onEdit, onDownload, busy }) {
-  const [imgFailed, setImgFailed] = useState(false);
-  const name = fmt(p.full_name) || "Unnamed profile";
-  const initials = name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
-  const dob = parseDate(p.dob);
-  const age = dob ? ageFrom(dob) : null;
-  const weight = fmt(p.weight);
+function Documents({ docs, onDelete, deletingId }) {
+  return (
+    <section className="pd-section">
+      <h3 className="pd-section-title"><span className="pd-section-ic"><FaFileAlt /></span>Uploaded Documents</h3>
+      {docs.length === 0 ? (
+        <p className="pd-text">No documents have been uploaded yet.</p>
+      ) : (
+        <ul className="pd-docs">
+          {docs.map((document) => {
+            const url = normalizeUrl(document.url);
+            return (
+              <li key={document.id}>
+                <span className="pd-doc-ic">{/birth/i.test(document.label) ? <FaCalendarAlt /> : <FaIdCard />}</span>
+                {url ? <a href={url} target="_blank" rel="noopener noreferrer">{document.label}</a> : <span>{document.label}</span>}
+                <button
+                  type="button"
+                  className="pd-icon-btn"
+                  aria-label={`Delete ${document.label}`}
+                  disabled={deletingId === document.id}
+                  onClick={() => onDelete(document)}
+                >
+                  <FaTrash />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SummaryCard({ profile }) {
+  const name = fmt(profile.full_name) || "Unnamed profile";
+  const initials = name.split(/\s+/).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+  const dob = parseDate(profile.dob || profile.birth_date);
+  const age = dob ? ageFrom(dob) : profile.age;
+  const weight = fmt(profile.weight);
+  const completion = Number(profile.profile_completion);
+  const verified = String(profile.verification_status || "").toLowerCase() === "completed";
 
   const facts = [
-    [<FaVenusMars />, fmt(p.gender)],
-    [<FaBirthdayCake />, dob ? `${longDate(dob)}${age !== null ? ` (${age} years)` : ""}` : null],
-    [<FaRulerVertical />, fmt(p.height)],
-    [<FaWeight />, weight ? (/^\d+(\.\d+)?$/.test(weight) ? `${weight} kg` : weight) : null],
-    [<FaUserTie />, fmt(p.profession)],
-    [<FaMapMarkerAlt />, fmt(p.city)],
-    [<FaPhoneAlt />, fmt(p.mobile)],
-    [<FaHome />, fmt(p.address)],
-  ].filter(([, text]) => text);
+    ["Gender", fmt(profile.gender)],
+    ["Date of Birth", dob ? longDate(dob) : fmt(profile.dob)],
+    ["Age", age ? `${age} years` : null],
+    ["Height", fmt(profile.height)],
+    ["Weight", weight ? (/^\d+(\.\d+)?$/.test(weight) ? `${weight} kg` : weight) : null],
+    ["Profession", fmt(profile.profession)],
+    ["City", fmt(profile.city)],
+    ["Mobile", fmt(profile.mobile)],
+    ["Email", fmt(profile.email)],
+    ["Registration Type", fmt(profile.registration_type)],
+    ["Melava Batch", fmt(profile.melava_batch)],
+    ["Profile Completion", Number.isFinite(completion) ? `${completion}%` : fmt(profile.profile_completion)],
+  ].filter(([, value]) => value);
 
   return (
-    <aside className="pd-side">
-      <div className="pd-banner" />
-      <div className="pd-avatar">
-        {p._photo && !imgFailed
-          ? <img src={p._photo} alt={name} onError={() => setImgFailed(true)} />
-          : <span aria-hidden="true">{initials}</span>}
+    <aside className="pd-summary ui-card">
+      <div className="pd-summary-head">
+        <span className="pd-summary-avatar">
+          {profile._photo ? <img src={profile._photo} alt={name} /> : initials}
+        </span>
+        <div>
+          <h1>{name}</h1>
+          <p>{fmt(profile.registration_no) || fmt(profile.registration_number) || "No registration number"}</p>
+        </div>
       </div>
-      <h2 className="pd-name">{name}</h2>
-      {fmt(p.registration_no) && <div className="pd-reg">{fmt(p.registration_no)}</div>}
-      <ul className="pd-facts">
-        {facts.map(([icon, text], i) => <li key={i}><span className="pd-fact-ic">{icon}</span><span>{text}</span></li>)}
-      </ul>
-      <div className="pd-actions">
-        <button type="button" className="pd-btn pd-btn-teal" onClick={onEdit}><FaEdit /> Edit Profile</button>
-        <button type="button" className="pd-btn pd-btn-green" onClick={onDownload} disabled={busy}>
-          <FaDownload /> {busy ? "Preparing…" : "BioData Download"}
-        </button>
+
+      <div className="pd-badges">
+        <span className={`ui-badge ${verified ? "ok" : "wait"}`}>{verified ? "Verified" : "Pending verification"}</span>
+        {fmt(profile.active) && <span className={`ui-badge ${String(profile.active).toLowerCase() === "active" ? "info" : "off"}`}>{profile.active}</span>}
+        {fmt(profile.serial_no) && <span className="ui-badge neutral">Sr. No. {profile.serial_no}</span>}
+      </div>
+
+      <dl className="pd-facts-grid">
+        {facts.map(([label, value]) => (
+          <div className="pd-fact" key={label}>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="pd-mini-facts">
+        {fmt(profile.address) && (
+          <span><FaHome /> {profile.address}</span>
+        )}
+        {fmt(profile.mobile) && (
+          <span><FaPhoneAlt /> {profile.mobile}</span>
+        )}
+        {fmt(profile.city) && (
+          <span><FaMapMarkerAlt /> {profile.city}</span>
+        )}
       </div>
     </aside>
   );
@@ -415,15 +472,16 @@ function Sidebar({ p, onEdit, onDownload, busy }) {
 
 function Skeleton() {
   return (
-    <div className="pd-layout" aria-busy="true" aria-label="Loading profile">
-      <div className="pd-side"><div className="pd-banner" />
-        <div className="pd-avatar pd-shimmer" /><div className="pd-sk pd-sk-name pd-shimmer" />
-        {[1, 2, 3, 4, 5].map((i) => <div key={i} className="pd-sk pd-shimmer" />)}
+    <div className="pd-skeleton" aria-busy="true" aria-label="Loading profile">
+      <div className="pd-skeleton-top">
+        <div className="pd-sk pd-shimmer" />
+        <div className="pd-sk pd-shimmer" />
       </div>
-      <div className="pd-main">
-        <div className="pd-sk pd-sk-tabs pd-shimmer" />
-        {[1, 2, 3, 4, 5, 6].map((i) => <div key={i} className="pd-sk pd-shimmer" />)}
+      <div className="pd-skeleton-grid">
+        <div className="pd-sk pd-sk-gallery pd-shimmer" />
+        <div className="pd-sk pd-sk-summary pd-shimmer" />
       </div>
+      <div className="pd-sk pd-sk-panel pd-shimmer" />
     </div>
   );
 }
@@ -434,16 +492,13 @@ function StateCard({ title, message, onRetry }) {
       <h2>{title}</h2>
       <p>{message}</p>
       <div>
-        {onRetry && <button type="button" className="pd-btn pd-btn-teal" onClick={onRetry}><FaRedo /> Try again</button>}
-        <Link to="/profiles/allProfiles" className="pd-btn pd-btn-ghost">Back to Profiles</Link>
+        {onRetry && <button type="button" className="ui-btn" onClick={onRetry}><FaRedo /> Try again</button>}
+        <Link to="/admin/profiles" className="ui-btn secondary"><FaArrowLeft /> Back to Profiles</Link>
       </div>
     </div>
   );
 }
 
-/* =====================================================================
-   4. PAGE
-   ===================================================================== */
 export default function ProfileDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -451,35 +506,57 @@ export default function ProfileDetail() {
 
   const [state, setState] = useState({ status: "loading", profile: null, error: "", notFound: false });
   const [tab, setTab] = useState("personal");
-  const [notice, setNotice] = useState(null); // { type: "success" | "error", text }
+  const [notice, setNotice] = useState(null);
   const [downloading, setDownloading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
 
-  const load = useCallback(async (signal) => {
-    setState({ status: "loading", profile: null, error: "", notFound: false });
+  const load = async (signal) => {
     try {
       const profile = await getProfile(id, signal);
       setState({ status: "ready", profile, error: "", notFound: false });
-    } catch (err) {
-      if (err.name === "AbortError") return;
-      setState({ status: "error", profile: null, error: err.message || "Something went wrong.", notFound: err.status === 404 });
+    } catch (error) {
+      if (error.name === "AbortError") return;
+      setState({
+        status: "error",
+        profile: null,
+        error: error.message || "Something went wrong.",
+        notFound: error.status === 404,
+      });
     }
-  }, [id]);
+  };
+
+  const retry = () => {
+    setState({ status: "loading", profile: null, error: "", notFound: false });
+    load();
+  };
 
   useEffect(() => {
-    setTab("personal");
-    setNotice(null);
     if (!idOk) return undefined;
     const controller = new AbortController();
-    load(controller.signal);
-    return () => controller.abort();
-  }, [idOk, load]);
+    let ignore = false;
+    getProfile(id, controller.signal)
+      .then((profile) => {
+        if (!ignore) setState({ status: "ready", profile, error: "", notFound: false });
+      })
+      .catch((error) => {
+        if (ignore || error.name === "AbortError") return;
+        setState({
+          status: "error",
+          profile: null,
+          error: error.message || "Something went wrong.",
+          notFound: error.status === 404,
+        });
+      });
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
+  }, [idOk, id]);
 
-  // success messages disappear by themselves
   useEffect(() => {
     if (notice?.type !== "success") return undefined;
-    const t = setTimeout(() => setNotice(null), 4000);
-    return () => clearTimeout(t);
+    const timer = window.setTimeout(() => setNotice(null), 4000);
+    return () => window.clearTimeout(timer);
   }, [notice]);
 
   const profile = state.profile;
@@ -490,23 +567,29 @@ export default function ProfileDetail() {
     try {
       await downloadBiodata(id, profile?.registration_no);
       setNotice({ type: "success", text: "BioData downloaded." });
-    } catch (err) {
-      setNotice({ type: "error", text: err.message || "Could not download the BioData." });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message || "Could not download the BioData." });
     } finally {
       setDownloading(false);
     }
   };
 
-  const handleDeleteDoc = async (doc) => {
-    if (!window.confirm(`Delete "${doc.label}"? This cannot be undone.`)) return;
-    setDeletingId(doc.id);
+  const handleDeleteDoc = async (document) => {
+    if (!window.confirm(`Delete "${document.label}"? This cannot be undone.`)) return;
+    setDeletingId(document.id);
     setNotice(null);
     try {
-      await deleteDocument(id, doc.id);
-      setState((s) => ({ ...s, profile: { ...s.profile, documents: s.profile.documents.filter((d) => d.id !== doc.id) } }));
-      setNotice({ type: "success", text: `${doc.label} deleted.` });
-    } catch (err) {
-      setNotice({ type: "error", text: err.message || "Could not delete the document." });
+      await deleteDocument(id, document.id);
+      setState((current) => ({
+        ...current,
+        profile: {
+          ...current.profile,
+          documents: current.profile.documents.filter((item) => item.id !== document.id),
+        },
+      }));
+      setNotice({ type: "success", text: `${document.label} deleted.` });
+    } catch (error) {
+      setNotice({ type: "error", text: error.message || "Could not delete the document." });
     } finally {
       setDeletingId(null);
     }
@@ -518,28 +601,62 @@ export default function ProfileDetail() {
   } else if (state.status === "loading") {
     body = <Skeleton />;
   } else if (state.status === "error") {
-    body = <StateCard title={state.notFound ? "Profile not found" : "Could not load this profile"}
-      message={state.error} onRetry={state.notFound ? undefined : () => load()} />;
-  } else {
-    const active = TABS.find((t) => t.id === tab) || TABS[0];
     body = (
-      <div className="pd-layout">
-        <Sidebar p={profile} busy={downloading} onDownload={handleDownload} onEdit={() => navigate(`/profiles/${id}/edit`)} />
-        <div className="pd-main">
+      <StateCard
+        title={state.notFound ? "Profile not found" : "Could not load this profile"}
+        message={state.error}
+        onRetry={state.notFound ? undefined : retry}
+      />
+    );
+  } else {
+    const active = TABS.find((item) => item.id === tab) || TABS[0];
+    const name = fmt(profile.full_name) || "Candidate profile";
+    body = (
+      <div className="pd-page">
+        <div className="pd-top">
+          <div>
+            <Link to="/admin/profiles" className="pd-back"><FaArrowLeft /> Back to Profiles</Link>
+            <h1 className="pd-title">{name}</h1>
+            <p className="pd-subtitle">Candidate information, uploaded photos, and verification details.</p>
+          </div>
+          <div className="pd-top-actions">
+            <button type="button" className="ui-btn secondary" onClick={() => navigate(`/admin/profiles/edit/${id}`)}>
+              <FaEdit /> Edit Profile
+            </button>
+            <button type="button" className="ui-btn" onClick={handleDownload} disabled={downloading}>
+              <FaDownload /> {downloading ? "Preparing…" : "BioData Download"}
+            </button>
+          </div>
+        </div>
+
+        <div className="pd-hero">
+          <PhotoGallery key={profile.id} photos={profile.photos} name={name} />
+          <SummaryCard profile={profile} />
+        </div>
+
+        <div className="ui-card pd-tabs-card">
           <div className="pd-tabs" role="tablist" aria-label="Profile sections">
-            {TABS.map((t) => (
-              <button key={t.id} type="button" role="tab" id={`pd-tab-${t.id}`} aria-selected={tab === t.id}
-                aria-controls="pd-panel" className={`pd-tab${tab === t.id ? " active" : ""}`} onClick={() => setTab(t.id)}>
-                {t.label}
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                id={`pd-tab-${item.id}`}
+                aria-selected={tab === item.id}
+                aria-controls="pd-panel"
+                className={`pd-tab${tab === item.id ? " active" : ""}`}
+                onClick={() => setTab(item.id)}
+              >
+                {item.label}
               </button>
             ))}
           </div>
           <div id="pd-panel" role="tabpanel" aria-labelledby={`pd-tab-${active.id}`} className="pd-panel">
             {active.id === "photos"
-              ? <Photos photos={profile.photos} />
+              ? <PhotoGrid photos={profile.photos} />
               : active.id === "documents"
                 ? <Documents docs={profile.documents} onDelete={handleDeleteDoc} deletingId={deletingId} />
-              : active.sections.map((s) => <Section key={s.title} s={s} profile={profile} />)}
+                : active.sections.map((section) => <Section key={section.title} section={section} profile={profile} />)}
           </div>
         </div>
       </div>
@@ -547,15 +664,16 @@ export default function ProfileDetail() {
   }
 
   return (
-    <div className="pd">
-      <Link to="/profiles/allProfiles" className="pd-back"><FaArrowLeft /> Back to Profiles</Link>
-      {notice && (
-        <div className={`pd-alert pd-alert-${notice.type}`} role="alert">
-          <span>{notice.text}</span>
-          <button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button>
-        </div>
-      )}
-      {body}
-    </div>
+    <AdminLayout currentPath="/admin/profiles">
+      <div className="adm-ui pd-shell">
+        {notice && (
+          <div className={`pd-alert pd-alert-${notice.type}`} role="alert">
+            <span>{notice.text}</span>
+            <button type="button" aria-label="Dismiss message" onClick={() => setNotice(null)}>×</button>
+          </div>
+        )}
+        {body}
+      </div>
+    </AdminLayout>
   );
 }
