@@ -13,7 +13,7 @@ import {
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
 import {
-  getCachedMatches, getDashboard, getMatch, getMatches, readDashboardCache, sendInterest,
+  createRecommendationSeed, getDashboard, getMatch, getMatches, readDashboardCache, sendInterest,
 } from "../api";
 import { humanGender, text, timeAgo } from "../utils";
 
@@ -144,19 +144,12 @@ function HomeProfileCard({ match, featured = false, onOpen, onInterest, interest
 export default function Dashboard() {
   const cached = useMemo(() => getCachedHomeData(), []);
   const dashboardCache = useMemo(() => readDashboardCache(), []);
-  const cachedSuggested = useMemo(
-    () => getCachedMatches({ sort: "best_match", per_page: 6 }),
-    [],
-  );
-  const cachedRecent = useMemo(
-    () => getCachedMatches({ sort: "newest", per_page: 6 }),
-    [],
-  );
+  const [shuffleSeed] = useState(createRecommendationSeed);
   const [data, setData] = useState(() => dashboardCache || cached);
-  const [suggested, setSuggested] = useState(cachedSuggested?.matches || []);
-  const [recentProfiles, setRecentProfiles] = useState(cachedRecent?.matches || []);
-  const [suggestedLoading, setSuggestedLoading] = useState(!cachedSuggested);
-  const [recentLoading, setRecentLoading] = useState(!cachedRecent);
+  const [suggested, setSuggested] = useState([]);
+  const [recentProfiles, setRecentProfiles] = useState([]);
+  const [suggestedLoading, setSuggestedLoading] = useState(true);
+  const [recentLoading, setRecentLoading] = useState(true);
   const [loading, setLoading] = useState(() => !dashboardCache);
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
@@ -220,7 +213,9 @@ export default function Dashboard() {
     setSuggestedLoading(true);
     setSuggestedError("");
     try {
-      const result = await getMatches({ sort: "best_match", per_page: 6, include_filters: 0 });
+      const result = await getMatches({
+        sort: "best_match", per_page: 6, include_filters: 0, shuffle_seed: shuffleSeed,
+      });
       setSuggested(Array.isArray(result?.matches) ? result.matches : []);
     } catch (matchError) {
       suggestedRequestProfile.current = null;
@@ -228,7 +223,7 @@ export default function Dashboard() {
     } finally {
       setSuggestedLoading(false);
     }
-  }, [profile?.id, completion]);
+  }, [profile?.id, completion, shuffleSeed]);
 
   const loadRecent = useCallback(async () => {
     if (!profile?.id || completion <= 50 || recentRequestProfile.current === profile.id) return;
@@ -236,7 +231,9 @@ export default function Dashboard() {
     setRecentLoading(true);
     setRecentError("");
     try {
-      const result = await getMatches({ sort: "newest", per_page: 6, include_filters: 0 });
+      const result = await getMatches({
+        sort: "newest", per_page: 6, include_filters: 0, shuffle_seed: shuffleSeed,
+      });
       setRecentProfiles(Array.isArray(result?.matches) ? result.matches : []);
     } catch (matchError) {
       recentRequestProfile.current = null;
@@ -244,7 +241,7 @@ export default function Dashboard() {
     } finally {
       setRecentLoading(false);
     }
-  }, [profile?.id, completion]);
+  }, [profile?.id, completion, shuffleSeed]);
 
   useEffect(() => {
     const section = recentSection.current;
@@ -650,7 +647,7 @@ export default function Dashboard() {
                 icon={Users}
                 title="No suggested matches yet"
                 message={profile ? "Try widening your preferences or check back soon." : "Create your profile first so we can find compatible matches."}
-                action={<a href={profile ? "/candidate/matches" : "/candidate/profile"} className="cnd-btn cnd-btn-primary">{profile ? "Browse matches" : "Create profile"}</a>}
+                action={<Link to={profile ? "/candidate/matches" : "/candidate/profile"} className="cnd-btn cnd-btn-primary">{profile ? "Browse matches" : "Create profile"}</Link>}
               />
             ) : (
               <div className="cnd-match-grid">

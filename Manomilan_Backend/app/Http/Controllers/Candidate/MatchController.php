@@ -34,6 +34,7 @@ class MatchController extends CandidateController
                 'per_page' => ['nullable', 'integer', 'min:6', 'max:48'],
                 'feed' => ['nullable', 'boolean'],
                 'include_filters' => ['nullable', 'boolean'],
+                'shuffle_seed' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
                 'exclude_ids' => ['nullable', 'string', 'max:12000', function ($attribute, $value, $fail) {
                     if ($value !== null && collect(explode(',', $value))->contains(
                         fn ($id) => ! ctype_digit($id)
@@ -62,7 +63,8 @@ class MatchController extends CandidateController
             $sort = $filters['sort'] ?? 'best_match';
             $perPage = (int) ($filters['per_page'] ?? 12);
             $page = (int) ($filters['page'] ?? 1);
-            $this->applyRecommendationOrdering($query, $sort, $preference);
+            $shuffleSeed = isset($filters['shuffle_seed']) ? (int) $filters['shuffle_seed'] : null;
+            $this->applyRecommendationOrdering($query, $sort, $preference, $shuffleSeed);
 
             $total = (clone $query)->count();
             $lastPage = max(1, (int) ceil($total / $perPage));
@@ -178,9 +180,13 @@ class MatchController extends CandidateController
         }
     }
 
-    private function applyRecommendationOrdering(Builder $query, string $sort, $preference): void
+    private function applyRecommendationOrdering(Builder $query, string $sort, $preference, ?int $shuffleSeed): void
     {
         if ($sort === 'newest') {
+            $query->orderByRaw('DATE(profiles.created_at) DESC');
+            if ($shuffleSeed !== null) {
+                $query->orderByRaw('RAND(?)', [$shuffleSeed]);
+            }
             $query->orderByDesc('profiles.id');
         } elseif ($sort === 'age_asc') {
             $query->orderBy('profiles.birth_date', 'desc');
@@ -239,8 +245,15 @@ class MatchController extends CandidateController
                 }
             }
 
-            $query->orderByDesc('profiles.updated_at')
+            $query->orderByRaw(
+                "CASE WHEN JSON_LENGTH(profiles.photos) > 0 THEN 1 ELSE 0 END DESC"
+            );
+            $query->orderByRaw('DATE(profiles.updated_at) DESC')
                 ->orderByRaw("CASE WHEN profiles.verification_status = 'Completed' THEN 1 ELSE 0 END DESC");
+            if ($shuffleSeed !== null) {
+                $query->orderByRaw('RAND(?)', [$shuffleSeed]);
+            }
+            $query->orderByDesc('profiles.updated_at');
         }
 
         $query->orderByDesc('profiles.id');

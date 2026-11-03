@@ -65,7 +65,10 @@ export default function SystemManagement() {
     if (!selectedRole) return;
     try {
       const response = await request(`/system/roles/${selectedRole}/permissions`);
-      setPermissionModules(response.data.modules || []);
+      if (!Array.isArray(response.data?.modules)) {
+        throw new Error("The role permissions response is invalid. Refresh and try again.");
+      }
+      setPermissionModules(response.data.modules);
       setPermissionLastUpdated(response.data.last_updated_at || null);
     } catch (requestError) {
       setError(messageFrom(requestError));

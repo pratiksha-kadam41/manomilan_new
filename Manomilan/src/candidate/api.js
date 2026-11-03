@@ -27,7 +27,6 @@ let candidateProfileCachedAt = 0;
 let matchesCache = new Map();
 let matchesRequestCache = new Map();
 let matchesCacheVersion = 0;
-let candidateFeedCache = null;
 let matchCache = new Map();
 let matchRequestCache = new Map();
 
@@ -100,34 +99,13 @@ export const getCachedMatches = (params = {}) => {
   return readQueryCache(`matches:${query}`, true);
 };
 
-export const getCachedCandidateFeed = () => (
-  candidateFeedCache && Date.now() - candidateFeedCache.cachedAt < MATCHES_CACHE_MS
-    ? candidateFeedCache.result
-    : null
-);
-
-export const cacheCandidateFeed = (filters, result, append = false) => {
-  const previous = candidateFeedCache?.result;
-  const seen = new Set(append ? (previous?.matches || []).map((item) => String(item.id)) : []);
-  const matches = append
-    ? [...(previous?.matches || []), ...(result?.matches || []).filter((item) => {
-      const id = String(item.id);
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    })]
-    : result?.matches || [];
-  candidateFeedCache = {
-    cachedAt: Date.now(),
-    result: {
-      ...result,
-      matches,
-      filters: append
-        ? (result?.filters?.length ? result.filters : previous?.filters || {})
-        : result?.filters || {},
-      feed_filters: filters,
-    },
-  };
+export const createRecommendationSeed = () => {
+  const values = new Uint32Array(1);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(values);
+    return (values[0] % 2147483647) + 1;
+  }
+  return Math.floor(Math.random() * 2147483647) + 1;
 };
 
 export const getCachedInterests = (mode = "sent", params = {}) =>
@@ -292,7 +270,7 @@ export const savePreferences = async (payload) =>
 export const getMatches = async (params = {}, { signal } = {}) => {
   const query = queryString(params);
   const cacheKey = query || "__default__";
-  const cacheable = !params.feed || Number(params.page || 1) === 1;
+  const cacheable = !params.shuffle_seed && (!params.feed || Number(params.page || 1) === 1);
   const cached = matchesCache.get(cacheKey);
   if (cacheable && cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
   if (cached) matchesCache.delete(cacheKey);
@@ -348,7 +326,6 @@ export const getMatch = async (id) => {
 export const invalidateMatchesCache = () => {
   matchesCacheVersion += 1;
   matchesCache.clear();
-  candidateFeedCache = null;
   matchCache.clear();
   clearQueryCache("matches:");
 };

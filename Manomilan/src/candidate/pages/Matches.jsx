@@ -11,7 +11,7 @@ import {
 import { useToasts } from "../useToasts";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  cacheCandidateFeed, getCachedCandidateFeed, getCachedMatches, getMatches, sendInterest,
+  createRecommendationSeed, getMatches, sendInterest,
 } from "../api";
 import { useProfileCompletion } from "../profile-completion-context";
 import { humanGender, text } from "../utils";
@@ -42,28 +42,18 @@ export default function Matches() {
   const location = useLocation();
   const requestedSort = new URLSearchParams(location.search).get("sort");
   const validRequestedSort = SORTS.some(([value]) => value === requestedSort) ? requestedSort : null;
-  const [initialFeed] = useState(() => {
-    const cachedFeed = getCachedCandidateFeed();
-    return validRequestedSort && cachedFeed?.feed_filters?.sort !== validRequestedSort
-      ? null
-      : cachedFeed;
-  });
+  const [shuffleSeed] = useState(createRecommendationSeed);
   const [initialFilters] = useState(() => (
-    initialFeed?.feed_filters || { ...EMPTY_FILTERS, ...(validRequestedSort ? { sort: validRequestedSort } : {}) }
-  ));
-  const [initialMatches] = useState(() => (
-    initialFeed || getCachedMatches({
-      ...initialFilters, page: 1, per_page: 12, feed: 1, include_filters: 1,
-    })
+    { ...EMPTY_FILTERS, ...(validRequestedSort ? { sort: validRequestedSort } : {}) }
   ));
   const profileCompletion = useProfileCompletion();
   const [draft, setDraft] = useState(initialFilters);
   const [applied, setApplied] = useState(initialFilters);
-  const [page, setPage] = useState(initialMatches?.pagination?.current_page || 1);
-  const [matches, setMatches] = useState(initialMatches?.matches || []);
-  const [options, setOptions] = useState(initialMatches?.filters || {});
-  const [pagination, setPagination] = useState(initialMatches?.pagination || null);
-  const [loading, setLoading] = useState(!initialMatches);
+  const [page, setPage] = useState(1);
+  const [matches, setMatches] = useState([]);
+  const [options, setOptions] = useState({});
+  const [pagination, setPagination] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [loadMoreError, setLoadMoreError] = useState("");
@@ -71,7 +61,7 @@ export default function Matches() {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const loadRequestId = useRef(0);
   const loadAbortController = useRef(null);
-  const loadedIds = useRef(new Set((initialMatches?.matches || []).map((item) => String(item.id))));
+  const loadedIds = useRef(new Set());
   const loadingMoreRef = useRef(false);
   const feedSentinel = useRef(null);
   const { toasts, push, dismiss } = useToasts();
@@ -87,18 +77,12 @@ export default function Matches() {
       per_page: 12,
       feed: 1,
       include_filters: page === 1 ? 1 : 0,
+      shuffle_seed: shuffleSeed,
     };
     if (page > 1 && loadedIds.current.size) {
       params.exclude_ids = [...loadedIds.current].join(",");
     }
-    const cachedMatches = page === 1 ? getCachedMatches(params) : null;
-    if (cachedMatches) {
-      setMatches(cachedMatches.matches || []);
-      setOptions(cachedMatches.filters || {});
-      setPagination(cachedMatches.pagination || null);
-      setLoading(false);
-      loadedIds.current = new Set((cachedMatches.matches || []).map((item) => String(item.id)));
-    } else if (page === 1) {
+    if (page === 1) {
       setLoading(true);
     } else {
       setLoadingMore(true);
@@ -122,7 +106,6 @@ export default function Matches() {
       } else {
         setMatches((current) => [...current, ...nextMatches]);
       }
-      cacheCandidateFeed(applied, result, page > 1);
       if (page === 1 && result?.filters) setOptions(result.filters);
       setPagination(result?.pagination || null);
     } catch (loadError) {
@@ -137,23 +120,19 @@ export default function Matches() {
         loadingMoreRef.current = false;
       }
     }
-  }, [applied, page]);
+  }, [applied, page, shuffleSeed]);
 
   const hasMore = Boolean(pagination?.has_more);
   const canBrowseMatches = profileCompletion.status === "complete"
     || (profileCompletion.status === "required" && profileCompletion.completion > 50);
   useEffect(() => {
-    const restoredFeedIsCurrent = initialFeed
-      && page === (initialFeed.pagination?.current_page || 1)
-      && JSON.stringify(applied) === JSON.stringify(initialFilters);
-    if (restoredFeedIsCurrent) return undefined;
     if (!canBrowseMatches) return;
     Promise.resolve().then(load);
     return () => {
       loadAbortController.current?.abort();
       loadRequestId.current += 1;
     };
-  }, [applied, canBrowseMatches, initialFeed, initialFilters, load, page]);
+  }, [applied, canBrowseMatches, load, page]);
 
   useEffect(() => {
     const sentinel = feedSentinel.current;

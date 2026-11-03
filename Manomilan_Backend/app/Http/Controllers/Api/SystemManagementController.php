@@ -183,7 +183,9 @@ class SystemManagementController extends Controller
             ->orderBy('module_name')
             ->get();
         if ($this->isCandidateRole($role)) {
-            $modules = $modules->filter(fn (Module $module) => $module->isCandidatePortalModule());
+            $modules = $modules
+                ->filter(fn (Module $module) => $module->isCandidatePortalModule())
+                ->values();
         }
         $modules->each(function (Module $module) use ($grants) {
             $grant = $grants->get($module->id);
