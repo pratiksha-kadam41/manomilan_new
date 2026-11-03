@@ -196,10 +196,13 @@ export default function SystemManagement() {
   const savePermissions = () => {
     if (!window.confirm("Save these permissions for the selected role?")) return;
     run(
-      () => request(`/system/roles/${selectedRole}/permissions`, {
-        method: "PUT",
-        body: { permissions: permissionGrants },
-      }),
+      async () => {
+        await request(`/system/roles/${selectedRole}/permissions`, {
+          method: "PUT",
+          body: { permissions: permissionGrants },
+        });
+        window.dispatchEvent(new Event("admin:permissions-updated"));
+      },
       "Role permissions saved.",
     );
   };

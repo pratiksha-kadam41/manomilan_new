@@ -17,8 +17,10 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { clearSession, getSession } from "../../auth";
+import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
 import { menuItems } from "../data/adminData";
 import WebsiteSidebarGroup from "./WebsiteSidebarGroup";
+import { useContext } from "react";
 
 const SYSTEM_MANAGEMENT = {
   label: "System Management",
@@ -68,8 +70,11 @@ const isSuperAdmin = () => {
 };
 
 export default function Sidebar({ currentPath, onNavigate }) {
-  const items = isSuperAdmin() ? [...menuItems, SYSTEM_MANAGEMENT] : menuItems;
-  const activePath = items.reduce((active, item) => {
+  const access = useContext(AdminPermissionContext);
+  const superAdmin = access?.is_super_admin || isSuperAdmin();
+  const items = superAdmin ? [...menuItems, SYSTEM_MANAGEMENT] : menuItems;
+  const visibleItems = items.filter((item) => hasModulePermission(access, "view", item.path));
+  const activePath = visibleItems.reduce((active, item) => {
     const matches =
       currentPath === item.path ||
       (item.path !== "/admin" && currentPath.startsWith(`${item.path}/`));
@@ -85,7 +90,7 @@ export default function Sidebar({ currentPath, onNavigate }) {
       <div className="adm-menu-label">MENU</div>
 
       <nav className="adm-nav">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const Icon = ICONS[item.path] || LayoutDashboard;
           return (
             <Link

@@ -1,7 +1,7 @@
 import { useContext, useMemo, useState } from "react";
 import { CalendarPlus, ChevronDown, ClockAlert, Globe2, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
-import { AdminPermissionContext } from "../../permission-context.jsx";
+import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
 import { getSession } from "../../auth";
 import "./websiteSidebarGroup.css";
 
@@ -26,12 +26,7 @@ export default function WebsiteSidebarGroup({ currentPath, onNavigate }) {
   const allowed = useMemo(() => {
     if (superAdmin) return LINKS;
     if (!access?.modules) return [];
-    return LINKS.filter((link) =>
-      access.modules.some((module) =>
-        module.permissions?.includes("view") &&
-        (module.routes || [module.route]).some((route) => route === link.path),
-      ),
-    );
+    return LINKS.filter((link) => hasModulePermission(access, "view", link.path));
   }, [access, superAdmin]);
 
   if (!allowed.length) return null;
