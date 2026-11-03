@@ -6,6 +6,13 @@
   --wr-muted: #788493;
 }
 
+.wr-registration-fee {
+  display: block;
+  margin-top: 3px;
+  color: var(--wr-muted);
+  font-size: .75rem;
+}
+
 .wr-page .ui-head h1 {
   color: #233144;
 }

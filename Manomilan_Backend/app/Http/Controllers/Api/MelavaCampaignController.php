@@ -7,19 +7,29 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Throwable;
 
 class MelavaCampaignController extends Controller
 {
     public function active(Request $request)
     {
-        return response()->json([
-            'success' => true,
-            'data' => DB::table('melava_campaigns')
-                ->where('status', 'active')
-                ->orderByDesc('id')
-                ->get()
-                ->map(fn ($campaign) => $this->present($campaign, $request)),
-        ]);
+        try {
+            return response()->json([
+                'success' => true,
+                'data' => DB::table('melava_campaigns')
+                    ->where('status', 'active')
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn ($campaign) => $this->present($campaign, $request)),
+            ]);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load active Melava events.',
+            ], 500);
+        }
     }
 
     public function index(Request $request)

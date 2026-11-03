@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { GraduationCap, Handshake, Users } from "lucide-react";
-import { request } from "../api";
+import { apiMediaUrl, request } from "../api";
 import "./WorkshopRegistration.css";
 
 const STEPS = ["Details", "Payment", "Confirm"];
 const MAX_SCREENSHOT_SIZE = 4 * 1024 * 1024;
+const TRANSACTION_ID_PATTERN = /^[A-Za-z0-9]{12,22}$/;
+const TRANSACTION_ID_ERROR = "Enter 12 to 22 letters or numbers only. Spaces and special characters are not allowed.";
 const today = new Date().toISOString().slice(0, 10);
 
 export default function WorkshopRegistration() {
@@ -15,6 +17,36 @@ export default function WorkshopRegistration() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [workshops, setWorkshops] = useState([]);
+  const [selectedWorkshopId, setSelectedWorkshopId] = useState("");
+  const [workshopsLoading, setWorkshopsLoading] = useState(true);
+  const [workshopsError, setWorkshopsError] = useState("");
+  const selectedWorkshop = workshops.find((workshop) => String(workshop.id) === selectedWorkshopId);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadWorkshops = async () => {
+      setWorkshopsLoading(true);
+      setWorkshopsError("");
+      try {
+        const response = await request("/workshop-events/active", { auth: false });
+        if (cancelled) return;
+        const activeWorkshops = Array.isArray(response?.data) ? response.data : [];
+        setWorkshops(activeWorkshops);
+        setSelectedWorkshopId(activeWorkshops.length ? String(activeWorkshops[0].id) : "");
+      } catch (error) {
+        if (!cancelled) {
+          setWorkshopsError(error.message || "Unable to load current workshop details.");
+        }
+      } finally {
+        if (!cancelled) setWorkshopsLoading(false);
+      }
+    };
+    loadWorkshops();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!submitted) return undefined;
@@ -44,7 +76,7 @@ export default function WorkshopRegistration() {
       ? [
           "full_name", "mobile_number", "whatsapp_number", "date_of_birth",
           "education", "marital_status", "city", "district", "parent_name",
-          "parent_contact_number",
+          "parent_contact_number", "workshop_event_id",
         ]
       : ["payment_screenshot", "transaction_id"];
 
@@ -82,9 +114,9 @@ export default function WorkshopRegistration() {
         }
       }
 
-      const transactionId = String(data.get("transaction_id") || "").trim();
-      if (transactionId.length > 100) {
-        nextErrors.transaction_id = "Transaction ID must be 100 characters or fewer.";
+      const transactionId = String(data.get("transaction_id") || "");
+      if (transactionId && !TRANSACTION_ID_PATTERN.test(transactionId)) {
+        nextErrors.transaction_id = TRANSACTION_ID_ERROR;
       }
     }
 
@@ -136,7 +168,7 @@ export default function WorkshopRegistration() {
         if (Object.keys(validationErrors).some((name) => [
           "full_name", "mobile_number", "whatsapp_number", "date_of_birth",
           "education", "marital_status", "city", "district", "parent_name",
-          "parent_contact_number",
+          "parent_contact_number", "workshop_event_id",
         ].includes(name))) {
           setStep(1);
         } else if (Object.keys(validationErrors).some((name) => [
@@ -153,6 +185,27 @@ export default function WorkshopRegistration() {
   const fieldError = (name) => errors[name]
     ? <span className="workshop-error">{errors[name]}</span>
     : null;
+
+  const formatFee = (fee, currency) => {
+    try {
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: currency || "INR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(Number(fee || 0));
+    } catch {
+      return `${currency || "INR"} ${fee || 0}`;
+    }
+  };
+
+  const formatWorkshopDate = (value) => {
+    if (!value) return "";
+    const date = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+    return Number.isNaN(date.getTime())
+      ? ""
+      : date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  };
 
   if (submitted) {
     return (
@@ -184,8 +237,59 @@ export default function WorkshopRegistration() {
           </div>
         </header>
 
+        {workshopsLoading || workshopsError || workshops.length === 0 ? (
+          <div className="workshop-availability" role={workshopsError ? "alert" : "status"}>
+            {workshopsLoading ? <p>Loading available workshops…</p> : null}
+            {workshopsError ? (
+              <>
+                <h2>Workshop details are unavailable</h2>
+                <p>{workshopsError}</p>
+                <button type="button" className="workshop-secondary" onClick={() => window.location.reload()}>Try again</button>
+              </>
+            ) : null}
+            {!workshopsLoading && !workshopsError && workshops.length === 0 ? (
+              <h2>No active Workshop</h2>
+            ) : null}
+          </div>
+        ) : (
         <div className="workshop-layout">
           <div className="workshop-main">
+            <section className="workshop-event-choice" aria-label="Selected workshop">
+              <span className="workshop-event-kicker">Your workshop</span>
+              {workshops.length > 1 ? (
+                <label className="workshop-field">
+                  Select a workshop <b>*</b>
+                  <select
+                    value={selectedWorkshopId}
+                    onChange={(event) => {
+                      setSelectedWorkshopId(event.target.value);
+                      clearError("workshop_event_id");
+                    }}
+                  >
+                    {workshops.map((workshop) => (
+                      <option key={workshop.id} value={workshop.id}>
+                        {workshop.title} — {formatFee(workshop.registration_fee, workshop.currency)}
+                      </option>
+                    ))}
+                  </select>
+                  {fieldError("workshop_event_id")}
+                </label>
+              ) : null}
+              {selectedWorkshop ? (
+                <>
+                  {workshops.length === 1 ? <h2>{selectedWorkshop.title}</h2> : null}
+                  {selectedWorkshop.description ? <p>{selectedWorkshop.description}</p> : null}
+                  {selectedWorkshop.start_date ? (
+                    <small>
+                      {formatWorkshopDate(selectedWorkshop.start_date)}
+                      {selectedWorkshop.end_date && selectedWorkshop.end_date !== selectedWorkshop.start_date
+                        ? ` – ${formatWorkshopDate(selectedWorkshop.end_date)}`
+                        : ""}
+                    </small>
+                  ) : null}
+                </>
+              ) : null}
+            </section>
             <ol className="workshop-steps" aria-label="Registration progress">
               {STEPS.map((label, index) => {
                 const number = index + 1;
@@ -202,6 +306,7 @@ export default function WorkshopRegistration() {
             {submitError && <div className="workshop-alert" role="alert">{submitError}</div>}
 
             <form ref={formRef} onSubmit={handleSubmit} noValidate>
+          <input type="hidden" name="workshop_event_id" value={selectedWorkshopId} />
           <section className={`workshop-panel${step === 1 ? " active" : ""}`} aria-hidden={step !== 1}>
             <h2 className="workshop-section-title">Personal Details</h2>
             <div className="workshop-grid">
@@ -294,11 +399,11 @@ export default function WorkshopRegistration() {
             <h2 className="workshop-section-title">Payment Details</h2>
             <div className="workshop-payment-box">
               <span className="workshop-payment-kicker">Registration payment</span>
-              <strong>Scan the QR code to pay</strong>
+              <strong>{selectedWorkshop?.title ? `Scan to pay for ${selectedWorkshop.title}` : "Scan the QR code to pay"}</strong>
               <div className="workshop-qr-frame">
-                <img src="/website/Manomilan-QR.jpeg" alt="Workshop payment QR code" />
+                <img src={apiMediaUrl(selectedWorkshop?.qr_image_url)} alt="Workshop payment QR code" />
               </div>
-              <span className="workshop-fee">₹1,000</span>
+              <span className="workshop-fee">{formatFee(selectedWorkshop?.registration_fee, selectedWorkshop?.currency)}</span>
               <small>One-time workshop registration fee</small>
               <span className="workshop-payment-note">
                 <span aria-hidden="true">✓</span> Keep your payment screenshot and UTR number ready
@@ -314,7 +419,8 @@ export default function WorkshopRegistration() {
             </label>
             <label className="workshop-field workshop-field-spaced">
               Transaction ID / UTR Number <b>*</b>
-              <input name="transaction_id" type="text" maxLength="100" required
+              <input name="transaction_id" type="text" maxLength="22" pattern="^[A-Za-z0-9]{12,22}$"
+                placeholder="Enter your transaction ID / UTR number" required
                 className={errors.transaction_id ? "invalid" : ""}
                 onChange={() => clearError("transaction_id")} />
               {fieldError("transaction_id")}
@@ -383,6 +489,7 @@ export default function WorkshopRegistration() {
             </div>
           </aside>
         </div>
+        )}
       </section>
     </main>
   );

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\WorkshopEvent;
 use App\WorkshopRegistration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,14 +27,24 @@ class WorkshopRegistrationController extends Controller
             'marital_status' => ['required', Rule::in(['Unmarried', 'Divorced', 'Widow', 'Widower'])],
             'parent_name' => ['required', 'string', 'max:255'],
             'parent_contact_number' => ['required', 'digits:10'],
-            'transaction_id' => ['required', 'string', 'max:255'],
+            'transaction_id' => ['required', 'string', 'regex:/^[A-Za-z0-9]{12,22}$/'],
+            'workshop_event_id' => [
+                'required',
+                'integer',
+                Rule::exists('workshop_events', 'id')->where('status', 'active'),
+            ],
             'consent' => ['required', 'boolean'],
             'payment_screenshot' => ['required', 'image', 'mimes:jpg,jpeg,png', 'max:4096'],
+        ], [
+            'transaction_id.regex' => 'Transaction ID / UTR Number must be 12 to 22 letters or numbers, with no spaces or special characters.',
         ]);
 
         $path = null;
+        $event = WorkshopEvent::query()
+            ->where('status', 'active')
+            ->findOrFail($data['workshop_event_id']);
         try {
-            $registration = DB::transaction(function () use ($request, $data, &$path) {
+            $registration = DB::transaction(function () use ($request, $data, $event, &$path) {
                 $path = $request->file('payment_screenshot')->store('workshop_payments', 'public');
                 if (! $path) {
                     throw new RuntimeException('Unable to store the workshop payment screenshot.');
@@ -52,6 +63,9 @@ class WorkshopRegistrationController extends Controller
                     'parent_contact_number' => $data['parent_contact_number'],
                     'payment_screenshot' => $path,
                     'transaction_id' => $data['transaction_id'],
+                    'workshop_event_id' => $event->id,
+                    'registration_fee' => $event->registration_fee,
+                    'registration_currency' => $event->currency,
                     'consent' => (bool) $data['consent'],
                     'status' => 'Pending',
                 ]);
@@ -97,7 +111,7 @@ class WorkshopRegistrationController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = WorkshopRegistration::query();
+        $query = WorkshopRegistration::query()->with('workshopEvent:id,title,workshop_code');
         if (! empty($filters['name'])) {
             $query->where('full_name', 'LIKE', '%' . $filters['name'] . '%');
         }
@@ -135,7 +149,7 @@ class WorkshopRegistrationController extends Controller
             ], 403);
         }
 
-        $registration = WorkshopRegistration::findOrFail($id);
+        $registration = WorkshopRegistration::with('workshopEvent:id,title,workshop_code')->findOrFail($id);
         $registration->payment_screenshot_url = Storage::disk('public')->url($registration->payment_screenshot);
 
         return response()->json(['success' => true, 'data' => $registration]);

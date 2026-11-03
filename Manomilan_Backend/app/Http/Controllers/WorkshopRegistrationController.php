@@ -33,8 +33,10 @@ class WorkshopRegistrationController extends Controller
             'parent_name'            => 'required|max:150',
             'parent_contact_number'  => 'required|digits_between:10,15',
             'payment_screenshot'     => 'required|image|mimes:jpeg,jpg,png|max:4096',
-            'transaction_id'         => 'required|max:100',
+            'transaction_id'         => ['required', 'string', 'regex:/^[A-Za-z0-9]{12,22}$/'],
             'consent'                => 'required'
+        ], [
+            'transaction_id.regex' => 'Transaction ID / UTR Number must be 12 to 22 letters or numbers, with no spaces or special characters.',
         ]);
 
         $paymentImage = null;

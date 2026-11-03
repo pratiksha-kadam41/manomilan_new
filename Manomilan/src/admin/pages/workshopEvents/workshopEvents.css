@@ -1,0 +1,18 @@
+.we-qr-preview {
+  width: 110px;
+  height: 110px;
+  padding: 5px;
+  border: 1px solid #dce5eb;
+  border-radius: 9px;
+  background: #fff;
+  object-fit: contain;
+}
+
+.mc-form .mc-upload {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.mc-form .mc-upload input {
+  flex-basis: 100%;
+}

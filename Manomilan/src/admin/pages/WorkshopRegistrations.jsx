@@ -23,6 +23,20 @@ import "./workshopRegistrations.css";
 
 const EMPTY_STATS = { total: 0, pending: 0, verified: 0, rejected: 0 };
 
+const formatFee = (value, currency) => {
+  if (value === null || value === undefined) return "—";
+  try {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: currency || "INR",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(Number(value));
+  } catch {
+    return `${currency || "INR"} ${value}`;
+  }
+};
+
 const formatDate = (value, includeTime = false) => {
   if (!value) return "—";
   const date = new Date(value);
@@ -239,6 +253,7 @@ export default function WorkshopRegistrations() {
                 <tr>
                   <th>#</th>
                   <th>Candidate</th>
+                  <th>Workshop</th>
                   <th>Mobile</th>
                   <th>WhatsApp</th>
                   <th>City</th>
@@ -254,6 +269,7 @@ export default function WorkshopRegistrations() {
                   <tr key={registration.id}>
                     <td>{(Number(pagination?.from || 1) - 1) + index + 1}</td>
                     <td><strong className="wr-candidate-name">{registration.full_name}</strong></td>
+                    <td>{registration.workshop_event?.title || "Legacy registration"}{registration.registration_fee !== null && registration.registration_fee !== undefined ? <small className="wr-registration-fee">{formatFee(registration.registration_fee, registration.registration_currency)}</small> : null}</td>
                     <td><a className="wr-phone" href={`tel:${registration.mobile_number}`}>{registration.mobile_number}</a></td>
                     <td>{registration.whatsapp_number || "—"}</td>
                     <td>{registration.city || "—"}</td>
@@ -269,9 +285,9 @@ export default function WorkshopRegistrations() {
                   </tr>
                 ))}
                 {!loading && !error && registrations.length === 0 ? (
-                  <tr><td className="wr-empty" colSpan="10">No workshop registrations found for these filters.</td></tr>
+                  <tr><td className="wr-empty" colSpan="11">No workshop registrations found for these filters.</td></tr>
                 ) : null}
-                {loading ? <tr><td className="wr-empty" colSpan="10">Loading registrations…</td></tr> : null}
+                {loading ? <tr><td className="wr-empty" colSpan="11">Loading registrations…</td></tr> : null}
               </tbody>
             </table>
           </div>
@@ -313,7 +329,9 @@ export default function WorkshopRegistrations() {
                     <Detail label="District" value={selected.district} />
                     <Detail label="Parent / Guardian" value={selected.parent_name} />
                     <Detail label="Parent Contact" value={selected.parent_contact_number} />
-                    <Detail label="Transaction / UTR" value={selected.transaction_id} />
+                    <Detail label="Transaction / UTR" value={selected.legacy_transaction_id || selected.transaction_id} />
+                    <Detail label="Workshop" value={selected.workshop_event?.title || "Legacy registration"} />
+                    <Detail label="Registration fee" value={formatFee(selected.registration_fee, selected.registration_currency)} />
                   </div>
                   <div className="wr-payment-preview">
                     <h3><FileImage size={17} /> Payment Screenshot</h3>

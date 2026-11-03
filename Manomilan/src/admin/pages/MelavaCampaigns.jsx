@@ -51,6 +51,7 @@ const amount = (value, currency) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: currency || "INR",
+    minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(Number(value || 0));
 
