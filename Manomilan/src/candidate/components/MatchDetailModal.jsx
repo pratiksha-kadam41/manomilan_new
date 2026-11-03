@@ -120,7 +120,7 @@ export default function MatchDetailModal({
         <div className="cnd-modal-actions">
           <button
             type="button"
-            className="cnd-btn cnd-btn-primary"
+            className={`cnd-btn cnd-btn-primary ${interestDone ? "cnd-interest-sent" : ""}`}
             onClick={handleInterest}
             disabled={interestDone || interestBusy}
           >
