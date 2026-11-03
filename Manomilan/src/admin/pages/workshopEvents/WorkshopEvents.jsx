@@ -19,6 +19,7 @@ import AdminStats from "../../components/AdminStats";
 import AdminPagination from "../../components/AdminPagination";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { request } from "../../../api";
+import { useAdminPermission } from "../../../permission-context";
 import "../../components/admin-ui.css";
 import "../melavaCampaigns.css";
 import "./workshopEvents.css";
@@ -59,6 +60,10 @@ const formatFee = (value, currency) => {
 };
 
 export default function WorkshopEvents() {
+  const canCreate = useAdminPermission("create", "/admin/workshop-events");
+  const canEdit = useAdminPermission("edit", "/admin/workshop-events");
+  const canDelete = useAdminPermission("delete", "/admin/workshop-events");
+  const canChangeStatus = useAdminPermission("approve", "/admin/workshop-events");
   const [events, setEvents] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [loading, setLoading] = useState(true);
@@ -251,10 +256,10 @@ export default function WorkshopEvents() {
             <p>Manage workshop sessions, registration fees, and payment QR codes.</p>
           </div>
           <div className="ui-head-actions">
-            <button type="button" className="ui-btn" onClick={formOpen ? closeForm : openCreateForm} disabled={saving || busyId !== null}>
+            {canCreate ? <button type="button" className="ui-btn" onClick={formOpen ? closeForm : openCreateForm} disabled={saving || busyId !== null}>
               {formOpen ? <X size={17} /> : <CalendarPlus size={17} />}
               {formOpen ? "Close form" : "Add workshop"}
-            </button>
+            </button> : null}
             <button type="button" className="ui-btn secondary" onClick={() => load()} disabled={loading || saving || busyId !== null}>
               <RefreshCw size={16} className={loading ? "ui-spin" : ""} /> Refresh
             </button>
@@ -378,12 +383,12 @@ export default function WorkshopEvents() {
                     <td data-label="Status"><span className={`mc-status ${workshop.status}`}>{workshop.status}</span></td>
                     <td data-label="Actions">
                       <div className="mc-event-actions">
-                        <button type="button" className="mc-button secondary" onClick={() => startEdit(workshop)} disabled={saving || busyId !== null} aria-label={`Edit ${workshop.title}`}><Pencil size={15} /> Edit</button>
-                        <button type="button" className={`mc-button ${workshop.status === "active" ? "status-active" : "status-inactive"}`} onClick={() => toggleStatus(workshop)} disabled={busyId === workshop.id || saving} aria-label={`${workshop.status === "active" ? "Close" : "Open"} ${workshop.title}`}>
+                        {canEdit ? <button type="button" className="mc-button secondary" onClick={() => startEdit(workshop)} disabled={saving || busyId !== null} aria-label={`Edit ${workshop.title}`}><Pencil size={15} /> Edit</button> : null}
+                        {canChangeStatus ? <button type="button" className={`mc-button ${workshop.status === "active" ? "status-active" : "status-inactive"}`} onClick={() => toggleStatus(workshop)} disabled={busyId === workshop.id || saving} aria-label={`${workshop.status === "active" ? "Close" : "Open"} ${workshop.title}`}>
                           {workshop.status === "active" ? <ToggleRight size={16} /> : <ToggleLeft size={16} />}
                           {workshop.status === "active" ? "Close" : "Open"}
-                        </button>
-                        <button type="button" className="mc-button danger" onClick={() => removeEvent(workshop)} disabled={busyId === workshop.id || saving || Number(workshop.registrations_count || 0) > 0} aria-label={`Delete ${workshop.title}`} title={Number(workshop.registrations_count || 0) > 0 ? "Workshops with registrations cannot be deleted" : "Delete workshop"}><Trash2 size={15} /> Delete</button>
+                        </button> : null}
+                        {canDelete ? <button type="button" className="mc-button danger" onClick={() => removeEvent(workshop)} disabled={busyId === workshop.id || saving || Number(workshop.registrations_count || 0) > 0} aria-label={`Delete ${workshop.title}`} title={Number(workshop.registrations_count || 0) > 0 ? "Workshops with registrations cannot be deleted" : "Delete workshop"}><Trash2 size={15} /> Delete</button> : null}
                       </div>
                     </td>
                   </tr>

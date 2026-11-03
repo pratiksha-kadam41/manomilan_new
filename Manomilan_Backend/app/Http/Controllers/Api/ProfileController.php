@@ -900,7 +900,10 @@ class ProfileController extends Controller
             'full_name' => ['sometimes', 'required', 'string', 'max:255'],
             'gender' => ['sometimes', 'required', Rule::in(['groom', 'bride', 'Groom', 'Bride'])],
             'birth_date' => ['sometimes', 'required', 'date', 'before:today'],
-            'mobile' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'mobile' => [
+                'sometimes', 'nullable', 'string', 'max:30',
+                Rule::unique('users', 'username')->ignore($profile->user?->id),
+            ],
             'email' => [
                 'sometimes', 'nullable', 'email', 'max:255',
                 Rule::unique('users', 'email')->ignore($profile->user?->id),

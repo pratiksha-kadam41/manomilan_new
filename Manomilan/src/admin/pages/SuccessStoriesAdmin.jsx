@@ -9,6 +9,7 @@ MapPin, Filter
 import AdminLayout from "../components/AdminLayout";
 import SuccessStoryForm from "./SuccessStoryForm.jsx";
 import { request, apiMediaUrl } from "../../api.js";
+import { useAdminPermission } from "../../permission-context.jsx";
 import "./SuccessStories.css";
 
 const EMPTY_FORM = {
@@ -41,6 +42,10 @@ const IMAGE_FIELDS = [
 export default function SuccessStoriesAdmin() {
 const location = useLocation();
 const navigate = useNavigate();
+const canCreate = useAdminPermission("create", "/admin/success-stories");
+const canEdit = useAdminPermission("edit", "/admin/success-stories");
+const canDelete = useAdminPermission("delete", "/admin/success-stories");
+const canChangeStatus = useAdminPermission("approve", "/admin/success-stories");
 const createPage = location.pathname === "/admin/success-stories/create";
 const [stories, setStories] = useState([]);
 const [loading, setLoading] = useState(true);
@@ -399,10 +404,10 @@ return (
           <p>Manage and celebrate successful Manomilan matches.</p>
         </div>
 
-        <button className="ss-primary-btn" onClick={openCreate}>
+        {canCreate ? <button className="ss-primary-btn" onClick={openCreate}>
           <Plus size={18} />
           Add Success Story
-        </button>
+        </button> : null}
       </div>
 
       <div className="ss-stats">
@@ -476,9 +481,9 @@ return (
             <HeartHandshake size={45} />
             <h3>No Success Stories Found</h3>
             <p>Create your first success story to get started.</p>
-            <button className="ss-primary-btn" onClick={openCreate}>
+            {canCreate ? <button className="ss-primary-btn" onClick={openCreate}>
               <Plus size={17} /> Add Story
-            </button>
+            </button> : null}
           </div>
         ) : (
           <div className="ss-gallery">
@@ -507,14 +512,14 @@ return (
                         }}
                       />
                     ) : null}
-                    <button
+                    {canChangeStatus ? <button
                       type="button"
                       className={`ss-story-status ${story.status === "Active" ? "active" : "inactive"}`}
                       onClick={() => toggleStatus(story)}
                       title="Change story status"
                     >
                       {story.status}
-                    </button>
+                    </button> : null}
                     {story.is_featured && (
                       <span className="ss-story-featured">
                         <Star size={12} fill="currentColor" /> Featured
@@ -546,12 +551,12 @@ return (
                         <button title="View story" onClick={() => openEdit(story)}>
                           <Eye size={17} />
                         </button>
-                        <button title="Edit story" onClick={() => openEdit(story)}>
+                        {canEdit ? <button title="Edit story" onClick={() => openEdit(story)}>
                           <Edit size={17} />
-                        </button>
-                        <button title="Delete story" className="delete" onClick={() => deleteStory(story)}>
+                        </button> : null}
+                        {canDelete ? <button title="Delete story" className="delete" onClick={() => deleteStory(story)}>
                           <Trash2 size={17} />
-                        </button>
+                        </button> : null}
                       </div>
                     </div>
                   </div>

@@ -21,6 +21,7 @@ import AdminStats from "../components/AdminStats";
 import AdminPagination from "../components/AdminPagination";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { request } from "../../api";
+import { useAdminPermission } from "../../permission-context";
 import "../components/admin-ui.css";
 import "./melavaCampaigns.css";
 
@@ -73,6 +74,10 @@ const scheduleTone = (status) => {
 };
 
 export default function MelavaCampaigns() {
+  const canCreate = useAdminPermission("create", "/admin/melava-campaigns");
+  const canEdit = useAdminPermission("edit", "/admin/melava-campaigns");
+  const canDelete = useAdminPermission("delete", "/admin/melava-campaigns");
+  const canChangeStatus = useAdminPermission("approve", "/admin/melava-campaigns");
   const [campaigns, setCampaigns] = useState([]);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [loading, setLoading] = useState(true);
@@ -318,7 +323,7 @@ export default function MelavaCampaigns() {
             <p>Manage Melava batches, registration prices, and event availability.</p>
           </div>
           <div className="ui-head-actions">
-            <button
+            {canCreate ? <button
               type="button"
               className="ui-btn"
               onClick={() => formOpen
@@ -327,7 +332,7 @@ export default function MelavaCampaigns() {
               disabled={saving || busyId !== null}
             >
               <CalendarPlus size={17} /> {formOpen ? "Form is open" : "Add new Melava"}
-            </button>
+            </button> : null}
             <button type="button" className="ui-btn secondary" onClick={() => load()} disabled={loading || saving || busyId !== null}>
               <RefreshCw size={16} className={loading ? "ui-spin" : ""} /> Refresh
             </button>
@@ -565,7 +570,7 @@ export default function MelavaCampaigns() {
                     </td>
                     <td>
                       <div className="ui-actions">
-                        <button
+                        {canChangeStatus ? <button
                           type="button"
                           className="ui-btn small secondary"
                           onClick={() => changeStatus(campaign)}
@@ -576,13 +581,13 @@ export default function MelavaCampaigns() {
                           {busyId === campaign.id
                             ? "Saving..."
                             : campaign.status === "active" ? "Deactivate" : "Activate"}
-                        </button>
-                        <button type="button" className="ui-btn small secondary" onClick={() => startEdit(campaign)} disabled={busyId !== null || saving}>
+                        </button> : null}
+                        {canEdit ? <button type="button" className="ui-btn small secondary" onClick={() => startEdit(campaign)} disabled={busyId !== null || saving}>
                           <Pencil size={15} /> Edit
-                        </button>
-                        <button type="button" className="ui-btn small danger" onClick={() => setDeleteTarget(campaign)} disabled={busyId !== null || saving}>
+                        </button> : null}
+                        {canDelete ? <button type="button" className="ui-btn small danger" onClick={() => setDeleteTarget(campaign)} disabled={busyId !== null || saving}>
                           <Trash2 size={15} /> Delete
-                        </button>
+                        </button> : null}
                       </div>
                     </td>
                   </tr>

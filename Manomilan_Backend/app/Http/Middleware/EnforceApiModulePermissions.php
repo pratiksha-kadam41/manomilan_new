@@ -46,13 +46,22 @@ class EnforceApiModulePermissions
         $modules = DB::table('modules')
             ->where('status', true)
             ->whereNotNull('api_prefixes')
-            ->get(['id', 'module_key', 'api_prefixes']);
+            ->get(['id', 'module_key', 'api_prefixes', 'frontend_routes']);
         $matched = null;
         $matchedLength = -1;
 
         foreach ($modules as $module) {
             $prefixes = json_decode((string) $module->api_prefixes, true);
             if (! is_array($prefixes)) {
+                continue;
+            }
+            $frontendRoutes = json_decode((string) $module->frontend_routes, true);
+            $isCandidateModule = is_array($frontendRoutes)
+                && collect($frontendRoutes)->contains(
+                    fn ($route) => is_string($route) && Str::startsWith($route, '/candidate')
+                );
+            if (($user->portal() === 'candidate' && ! $isCandidateModule)
+                || ($user->portal() !== 'candidate' && $isCandidateModule)) {
                 continue;
             }
 
@@ -101,11 +110,14 @@ class EnforceApiModulePermissions
         if (preg_match('/(^|\/)(export|biodata|receipt)(\/|$)/i', $path)) {
             return 'export';
         }
-        if (preg_match('/(^|\/)(verify|approve|payment-status)(\/|$)/i', $path)) {
+        if (preg_match('/(^|\/)(verify|approve|payment-status|activate|deactivate|status)(\/|$)/i', $path)) {
             return 'approve';
         }
         if (in_array($method, ['POST'], true)) {
-            return preg_match('/(^|\/)(status|deactivate|read|respond)(\/|$)/i', $path) ? 'edit' : 'create';
+            if (preg_match('/^admin\/success-stories\/\d+$|^admin\/users\/\d+\/reset-password$|^profiles\/\d+\/update$|^tickets\/\d+$/i', $path)) {
+                return 'edit';
+            }
+            return preg_match('/(^|\/)(status|activate|deactivate|read|respond)(\/|$)/i', $path) ? 'edit' : 'create';
         }
         if (in_array($method, ['PUT', 'PATCH'], true)) {
             return preg_match('/(^|\/)(status|verify|payment)(\/|$)/i', $path) ? 'approve' : 'edit';

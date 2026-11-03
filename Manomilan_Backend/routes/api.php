@@ -107,7 +107,7 @@ Route::prefix('admin/success-stories')->group(function () {
         Route::get('/maintenance', [WebsiteManagementController::class, 'showMaintenance']);
         Route::put('/maintenance', [WebsiteManagementController::class, 'updateMaintenance']);
     });
-    Route::prefix('system')->middleware('superadmin')->group(function () {
+    Route::prefix('system')->middleware('module.permission:system_configuration,manage')->group(function () {
         Route::get('/', [SystemManagementController::class, 'index']);
         Route::get('/roles/{role}/permissions', [SystemManagementController::class, 'showRolePermissions'])->whereNumber('role');
         Route::put('/roles/{role}/permissions', [SystemManagementController::class, 'updateRolePermissions'])->whereNumber('role');

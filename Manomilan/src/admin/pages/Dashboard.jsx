@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { getAdminDashboard } from "../../auth";
+import { getAdminDashboard, getSession } from "../../auth";
+import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
 import { Link } from "react-router-dom";
 import {
   ArrowUpRight, BadgeCheck, CalendarDays, CalendarPlus, ChevronRight, CircleDollarSign,
@@ -16,7 +17,7 @@ import "../admin.css";
 const ROUTES = {
   addProfile: "/admin/profiles",
   profiles: "/admin/profiles",
-  verify: "/admin/profiles",
+  verify: "/admin/unverified-profiles",
   events: "/admin/melava-campaigns",
   createEvent: "/admin/melava-campaigns",
   registrations: "/admin/melava",
@@ -33,11 +34,11 @@ const PERIODS = [
 ];
 
 const QUICK_ACTIONS = [
-  { label: "Add profile", hint: "Create a new candidate", icon: UserPlus, to: ROUTES.addProfile, tone: "teal" },
-  { label: "Verify profiles", hint: "Review pending profiles", icon: ShieldCheck, to: ROUTES.verify, tone: "green" },
-  { label: "New Melava event", hint: "Schedule a meet-up", icon: CalendarPlus, to: ROUTES.createEvent, tone: "violet" },
-  { label: "Registrations", hint: "See who signed up", icon: ListChecks, to: ROUTES.registrations, tone: "blue" },
-  { label: "Payments", hint: "Verify event payments", icon: Wallet, to: ROUTES.payments, tone: "amber" },
+  { label: "Add profile", hint: "Create a new candidate", icon: UserPlus, to: ROUTES.addProfile, permission: "create", tone: "teal" },
+  { label: "Verify profiles", hint: "Review pending profiles", icon: ShieldCheck, to: "/admin/unverified-profiles", permission: "approve", tone: "green" },
+  { label: "New Melava event", hint: "Schedule a meet-up", icon: CalendarPlus, to: ROUTES.createEvent, permission: "create", tone: "violet" },
+  { label: "Registrations", hint: "See who signed up", icon: ListChecks, to: ROUTES.registrations, permission: "view", tone: "blue" },
+  { label: "Payments", hint: "Verify event payments", icon: Wallet, to: ROUTES.payments, permission: "approve", tone: "amber" },
 ];
 
 const KPI_CARDS = [
@@ -174,19 +175,22 @@ const HeroArt = memo(function HeroArt() {
   );
 });
 
-const KpiCard = memo(function KpiCard({ item, value, index }) {
+const KpiCard = memo(function KpiCard({ item, value, index, canNavigate }) {
   const Icon = item.icon;
   const shown = typeof value === "number" ? value.toLocaleString("en-IN") : "—";
-  return (
-    <AppLink to={item.to} className="dx-kpi" style={{ "--c": item.color, "--i": index }}>
+  const content = (
+    <>
       <span className="dx-kpi-icon"><Icon size={22} aria-hidden="true" /></span>
       <span className="dx-kpi-body">
         <strong>{shown}</strong>
         <small>{item.label}</small>
       </span>
-      <ArrowUpRight className="dx-kpi-go" size={16} aria-hidden="true" />
-    </AppLink>
+      {canNavigate ? <ArrowUpRight className="dx-kpi-go" size={16} aria-hidden="true" /> : null}
+    </>
   );
+  return canNavigate
+    ? <AppLink to={item.to} className="dx-kpi" style={{ "--c": item.color, "--i": index }}>{content}</AppLink>
+    : <article className="dx-kpi" style={{ "--c": item.color, "--i": index }}>{content}</article>;
 });
 
 const Donut = memo(function Donut({ pct, colorA, colorB, empty, children }) {
@@ -257,6 +261,8 @@ const EventCard = memo(function EventCard({ event, index }) {
    ===================================================================== */
 
 export default function Dashboard() {
+  const permissions = useContext(AdminPermissionContext);
+  const roleName = getSession()?.user?.role?.name || "Admin";
   const [stats, setStats] = useState(null);
   const [error, setError] = useState("");
   const [period, setPeriod] = useState("all");
@@ -336,9 +342,9 @@ export default function Dashboard() {
   const attention = useMemo(() => {
     if (!stats) return [];
     const list = [];
-    if (m.unverified) list.push({ text: `${m.unverified} profile${m.unverified > 1 ? "s" : ""} to verify`, to: ROUTES.verify });
-    if (m.pendingPay) list.push({ text: `${m.pendingPay} payment${m.pendingPay > 1 ? "s" : ""} pending`, to: ROUTES.payments });
-    if (!(stats.upcoming_melava_events || []).length) list.push({ text: "No upcoming event — create one", to: ROUTES.createEvent });
+    if (m.unverified) list.push({ text: `${m.unverified} profile${m.unverified > 1 ? "s" : ""} to verify`, to: "/admin/unverified-profiles", permission: "approve" });
+    if (m.pendingPay) list.push({ text: `${m.pendingPay} payment${m.pendingPay > 1 ? "s" : ""} pending`, to: ROUTES.payments, permission: "approve" });
+    if (!(stats.upcoming_melava_events || []).length) list.push({ text: "No upcoming event — create one", to: ROUTES.createEvent, permission: "create" });
     return list;
   }, [stats, m]);
 
@@ -351,15 +357,26 @@ export default function Dashboard() {
   }, [stats, recentType]);
 
   const events = useMemo(() => (stats?.upcoming_melava_events || []).slice(0, 3), [stats]);
-  const header = useMemo(() => ({ greeting: getGreeting(), today: TODAY_FMT.format(new Date()) }), []);
+  const header = useMemo(() => ({ greeting: getGreeting(), today: TODAY_FMT.format(new Date()), roleName }), [roleName]);
+  const visibleQuickActions = QUICK_ACTIONS.filter(({ permission, to }) =>
+    hasModulePermission(permissions, permission, to)
+  );
+  const visibleKpis = KPI_CARDS;
+  const visibleAttention = attention.filter((item) =>
+    hasModulePermission(permissions, item.permission, item.to)
+  );
+  const canViewProfiles = hasModulePermission(permissions, "view", ROUTES.profiles);
+  const canViewPayments = hasModulePermission(permissions, "view", ROUTES.payments);
+  const canViewEvents = hasModulePermission(permissions, "view", ROUTES.events);
+  const canExportDashboard = hasModulePermission(permissions, "export", "/admin");
 
   const handleExport = useCallback(() => {
     if (!stats) return;
-    const rows = [["Metric", "Value"], ...KPI_CARDS.map((c) => [c.label, m[c.id]])];
+    const rows = [["Metric", "Value"], ...visibleKpis.map((c) => [c.label, m[c.id]])];
     rows.push([], ["Recent registrations"], ["Name", "Type", "Location", "Registered", "Status"]);
     recent.forEach((p) => rows.push([p.name, p.type, p.location, p.created_at, p.status]));
     downloadCsv(rows, `manomilan-dashboard-${period}-${new Date().toISOString().slice(0, 10)}.csv`);
-  }, [stats, m, recent, period]);
+  }, [stats, m, recent, period, visibleKpis]);
 
   const busy = loading && customReady;
 
@@ -370,12 +387,12 @@ export default function Dashboard() {
         <header className="dx-hero">
           <div className="dx-hero-copy">
             <span className="dx-kicker"><Sparkles size={14} aria-hidden="true" /> Welcome to Manomilan</span>
-            <h1>{header.greeting}, Super Admin</h1>
+            <h1>{header.greeting}, {header.roleName}</h1>
             <p className="dx-hero-summary">Here’s what’s happening with Manomilan today.</p>
             <p>{header.today}</p>
             <div className="dx-attention" aria-live="polite">
               {stats && !attention.length ? <span className="dx-clear">You’re all caught up</span> : null}
-              {attention.map((item) => (
+              {visibleAttention.map((item) => (
                 <AppLink key={item.text} to={item.to} className="dx-attn-chip">
                   <i aria-hidden="true" />{item.text}<ChevronRight size={14} aria-hidden="true" />
                 </AppLink>
@@ -387,7 +404,7 @@ export default function Dashboard() {
 
         {/* ---------- Quick actions ---------- */}
         <nav className="dx-actions" aria-label="Quick actions">
-          {QUICK_ACTIONS.map(({ label, hint, icon: Icon, to, tone }, i) => (
+          {visibleQuickActions.map(({ label, hint, icon: Icon, to, tone }, i) => (
             <AppLink key={label} to={to} className={`dx-action ${tone}`} style={{ "--i": i }}>
               <span className="dx-action-icon"><Icon size={20} aria-hidden="true" /></span>
               <span><strong>{label}</strong><small>{hint}</small></span>
@@ -420,9 +437,9 @@ export default function Dashboard() {
               <span aria-hidden="true" />
               Auto refresh
             </label>
-            <button type="button" className="dx-btn" onClick={handleExport} disabled={!stats}>
+            {canExportDashboard ? <button type="button" className="dx-btn" onClick={handleExport} disabled={!stats}>
               <Download size={16} aria-hidden="true" /> Export
-            </button>
+            </button> : null}
             <button type="button" className="dx-btn primary" onClick={handleRefresh} disabled={busy}>
               <RefreshCw size={16} className={busy ? "dx-spin" : ""} aria-hidden="true" /> {busy ? "Updating…" : "Refresh"}
             </button>
@@ -441,14 +458,20 @@ export default function Dashboard() {
 
         {/* ---------- KPI cards ---------- */}
         <section className={`dx-kpis${busy ? " is-busy" : ""}`} aria-busy={busy} aria-label="Key numbers">
-          {KPI_CARDS.map((item, i) => (
-            <KpiCard key={item.id} item={item} index={i} value={stats ? m[item.id] : null} />
+          {visibleKpis.map((item, i) => (
+            <KpiCard
+              key={item.id}
+              item={item}
+              index={i}
+              value={stats ? m[item.id] : null}
+              canNavigate={hasModulePermission(permissions, "view", item.to)}
+            />
           ))}
         </section>
 
         {/* ---------- Insights ---------- */}
         <section className="dx-insights" aria-label="Insights">
-          <article className="dx-panel" style={{ "--i": 0 }}>
+          {canViewProfiles ? <article className="dx-panel" style={{ "--i": 0 }}>
             <h2>Groom &amp; bride balance</h2>
             <div className="dx-insight-row">
               <Donut pct={m.groomPct} colorA="#4f46e5" colorB="#ec4899" empty={!m.candidates}>
@@ -459,9 +482,9 @@ export default function Dashboard() {
                 <li><i style={{ background: "#ec4899" }} />Brides<b>{m.bride.toLocaleString("en-IN")}</b></li>
               </ul>
             </div>
-          </article>
+          </article> : null}
 
-          <article className="dx-panel" style={{ "--i": 1 }}>
+          {canViewProfiles ? <article className="dx-panel" style={{ "--i": 1 }}>
             <h2>Profile verification</h2>
             <div className="dx-insight-row">
               <Donut pct={m.verifiedPct} colorA="#1ec99b" colorB="#e9eef2" empty={!m.total}>
@@ -472,9 +495,9 @@ export default function Dashboard() {
                 <li><i style={{ background: "#cfd8df" }} />Waiting<b>{m.unverified.toLocaleString("en-IN")}</b></li>
               </ul>
             </div>
-          </article>
+          </article> : null}
 
-          <article className="dx-panel" style={{ "--i": 2 }}>
+          {canViewPayments ? <article className="dx-panel" style={{ "--i": 2 }}>
             <h2>Melava payments</h2>
             <div className="dx-paybar" aria-hidden="true">
               <i className="paid" style={{ width: `${m.paidPct}%` }} />
@@ -485,12 +508,12 @@ export default function Dashboard() {
               <li><i style={{ background: "#f59e0b" }} />Pending<b>{m.pendingPay.toLocaleString("en-IN")}</b></li>
             </ul>
             <AppLink to={ROUTES.payments} className="dx-link">Review payments <ArrowUpRight size={14} aria-hidden="true" /></AppLink>
-          </article>
+          </article> : null}
         </section>
 
         {/* ---------- Recent + events ---------- */}
         <div className="dx-main">
-          <section className="dx-panel" aria-label="Recent registrations" style={{ "--i": 3 }}>
+          {canViewProfiles ? <section className="dx-panel" aria-label="Recent registrations" style={{ "--i": 3 }}>
             <div className="dx-panel-head">
               <h2>Recent registrations</h2>
               <div className="dx-chips" role="group" aria-label="Filter by type">
@@ -509,9 +532,9 @@ export default function Dashboard() {
               <p className="dx-empty">{stats ? "No registrations match this view yet." : "Loading registrations…"}</p>
             ) : null}
             <AppLink to={ROUTES.profiles} className="dx-link">View all profiles <ArrowUpRight size={14} aria-hidden="true" /></AppLink>
-          </section>
+          </section> : null}
 
-          <section className="dx-panel" aria-label="Upcoming Melava events" style={{ "--i": 4 }}>
+          {canViewEvents ? <section className="dx-panel" aria-label="Upcoming Melava events" style={{ "--i": 4 }}>
             <div className="dx-panel-head">
               <h2>Upcoming Melava events</h2>
               <AppLink to={ROUTES.events} className="dx-link inline">View all</AppLink>
@@ -522,7 +545,7 @@ export default function Dashboard() {
             {!events.length ? (
               <p className="dx-empty">{stats ? "No upcoming Melava events." : "Loading events…"}</p>
             ) : null}
-          </section>
+          </section> : null}
         </div>
       </div>
     </AdminLayout>

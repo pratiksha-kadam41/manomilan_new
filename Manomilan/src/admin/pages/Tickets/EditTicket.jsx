@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
+import { useAdminPermission } from "../../../permission-context";
 import { getTicket, getTicketMeta, updateTicket } from "./api/ticketApi";
 import { TicketFileInput, TicketItemForm } from "./TicketFormFields";
 import { blankTicketItem } from "./ticketFormUtils";
@@ -14,6 +15,7 @@ const includeOptions = (options, currentValues) => (
 
 export default function EditTicket({ params = {} }) {
   const navigate = useNavigate();
+  const hasEditPermission = useAdminPermission("edit", "/admin/software-tickets");
   const bodyRef = useRef(null);
   const itemRefs = useRef([]);
   const [ticket, setTicket] = useState(null);
@@ -128,6 +130,10 @@ export default function EditTicket({ params = {} }) {
 
   const submit = async (event) => {
     event.preventDefault();
+    if (!canEdit) {
+      setError("You do not have permission to edit this ticket.");
+      return;
+    }
     const validationError = validate();
     if (validationError) {
       setError(validationError);
@@ -166,7 +172,7 @@ export default function EditTicket({ params = {} }) {
     }
   };
 
-  const canEdit = ticket?.ticket_status === "Open" && Number(ticket?.status) === 1;
+  const canEdit = hasEditPermission && ticket?.ticket_status === "Open" && Number(ticket?.status) === 1;
   const ticketPath = `/admin/software-tickets/${params.id}`;
 
   return (

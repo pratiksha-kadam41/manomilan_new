@@ -5,6 +5,7 @@ import AdminStats from "../components/AdminStats";
 import AdminPagination from "../components/AdminPagination";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { request } from "../../api";
+import { useAdminPermission } from "../../permission-context";
 import "../components/admin-ui.css";
 import "./resetPasswords.css";
 
@@ -20,6 +21,7 @@ const resetPassword = (id) =>
   request(`/admin/users/${id}/reset-password`, { method: "POST" });
 
 export default function ResetPasswords() {
+  const canResetPassword = useAdminPermission("edit", "/admin/reset-passwords");
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState("all");
   const [status, setStatus] = useState("all");
@@ -217,9 +219,11 @@ export default function ResetPasswords() {
                     </td>
                     <td className="ui-muted">{user.created_at ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"}</td>
                     <td>
-                      <button type="button" className="ui-btn small" onClick={() => setSelected(user)} disabled={busy}>
-                        <KeyRound size={15} /> Reset
-                      </button>
+                      {canResetPassword ? (
+                        <button type="button" className="ui-btn small" onClick={() => setSelected(user)} disabled={busy}>
+                          <KeyRound size={15} /> Reset
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

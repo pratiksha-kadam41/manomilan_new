@@ -21,8 +21,8 @@ import DowntimeNotice from "../website/DowntimeNotice.jsx";
 import "./Login.css";
 
 /* ---------- Validation rules ---------- */
-// Usernames: start with a letter, then letters / numbers / . _ -  (3 to 30 characters)
-const USERNAME_RE = /^[A-Za-z][A-Za-z0-9._-]{2,29}$/;
+// Usernames: start with a letter or number, then letters / numbers / . _ - (3 to 30 characters)
+const USERNAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{2,29}$/;
 
 const validate = ({ username, password, name, email, birth_date, gender }, registering = false) => {
   const errors = {};
@@ -53,7 +53,7 @@ const validate = ({ username, password, name, email, birth_date, gender }, regis
       errors.username = "Mobile number must start with 6, 7, 8 or 9.";
   } else if (!USERNAME_RE.test(username)) {
     errors.username =
-      "Username must start with a letter (3-30 characters) and use only letters, numbers, dot, dash or underscore.";
+      "Username must be 3-30 characters and use only letters, numbers, dot, dash or underscore.";
   }
 
   if (!password) errors.password = "Password is required.";

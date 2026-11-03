@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Save, ShieldAlert } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
+import { useAdminPermission } from "../../../permission-context";
 import ToggleField from "./ToggleField";
 import { getMaintenanceSettings, saveMaintenanceSettings } from "./api";
 import "../../components/admin-ui.css";
@@ -23,6 +24,7 @@ const toForm = (data = {}) => ({
 });
 
 export default function FullMaintenanceMode() {
+  const canEditSettings = useAdminPermission("edit", "/admin/website/maintenance");
   const [form, setForm] = useState(EMPTY);
   const [status, setStatus] = useState({});
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,10 @@ export default function FullMaintenanceMode() {
   const submit = async (event) => {
     event.preventDefault();
     if (saving) return;
+    if (!canEditSettings) {
+      setError("You do not have permission to change website settings.");
+      return;
+    }
 
     if (form.enabled && !status.active) {
       const confirmed = window.confirm(
@@ -152,7 +158,7 @@ export default function FullMaintenanceMode() {
 
             <div className="wm-actions">
               <button type="button" className="ui-btn secondary" onClick={load} disabled={loading || saving}>Reset</button>
-              <button type="submit" className={`ui-btn ${form.enabled ? "danger" : ""}`} disabled={loading || saving}>
+              <button type="submit" className={`ui-btn ${form.enabled ? "danger" : ""}`} disabled={!canEditSettings || loading || saving}>
                 <Save size={16} />
                 {saving ? "Saving..." : "Save maintenance settings"}
               </button>

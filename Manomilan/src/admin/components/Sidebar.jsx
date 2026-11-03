@@ -16,11 +16,11 @@ import {
   Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { clearSession, getSession } from "../../auth";
+import { useContext } from "react";
+import { clearSession } from "../../auth";
 import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
 import { menuItems } from "../data/adminData";
 import WebsiteSidebarGroup from "./WebsiteSidebarGroup";
-import { useContext } from "react";
 
 const SYSTEM_MANAGEMENT = {
   label: "System Management",
@@ -63,16 +63,9 @@ const ICON_COLORS = {
   "/admin/system-management": "#0f766e",
 };
 
-const isSuperAdmin = () => {
-  const role = getSession()?.user?.role;
-  const normalizedName = String(role?.name || "").toLowerCase().replace(/[^a-z]/g, "");
-  return normalizedName === "superadmin" && String(role?.user_type) === "00";
-};
-
 export default function Sidebar({ currentPath, onNavigate }) {
   const access = useContext(AdminPermissionContext);
-  const superAdmin = access?.is_super_admin || isSuperAdmin();
-  const items = superAdmin ? [...menuItems, SYSTEM_MANAGEMENT] : menuItems;
+  const items = [...menuItems, SYSTEM_MANAGEMENT];
   const visibleItems = items.filter((item) => hasModulePermission(access, "view", item.path));
   const activePath = visibleItems.reduce((active, item) => {
     const matches =

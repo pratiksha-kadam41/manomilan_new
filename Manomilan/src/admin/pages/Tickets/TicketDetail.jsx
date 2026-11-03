@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
+import { useAdminPermission } from "../../../permission-context";
 import { getTicket } from "./api/ticketApi";
 import "./tickets.css";
 
@@ -66,6 +67,7 @@ function SummaryCard({ label, value, icon: Icon, children }) {
 export default function TicketDetail({ params = {} }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const canEditTicket = useAdminPermission("edit", "/admin/software-tickets");
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -118,7 +120,7 @@ export default function TicketDetail({ params = {} }) {
             >
               <ArrowLeft size={16} /> Back to Tickets
             </button>
-            <button
+            {canEditTicket ? <button
               type="button"
               className="tk-detail-edit"
               disabled={!canEdit}
@@ -126,7 +128,7 @@ export default function TicketDetail({ params = {} }) {
               title={canEdit ? "Edit ticket" : "Only open active tickets can be edited"}
             >
               <Pencil size={15} /> Edit Ticket
-            </button>
+            </button> : null}
           </div>
         </header>
 

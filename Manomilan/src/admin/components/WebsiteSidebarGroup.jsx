@@ -2,7 +2,6 @@ import { useContext, useMemo, useState } from "react";
 import { CalendarPlus, ChevronDown, ClockAlert, Globe2, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
-import { getSession } from "../../auth";
 import "./websiteSidebarGroup.css";
 
 const LINKS = [
@@ -12,22 +11,14 @@ const LINKS = [
   { label: "Full Maintenance Mode", path: "/admin/website/maintenance", icon: ShieldAlert },
 ];
 
-const isSuperAdmin = () => {
-  const role = getSession()?.user?.role;
-  const normalizedName = String(role?.name || "").toLowerCase().replace(/[^a-z]/g, "");
-  return normalizedName === "superadmin" && String(role?.user_type) === "00";
-};
-
 export default function WebsiteSidebarGroup({ currentPath, onNavigate }) {
   const access = useContext(AdminPermissionContext);
   const [open, setOpen] = useState(true);
-  const superAdmin = isSuperAdmin();
 
   const allowed = useMemo(() => {
-    if (superAdmin) return LINKS;
     if (!access?.modules) return [];
     return LINKS.filter((link) => hasModulePermission(access, "view", link.path));
-  }, [access, superAdmin]);
+  }, [access]);
 
   if (!allowed.length) return null;
 

@@ -10,6 +10,7 @@ export function hasModulePermission(access, permission, currentPath) {
   const path = currentPath || access.path;
   return Boolean(access.modules?.some((module) =>
     (!module.requires_super_admin || access.is_super_admin)
+    && (!module.requires_manage || module.permissions?.includes("manage"))
     && (module.permissions?.includes(permission) || module.permissions?.includes("manage"))
     && (module.routes || [module.route]).some((route) =>
       route && (path === route || (route !== "/admin" && path.startsWith(`${route}/`))),

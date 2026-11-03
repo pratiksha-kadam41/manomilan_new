@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
+import { useAdminPermission } from "../../../permission-context";
 import { createTicket, getTicketMeta } from "./api/ticketApi";
 import { TicketFileInput, TicketItemForm } from "./TicketFormFields";
 import { blankTicketItem } from "./ticketFormUtils";
@@ -10,6 +11,7 @@ import "./tickets.css";
 
 export default function CreateTicket() {
   const navigate = useNavigate();
+  const canCreateTicket = useAdminPermission("create", "/admin/software-tickets");
   const bodyRef = useRef(null);
   const itemRefs = useRef([]);
   const [meta, setMeta] = useState(emptyTicketMeta);
@@ -77,6 +79,10 @@ export default function CreateTicket() {
 
   const submit = async (event) => {
     event.preventDefault();
+    if (!canCreateTicket) {
+      setError("You do not have permission to create tickets.");
+      return;
+    }
     const validationError = validate();
     if (validationError) {
       setError(validationError);
@@ -139,7 +145,7 @@ export default function CreateTicket() {
 
             <div className="tk-items-heading">
               <h2>Ticket Items</h2>
-              <button type="button" className="tk-add-item" onClick={addItem}><Plus size={15} /> Add Item</button>
+              <button type="button" className="tk-add-item" onClick={addItem} disabled={!canCreateTicket}><Plus size={15} /> Add Item</button>
             </div>
             <div className="tk-items-list">
               {items.map((item, index) => (
@@ -170,7 +176,7 @@ export default function CreateTicket() {
           </div>
           <footer className="tk-create-footer">
             <button type="button" className="tk-cancel-button" onClick={() => navigate("/admin/software-tickets")}>Cancel</button>
-            <button type="submit" className="tk-save-button" disabled={saving || loadingMeta || !meta.modules.length}>
+            <button type="submit" className="tk-save-button" disabled={!canCreateTicket || saving || loadingMeta || !meta.modules.length}>
               {saving ? "Saving…" : "Save Ticket"}
             </button>
           </footer>

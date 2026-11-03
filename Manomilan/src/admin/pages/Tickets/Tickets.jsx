@@ -6,6 +6,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
+import { useAdminPermission } from "../../../permission-context";
 import {
   activateTicket, deactivateTicket, listTickets,
 } from "./api/ticketApi";
@@ -97,6 +98,10 @@ function Pagination({ page, lastPage, from, to, total, onPage, disabled }) {
 export default function Tickets({ inactive = false }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const canCreate = useAdminPermission("create", "/admin/software-tickets");
+  const canEdit = useAdminPermission("edit", "/admin/software-tickets");
+  const canDeactivate = useAdminPermission("delete", "/admin/software-tickets");
+  const canActivate = useAdminPermission("approve", "/admin/software-tickets");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [tickets, setTickets] = useState([]);
@@ -179,9 +184,9 @@ export default function Tickets({ inactive = false }) {
                 <button type="button" className="tk-pill-button tk-inactive-button" onClick={() => navigate("/admin/software-tickets/inactive")}>
                   <Archive size={16} /> Inactive Tickets
                 </button>
-                <button type="button" className="tk-pill-button tk-raise-button" onClick={() => navigate("/admin/software-tickets/create")}>
+                {canCreate ? <button type="button" className="tk-pill-button tk-raise-button" onClick={() => navigate("/admin/software-tickets/create")}>
                   <PlusCircle size={16} /> Raise Ticket
-                </button>
+                </button> : null}
               </>
             )}
           </div>
@@ -233,7 +238,7 @@ export default function Tickets({ inactive = false }) {
                 ) : null}
                 {!loading ? tickets.map((ticket, index) => {
                   const ticketStatus = ticket.ticket_status || "Open";
-                  const canEdit = !inactive && ticketStatus === "Open";
+                  const ticketCanEdit = !inactive && ticketStatus === "Open";
                   const currentPage = pagination?.current_page || page;
                   return (
                     <tr key={ticket.id}>
@@ -256,10 +261,10 @@ export default function Tickets({ inactive = false }) {
                           <button type="button" className="tk-icon-button tk-view-action" aria-label="View ticket" title="View ticket" onClick={() => navigate(`/admin/software-tickets/${ticket.id}`, { state: { from: location.pathname } })}>
                             <Eye size={16} />
                           </button>
-                          <button type="button" className="tk-icon-button tk-edit-action" aria-label="Edit ticket" title={canEdit ? "Edit ticket" : "Only Open tickets can be edited"} disabled={!canEdit} onClick={() => navigate(`/admin/software-tickets/${ticket.id}/edit`)}>
+                          {canEdit ? <button type="button" className="tk-icon-button tk-edit-action" aria-label="Edit ticket" title={ticketCanEdit ? "Edit ticket" : "Only Open tickets can be edited"} disabled={!ticketCanEdit} onClick={() => navigate(`/admin/software-tickets/${ticket.id}/edit`)}>
                             <Pencil size={15} />
-                          </button>
-                          <button
+                          </button> : null}
+                          {(inactive ? canActivate : canDeactivate) ? <button
                             type="button"
                             className={`tk-icon-button ${inactive ? "tk-restore-action" : "tk-deactivate-action"}`}
                             aria-label={inactive ? "Activate ticket" : "Deactivate ticket"}
@@ -268,7 +273,7 @@ export default function Tickets({ inactive = false }) {
                             onClick={() => handleStatusChange(ticket)}
                           >
                             {inactive ? <RotateCcw size={16} /> : <Trash2 size={16} />}
-                          </button>
+                          </button> : null}
                         </div>
                       </td>
                     </tr>

@@ -101,7 +101,7 @@ class SystemManagementController extends Controller
                     'routes' => $module->frontend_routes ?: array_filter([$module->route]),
                     'icon' => $module->icon,
                     'sort_order' => $module->sort_order,
-                    'requires_super_admin' => $module->module_key === 'system_configuration',
+                    'requires_manage' => $module->module_key === 'system_configuration',
                     'permissions' => $permissions,
                 ];
             })
@@ -129,7 +129,23 @@ class SystemManagementController extends Controller
             return response()->json(['success' => false, 'message' => 'The Super Admin identity is reserved.'], 422);
         }
 
-        $role = Role::create($data + ['is_active' => true]);
+        $role = DB::transaction(function () use ($data) {
+            $role = Role::create($data + ['is_active' => true]);
+            $dashboardModule = Module::query()->where('status', true)->get()->first(
+                fn (Module $module) => $module->route === '/admin'
+                    && in_array('/dashboard', $module->api_prefixes ?: [], true)
+            );
+
+            if ($dashboardModule) {
+                ModulePermission::create([
+                    'role_id' => $role->id,
+                    'module_id' => $dashboardModule->id,
+                    'can_view' => true,
+                ]);
+            }
+
+            return $role;
+        });
         $this->auditLogger->log($request->user(), 'role.created', 'system_configuration', 'Role', $role->id, null, [], $role->only(['name', 'user_type', 'is_active']));
 
         return response()->json(['success' => true, 'data' => $role], 201);

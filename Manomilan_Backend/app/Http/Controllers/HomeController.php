@@ -1241,7 +1241,7 @@ private function createProfileFromSession($paymentScreenshot = null)
                 'religion' => 'nullable|string|min:2',
                 'state' => 'nullable|string|min:2',
                 'city' => 'nullable|string|min:2',
-                'mobile' => 'nullable|digits:10',
+                'mobile' => 'nullable|digits:10|unique:users,username',
             ]);
 
             $user = User::create([

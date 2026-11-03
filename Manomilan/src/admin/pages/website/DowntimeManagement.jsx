@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ClockAlert, Save, TimerReset } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
+import { useAdminPermission } from "../../../permission-context";
 import ToggleField from "./ToggleField";
 import { getDowntimeSettings, saveDowntimeSettings } from "./api";
 import "../../components/admin-ui.css";
@@ -33,6 +34,7 @@ const toForm = (data = {}) => ({
 });
 
 export default function DowntimeManagement() {
+  const canEditSettings = useAdminPermission("edit", "/admin/website/downtime");
   const [form, setForm] = useState(EMPTY);
   const [status, setStatus] = useState({});
   const [loading, setLoading] = useState(true);
@@ -75,6 +77,10 @@ export default function DowntimeManagement() {
   const submit = async (event) => {
     event.preventDefault();
     if (saving) return;
+    if (!canEditSettings) {
+      setError("You do not have permission to change website settings.");
+      return;
+    }
     setError("");
     setNotice("");
     setSaving(true);
@@ -183,7 +189,7 @@ export default function DowntimeManagement() {
 
             <div className="wm-actions">
               <button type="button" className="ui-btn secondary" onClick={load} disabled={loading || saving}>Reset</button>
-              <button type="submit" className="ui-btn" disabled={loading || saving}>
+              <button type="submit" className="ui-btn" disabled={!canEditSettings || loading || saving}>
                 <Save size={16} />
                 {saving ? "Saving..." : "Save settings"}
               </button>
