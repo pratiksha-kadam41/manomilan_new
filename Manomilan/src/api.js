@@ -49,7 +49,7 @@ export function apiMediaUrl(value) {
     let path = parsedUrl.pathname;
 
     if (/^https?:/i.test(mediaPath)
-      && !/^\/(?:storage|uploads|candidate)\//i.test(path)
+      && !/^\/(?:storage|uploads|candidate|profile_photos)\//i.test(path)
       && !mediaFolders.test(path)) {
       return mediaPath;
     }
@@ -59,11 +59,13 @@ export function apiMediaUrl(value) {
       path = `/storage${path}`;
     } else if (/^candidate\/documents\//i.test(storedPath)) {
       path = `/storage/candidate_documents/${storedPath.split("/").pop()}`;
-    } else if (/^candidate\/(?:profile_photos|body_photos)\//i.test(storedPath)) {
+    } else if (/^candidate\/(?:profile_photos|body_photos|photos)\//i.test(storedPath)) {
       path = `/storage/candidate_images/${storedPath.split("/").pop()}`;
     } else if (/^candidate_images\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;
     } else if (/^candidate_documents\//i.test(storedPath)) {
+      path = `/storage/${storedPath}`;
+    } else if (/^profile_photos\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;
     } else if (/^candidate\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;

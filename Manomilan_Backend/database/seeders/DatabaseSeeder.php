@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             RbacSeeder::class,
             CandidateRoleAccessSeeder::class,
             SuperAdminSeeder::class,
+            DemoBrideSeeder::class,
         ]);
     }
 }

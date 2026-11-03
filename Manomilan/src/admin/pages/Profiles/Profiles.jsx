@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  Search, Download, UserX, Pencil, CreditCard, Receipt, BadgeCheck,
+  Search, Download, UserX, Pencil, CreditCard, Receipt, BadgeCheck, FileCheck2,
   ArrowUp, ArrowDown, ArrowUpDown, Phone, CheckCircle2, Clock, X,
   AlertTriangle, Users, RotateCcw, Archive, UserCheck, ShieldAlert,
 } from "lucide-react";
@@ -10,7 +10,7 @@ import AdminStats from "../../components/AdminStats";
 import AdminPagination from "../../components/AdminPagination";
 import AgeRangeFilter from "../../components/AgeRangeFilter";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
-import { request, download } from "../../../api";
+import { request, download, apiMediaUrl } from "../../../api";
 import { touchSession } from "../../../auth";
 import { PermissionGate, useAdminPermission } from "../../../permission-context";
 import "../../components/admin-ui.css";
@@ -83,11 +83,12 @@ const initials = (name = "") =>
 
 function Avatar({ p, onOpen }) {
   const [broken, setBroken] = useState(false);
-  if (!p.photo_url || broken)
+  const photoSrc = apiMediaUrl(p.photo_url || p.photo || p.profile_photo || p.image);
+  if (!photoSrc || broken)
     return <div className="ui-avatar" aria-hidden="true">{initials(p.full_name)}</div>;
   return (
-    <button type="button" className="ui-avatar ui-avatar-btn" onClick={() => onOpen(p)} aria-label={`View photo of ${p.full_name}`}>
-      <img src={p.photo_url} alt="" loading="lazy" onError={() => setBroken(true)} />
+    <button type="button" className="ui-avatar ui-avatar-btn" onClick={() => onOpen({ ...p, photo_url: photoSrc })} aria-label={`View photo of ${p.full_name}`}>
+      <img src={photoSrc} alt="" loading="lazy" onError={() => setBroken(true)} />
     </button>
   );
 }
@@ -414,6 +415,16 @@ export default function Profiles() {
                         </td>
                         <td>
                           <div className="ui-actions">
+                            {currentPath === "/admin/unverified-profiles" ? (
+                              <Link
+                                to={`/admin/unverified-profiles/${p.id}/verify`}
+                                className="ui-icon-btn teal"
+                                title="View and verify documents"
+                                aria-label={`View and verify documents for ${p.full_name}`}
+                              >
+                                <FileCheck2 size={15} />
+                              </Link>
+                            ) : null}
                             {canEditProfiles ? <a href={LINKS.edit(p.id)} className="ui-icon-btn amber" title="Edit" aria-label="Edit"><Pencil size={15} /></a> : null}
 
                             <a href={LINKS.payment(p.id)} className="ui-icon-btn teal" title="Payment" aria-label="Payment">
@@ -476,7 +487,7 @@ export default function Profiles() {
           <div className="pf-modal" onClick={() => setPhoto(null)}>
             <div className="pf-lightbox" onClick={(e) => e.stopPropagation()}>
               <button type="button" className="pf-close" onClick={() => setPhoto(null)} aria-label="Close"><X size={20} /></button>
-              <img src={photo.photo_url} alt={photo.full_name} />
+              <img src={apiMediaUrl(photo.photo_url || photo.photo || photo.profile_photo)} alt={photo.full_name} />
               <p>{photo.full_name} · {photo.registration_number}</p>
             </div>
           </div>

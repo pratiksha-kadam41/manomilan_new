@@ -21,7 +21,7 @@ import AgeRangeFilter from "../components/AgeRangeFilter";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { useAdminPermission } from "../../permission-context";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
-import { request } from "../../api";
+import { request, apiMediaUrl } from "../../api";
 import "../components/admin-ui.css";
 import "./melavaPayments.css";
 
@@ -362,10 +362,10 @@ export default function MelavaPayments() {
                     <tr key={row.id}>
                       <td>
                         <div className="ui-person">
-                          {row.profile_photo_url ? (
-                            <span className="ui-avatar"><img src={row.profile_photo_url} alt="" loading="lazy" /></span>
+                          {(row.profile_photo_url || row.photo_url || row.profile_photo) ? (
+                            <span className="ui-avatar"><img src={apiMediaUrl(row.profile_photo_url || row.photo_url || row.profile_photo)} alt="" loading="lazy" /></span>
                           ) : (
-                            <span className="ui-avatar" aria-hidden="true">{name.trim().charAt(0).toUpperCase()}</span>
+                            <span className="ui-avatar">{initials(row.full_name)}</span>
                           )}
                           <span className="ui-person-text">
                             <strong>{name}</strong>

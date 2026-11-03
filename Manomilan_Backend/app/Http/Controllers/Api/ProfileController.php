@@ -1707,9 +1707,34 @@ class ProfileController extends Controller
         $employment = $profile->employments->sortByDesc('id')->first();
         $religion = $profile->religionDetails;
         $preference = $profile->partnerPreferences;
-        $photoPaths = is_array($profile->photos) ? $profile->photos : [];
-        $addresses = is_array($profile->addresses) ? $profile->addresses : [];
-        $profilePhoto = $photoPaths['profile_photo'] ?? $photoPaths[0] ?? null;
+        $photoPaths = is_array($profile->photos) ? $profile->photos : (is_string($profile->photos) && $profile->photos ? json_decode($profile->photos, true) : []);
+        if (! is_array($photoPaths)) {
+            $photoPaths = [];
+        }
+        $addresses = is_array($profile->addresses) ? $profile->addresses : (is_string($profile->addresses) && $profile->addresses ? json_decode($profile->addresses, true) : []);
+        if (! is_array($addresses)) {
+            $addresses = [];
+        }
+        $profilePhoto = $photoPaths['profile_photo'] ?? $photoPaths['profilePicture'] ?? $photoPaths[0] ?? $profile->profile_photo ?? null;
+
+        $normalizeList = function ($value) {
+            if (is_array($value)) {
+                return array_values(array_filter(array_map(fn ($item) => is_string($item) ? trim($item) : null, $value)));
+            }
+            if (! is_string($value) || trim($value) === '') {
+                return [];
+            }
+            $decoded = json_decode($value, true);
+            if (is_string($decoded)) {
+                $decoded = json_decode($decoded, true);
+            }
+            if (is_array($decoded)) {
+                return array_values(array_filter(array_map(fn ($item) => is_string($item) ? trim($item) : null, $decoded)));
+            }
+            return [trim($value)];
+        };
+
+        $additionalList = $photoPaths['additional_photos'] ?? $photoPaths['additionalPhotos'] ?? $normalizeList($profile->additional_photos ?? null);
 
         $data = [
             'id' => $profile->id,
@@ -1735,6 +1760,16 @@ class ProfileController extends Controller
             'education' => $education?->degree_name ?: $education?->education_level,
             'profession' => $employment?->profession,
             'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
+            'full_body_photo_url' => $this->fileUrl($photoPaths['full_body_photo'] ?? $profile->full_body_photo ?? null),
+            'half_body_photo_url' => $this->fileUrl($photoPaths['half_body_photo'] ?? $profile->half_body_photo ?? null),
+            'selfie_photo_url' => $this->fileUrl($photoPaths['selfie_photo'] ?? $profile->selfie_photo ?? null),
+            'profile_photo_url' => $this->fileUrl(is_string($profilePhoto) ? $profilePhoto : null),
+            'additional_photo_urls' => collect($additionalList)
+                ->map(fn ($path) => $this->fileUrl(is_string($path) ? $path : null))
+                ->filter()
+                ->values()
+                ->all(),
+            'photos' => $photoPaths,
         ];
 
         if ($detailed) {

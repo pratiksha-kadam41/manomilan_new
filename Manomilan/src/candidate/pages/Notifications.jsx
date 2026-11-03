@@ -12,7 +12,7 @@ import {
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
 import {
-  deleteNotification, getCandidateProfile, getNotifications,
+  deleteNotification, getCachedNotifications, getCandidateProfile, getNotifications,
   markAllNotificationsRead, markNotificationRead,
 } from "../api";
 import { dispatchNotificationsChanged, groupNotifications, timeAgo } from "../utils";
@@ -43,18 +43,22 @@ const iconFor = (type = "") => {
 
 export default function Notifications() {
   const cached = useMemo(() => getCachedHomeData(), []);
+  const initialNotifications = useMemo(
+    () => getCachedNotifications({ category: "all", filter: "all", page: 1, per_page: 12 }),
+    [],
+  );
   const [candidateInfo, setCandidateInfo] = useState({
     name: cached?.profile?.full_name || cached?.user?.name || cached?.user?.username,
     id: cached?.profile?.registration_number || cached?.profile?.profile_id || cached?.user?.username,
     photo: cached?.profile?.photo_url || "",
   });
-  const [items, setItems] = useState([]);
-  const [pagination, setPagination] = useState(null);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [items, setItems] = useState(initialNotifications?.notifications || []);
+  const [pagination, setPagination] = useState(initialNotifications?.pagination || null);
+  const [unreadCount, setUnreadCount] = useState(Number(initialNotifications?.unread_count) || 0);
   const [category, setCategory] = useState("all");
   const [filter, setFilter] = useState("all");
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialNotifications);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [markingAll, setMarkingAll] = useState(false);
@@ -66,15 +70,19 @@ export default function Notifications() {
 
   const load = useCallback(async () => {
     const requestId = ++loadRequestId.current;
-    setLoading(true);
+    const params = { category, filter, page, per_page: 12 };
+    const cachedNotifications = getCachedNotifications(params);
+    if (cachedNotifications) {
+      setItems(cachedNotifications.notifications || []);
+      setPagination(cachedNotifications.pagination || null);
+      setUnreadCount(Number(cachedNotifications.unread_count) || 0);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError("");
     try {
-      const result = await getNotifications({
-        category,
-        filter,
-        page,
-        per_page: 12,
-      });
+      const result = await getNotifications(params);
       if (requestId !== loadRequestId.current) return;
       setItems(result?.notifications || []);
       setPagination(result?.pagination || null);

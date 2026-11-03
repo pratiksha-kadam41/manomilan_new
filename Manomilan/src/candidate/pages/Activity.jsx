@@ -8,30 +8,44 @@ import {
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
-import { getCandidateProfile, getInterests, respondToInterest } from "../api";
+import {
+  getCachedInterests, getCandidateProfile, getInterests, respondToInterest,
+} from "../api";
 import { formatDate, text } from "../utils";
 
 export default function Activity({ currentPath, mode = "sent" }) {
   const cached = useMemo(() => getCachedHomeData(), []);
+  const initialInterests = useMemo(
+    () => getCachedInterests(mode, { q: "", page: 1, per_page: 10 }),
+    [mode],
+  );
   const [candidateInfo, setCandidateInfo] = useState({
     name: cached?.profile?.full_name || cached?.user?.name || cached?.user?.username,
     id: cached?.profile?.registration_number || cached?.profile?.profile_id || cached?.user?.username,
     photo: cached?.profile?.photo_url || "",
   });
-  const [records, setRecords] = useState([]);
-  const [pagination, setPagination] = useState(null);
-  const [counts, setCounts] = useState({});
+  const [records, setRecords] = useState(initialInterests?.interests || []);
+  const [pagination, setPagination] = useState(initialInterests?.pagination || null);
+  const [counts, setCounts] = useState(initialInterests?.counts || {});
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialInterests);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
   const [responding, setResponding] = useState({});
   const { toasts, dismiss } = useToasts();
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const cachedInterests = getCachedInterests(mode, { q: query, page, per_page: 10 });
+    if (cachedInterests) {
+      setRecords(cachedInterests.interests || []);
+      setPagination(cachedInterests.pagination || null);
+      setCounts(cachedInterests.counts || {});
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError("");
     try {
       const [profileResult, interestsResult] = await Promise.all([

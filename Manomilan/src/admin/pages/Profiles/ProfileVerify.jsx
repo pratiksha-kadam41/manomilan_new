@@ -4,7 +4,7 @@ import {
   Eye, ArrowLeft, Save, Loader2, AlertTriangle, CheckCircle2, Clock, XCircle, Ban,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
-import { request } from "../../../api";
+import { apiMediaUrl, request } from "../../../api";
 import { useAdminPermission } from "../../../permission-context";
 import "./verify.css";
 
@@ -40,7 +40,7 @@ const STATUSES = [
    Load:  GET  /profiles/:id/verification
    Save:  POST /profiles/:id/verify
    ===================================================================== */
-const LINKS = { back: "/admin/profiles" };
+const LINKS = { back: "/admin/unverified-profiles" };
 const MAX_REMARKS = 255;
 
 /* ---- Security helpers ---- */
@@ -89,11 +89,12 @@ const isImageUrl = (url) => /\.(?:jpe?g|png|gif|webp|bmp|svg)(?:[?#].*)?$/i.test
 
 function Photo({ profile }) {
   const [broken, setBroken] = useState(false);
-  if (!profile.photo_url || broken)
-    return <div className="pv-photo pv-photo-fallback">{initials(profile.full_name)}</div>;
+  const photoSrc = apiMediaUrl(profile.photo_url || profile.photo || profile.profile_photo);
+  if (!photoSrc || broken)
+    return <div className="pv-avatar" aria-hidden="true">{initials(profile.full_name)}</div>;
   return (
-    <div className="pv-photo">
-      <img src={profile.photo_url} alt={profile.full_name} onError={() => setBroken(true)} />
+    <div className="pv-avatar">
+      <img src={photoSrc} alt={profile.full_name} onError={() => setBroken(true)} />
     </div>
   );
 }
@@ -140,7 +141,7 @@ export default function ProfileVerify({ params }) {
         full_name: data.profile?.full_name || data.profile?.fullName || "Unnamed profile",
         registration_number: data.profile?.registration_number || "N/A",
         registration_date: data.profile?.registration_date || "N/A",
-        photo_url: safeUrl(
+        photo_url: apiMediaUrl(
           data.profile?.photo_url
           || data.profile?.profile_photo
           || data.profile?.photo
@@ -200,7 +201,7 @@ export default function ProfileVerify({ params }) {
   const percent = Math.round((counts.verified / total) * 100);
 
   return (
-    <AdminLayout currentPath="/admin/profiles">
+    <AdminLayout currentPath="/admin/unverified-profiles">
       <div className="pv-page">
         {/* ---------- Profile summary ---------- */}
         <section className="pv-card pv-profile">

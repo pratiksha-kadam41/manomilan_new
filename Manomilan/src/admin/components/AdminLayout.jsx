@@ -4,9 +4,17 @@ import { clearSession, getSession } from "../../auth";
 import Sidebar from "./Sidebar";
 import "../admin.css";
 
+const SIDEBAR_WIDTH_KEY = "adm_sidebar_collapsed";
+
 export default function AdminLayout({ currentPath, contentClassName = "", children }) {
   const session = getSession();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_WIDTH_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
@@ -30,6 +38,12 @@ export default function AdminLayout({ currentPath, contentClassName = "", childr
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [mobileOpen]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, collapsed ? "1" : "0");
+    } catch {}
+  }, [collapsed]);
+
   const handleLogout = () => {
     setMenuOpen(false);
     clearSession();
@@ -42,7 +56,7 @@ export default function AdminLayout({ currentPath, contentClassName = "", childr
   };
 
   const toggleNavigation = () => {
-    if (window.matchMedia("(max-width: 768px)").matches) {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 1024px)").matches) {
       setMobileOpen((open) => !open);
       return;
     }
@@ -72,7 +86,7 @@ export default function AdminLayout({ currentPath, contentClassName = "", childr
             onClick={toggleNavigation}
             aria-label="Toggle navigation menu"
             aria-expanded={
-              window.matchMedia("(max-width: 768px)").matches
+              typeof window !== "undefined" && window.matchMedia("(max-width: 1024px)").matches
                 ? mobileOpen
                 : !collapsed
             }

@@ -1,5 +1,5 @@
 import { apiMediaUrl, request } from "../api";
-import { updateCachedUserProfile } from "../auth";
+import { getSession, updateCachedUserProfile } from "../auth";
 
 const normalizeCandidateMedia = (value, key = "") => {
   if (Array.isArray(value)) {
@@ -31,10 +31,85 @@ let matchCache = new Map();
 let matchRequestCache = new Map();
 
 const CANDIDATE_PROFILE_CACHE_MS = 5 * 60 * 1000;
-const MATCHES_CACHE_MS = 30 * 1000;
+const MATCHES_CACHE_MS = 5 * 60 * 1000;
 const DASHBOARD_CACHE_KEY = "candidate_dashboard_cache";
 const DASHBOARD_CACHE_MS = 60 * 60 * 1000;
+const CANDIDATE_QUERY_CACHE_PREFIX = "candidate_query_cache:";
+const CANDIDATE_QUERY_CACHE_MS = 5 * 60 * 1000;
 let dashboardRequest = null;
+
+const queryString = (params) => new URLSearchParams(
+  Object.entries(params).filter(([, value]) => value !== "" && value != null),
+).toString();
+
+const readQueryCache = (key, allowStale = false) => {
+  try {
+    const user = getSession()?.user;
+    const namespace = user?.id || user?.username || "session";
+    const storageKey = `${CANDIDATE_QUERY_CACHE_PREFIX}${encodeURIComponent(namespace)}:${key}`;
+    const cached = JSON.parse(sessionStorage.getItem(storageKey));
+    if (
+      cached?.savedAt &&
+      (allowStale || Date.now() - cached.savedAt < CANDIDATE_QUERY_CACHE_MS)
+    ) {
+      return cached.data;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+const writeQueryCache = (key, result) => {
+  try {
+    const user = getSession()?.user;
+    const namespace = user?.id || user?.username || "session";
+    sessionStorage.setItem(`${CANDIDATE_QUERY_CACHE_PREFIX}${encodeURIComponent(namespace)}:${key}`, JSON.stringify({
+      savedAt: Date.now(),
+      data: result,
+    }));
+  } catch {
+    return;
+  }
+};
+
+const clearQueryCache = (prefix) => {
+  try {
+    const user = getSession()?.user;
+    const namespace = user?.id || user?.username || "session";
+    const keys = [];
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (key?.startsWith(`${CANDIDATE_QUERY_CACHE_PREFIX}${encodeURIComponent(namespace)}:${prefix}`)) keys.push(key);
+    }
+    keys.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    return;
+  }
+};
+
+const interestCacheKey = (mode = "sent", params = {}) =>
+  `interests:${mode}:${queryString(params)}`;
+const notificationCacheKey = (params = {}) => `notifications:${queryString(params)}`;
+
+export const getCachedMatches = (params = {}) => {
+  const query = queryString(params);
+  const cached = matchesCache.get(query || "__default__");
+  if (cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
+  return readQueryCache(`matches:${query}`, true);
+};
+
+export const getCachedInterests = (mode = "sent", params = {}) =>
+  readQueryCache(interestCacheKey(mode, params), true);
+
+export const getCachedNotifications = (params = {}) =>
+  readQueryCache(notificationCacheKey(params), true);
+
+export const peekCandidateProfile = () => (
+  candidateProfileCache && Date.now() - candidateProfileCachedAt < CANDIDATE_PROFILE_CACHE_MS
+    ? candidateProfileCache
+    : null
+);
 
 export const readDashboardCache = () => {
   try {
@@ -76,6 +151,7 @@ export const getCandidateProfile = async () => {
 export const invalidateCandidateProfileCache = () => {
   candidateProfileCache = null;
   candidateProfileCachedAt = 0;
+  clearQueryCache("");
 };
 
 const notifyCandidateProfileChanged = (result) => {
@@ -175,13 +251,16 @@ export const savePreferences = async (payload) =>
   );
 
 export const getMatches = async (params = {}, { signal } = {}) => {
-  const query = new URLSearchParams(
-    Object.entries(params).filter(([, value]) => value !== "" && value != null),
-  ).toString();
+  const query = queryString(params);
   const cacheKey = query || "__default__";
   const cached = matchesCache.get(cacheKey);
   if (cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
   if (cached) matchesCache.delete(cacheKey);
+  const persisted = readQueryCache(`matches:${query}`);
+  if (persisted) {
+    matchesCache.set(cacheKey, { result: persisted, cachedAt: Date.now() });
+    return persisted;
+  }
 
   const cacheVersion = matchesCacheVersion;
   const path = `/candidate/matches${query ? `?${query}` : ""}`;
@@ -189,6 +268,7 @@ export const getMatches = async (params = {}, { signal } = {}) => {
     const result = data(await request(path, { signal }));
     if (cacheVersion === matchesCacheVersion) {
       matchesCache.set(cacheKey, { result, cachedAt: Date.now() });
+      writeQueryCache(`matches:${query}`, result);
     }
     return result;
   }
@@ -199,6 +279,7 @@ export const getMatches = async (params = {}, { signal } = {}) => {
       .then((result) => {
         if (cacheVersion === matchesCacheVersion) {
           matchesCache.set(cacheKey, { result, cachedAt: Date.now() });
+          writeQueryCache(`matches:${query}`, result);
         }
         return result;
       })
@@ -228,14 +309,18 @@ export const invalidateMatchesCache = () => {
   matchesCacheVersion += 1;
   matchesCache.clear();
   matchCache.clear();
+  clearQueryCache("matches:");
 };
 
 export const getInterests = async (mode = "sent", params = {}) => {
   const path = mode === "received" ? "/candidate/interests/received" : "/candidate/interests/sent";
-  const query = new URLSearchParams(
-    Object.entries(params).filter(([, value]) => value !== "" && value != null),
-  ).toString();
-  return data(await request(`${path}${query ? `?${query}` : ""}`));
+  const query = queryString(params);
+  const cacheKey = interestCacheKey(mode, params);
+  const cached = readQueryCache(cacheKey);
+  if (cached) return cached;
+  const result = data(await request(`${path}${query ? `?${query}` : ""}`));
+  writeQueryCache(cacheKey, result);
+  return result;
 };
 
 export const sendInterest = async (profileId) => {
@@ -244,31 +329,53 @@ export const sendInterest = async (profileId) => {
     body: { to_profile_id: profileId },
   }));
   invalidateMatchesCache();
+  clearQueryCache("interests:");
   matchRequestCache.clear();
   return result;
 };
 
-export const respondToInterest = async (id, status) =>
-  data(await request(`/candidate/interests/${id}/respond`, {
+export const respondToInterest = async (id, status) => {
+  const result = data(await request(`/candidate/interests/${id}/respond`, {
     method: "POST",
     body: { status },
   }));
-
-export const getNotifications = async (params = {}) => {
-  const query = new URLSearchParams(
-    Object.entries(params).filter(([, value]) => value !== "" && value != null),
-  ).toString();
-  return data(await request(`/candidate/notifications${query ? `?${query}` : ""}`));
+  clearQueryCache("interests:");
+  return result;
 };
 
-export const getUnreadNotificationCount = async () =>
-  data(await request("/candidate/notifications/unread-count"));
+export const getNotifications = async (params = {}) => {
+  const query = queryString(params);
+  const cacheKey = notificationCacheKey(params);
+  const cached = readQueryCache(cacheKey);
+  if (cached) return cached;
+  const result = data(await request(`/candidate/notifications${query ? `?${query}` : ""}`));
+  writeQueryCache(cacheKey, result);
+  return result;
+};
 
-export const markNotificationRead = async (id) =>
-  data(await request(`/candidate/notifications/${id}/read`, { method: "POST" }));
+export const getUnreadNotificationCount = async () => {
+  const cacheKey = "notifications:unread-count";
+  const cached = readQueryCache(cacheKey);
+  if (cached) return cached;
+  const result = data(await request("/candidate/notifications/unread-count"));
+  writeQueryCache(cacheKey, result);
+  return result;
+};
 
-export const markAllNotificationsRead = async () =>
-  data(await request("/candidate/notifications/read-all", { method: "POST" }));
+export const markNotificationRead = async (id) => {
+  const result = data(await request(`/candidate/notifications/${id}/read`, { method: "POST" }));
+  clearQueryCache("notifications:");
+  return result;
+};
 
-export const deleteNotification = async (id) =>
-  data(await request(`/candidate/notifications/${id}`, { method: "DELETE" }));
+export const markAllNotificationsRead = async () => {
+  const result = data(await request("/candidate/notifications/read-all", { method: "POST" }));
+  clearQueryCache("notifications:");
+  return result;
+};
+
+export const deleteNotification = async (id) => {
+  const result = data(await request(`/candidate/notifications/${id}`, { method: "DELETE" }));
+  clearQueryCache("notifications:");
+  return result;
+};

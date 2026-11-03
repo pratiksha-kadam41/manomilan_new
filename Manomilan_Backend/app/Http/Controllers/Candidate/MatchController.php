@@ -8,7 +8,6 @@ use App\UserInterest;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Throwable;
 
 class MatchController extends CandidateController
@@ -35,13 +34,14 @@ class MatchController extends CandidateController
                 'per_page' => ['nullable', 'integer', 'min:6', 'max:48'],
             ]);
 
-            $opposite = $me->groomOrBride === 'groom' ? 'bride' : 'groom';
+            $opposite = $this->profileGender($me) === 'groom' ? 'bride' : 'groom';
 
             $query = Profile::query()
-                ->where('groomOrBride', $opposite)
-                ->where('active', 'active')
+                ->with(['educations', 'employments', 'religionDetails', 'familyDetails'])
+                ->where('groomorbride', ucfirst($opposite))
+                ->where('status', 'active')
                 ->where('id', '!=', $me->id)
-                ->whereNotNull('fullName');
+                ->whereNotNull('full_name');
 
             $this->applyFilters($query, $filters);
 
@@ -52,9 +52,9 @@ class MatchController extends CandidateController
             if ($sort === 'newest') {
                 $query->orderByDesc('id');
             } elseif ($sort === 'age_asc') {
-                $query->orderBy('birthDate', 'desc');
+                $query->orderBy('birth_date', 'desc');
             } elseif ($sort === 'age_desc') {
-                $query->orderBy('birthDate', 'asc');
+                $query->orderBy('birth_date', 'asc');
             }
 
             if ($sort !== 'best_match') {
@@ -126,7 +126,9 @@ class MatchController extends CandidateController
             $user = $this->candidate($request);
             $me = $this->candidateProfile($request, true);
 
-            $profile = Profile::where('active', 'active')->find($id);
+            $profile = Profile::with(['educations', 'employments', 'religionDetails', 'familyDetails'])
+                ->where('status', 'active')
+                ->find($id);
 
             if (! $profile) {
                 return response()->json([
@@ -174,44 +176,52 @@ class MatchController extends CandidateController
         if (! empty($filters['q'])) {
             $term = '%'.trim($filters['q']).'%';
             $query->where(function (Builder $inner) use ($term) {
-                foreach (['fullName', 'profile_id', 'registration_number', 'profession', 'organisationWorkingIn', 'professionalCity', 'location'] as $column) {
+                foreach (['full_name', 'reg_id', 'phone', 'email', 'birth_place', 'about_me'] as $column) {
                     $inner->orWhere($column, 'like', $term);
                 }
             });
         }
 
         if (! empty($filters['age_min'])) {
-            $query->whereDate('birthDate', '<=', Carbon::now()->subYears((int) $filters['age_min'])->toDateString());
+            $query->whereDate('birth_date', '<=', Carbon::now()->subYears((int) $filters['age_min'])->toDateString());
         }
 
         if (! empty($filters['age_max'])) {
-            $query->whereDate('birthDate', '>=', Carbon::now()->subYears((int) $filters['age_max'] + 1)->addDay()->toDateString());
+            $query->whereDate('birth_date', '>=', Carbon::now()->subYears((int) $filters['age_max'] + 1)->addDay()->toDateString());
         }
 
-        foreach ([
-            'religion' => 'religion',
-            'caste' => 'caste',
-            'marital_status' => 'maritalStatus',
-        ] as $filter => $column) {
+        foreach (['religion', 'caste'] as $filter) {
             if (! empty($filters[$filter])) {
-                $query->where($column, $filters[$filter]);
+                $query->whereHas('religionDetails', fn (Builder $details) => $details
+                    ->where($filter, $filters[$filter]));
             }
         }
 
+        if (! empty($filters['marital_status'])) {
+            $query->where('marital_status', $filters['marital_status']);
+        }
+
         if (! empty($filters['education'])) {
-            $query->where('education', 'like', '%'.$filters['education'].'%');
+            $education = '%'.$filters['education'].'%';
+            $query->whereHas('educations', fn (Builder $details) => $details
+                ->where('education_level', 'like', $education)
+                ->orWhere('degree_name', 'like', $education));
         }
 
         if (! empty($filters['profession'])) {
-            $query->where('profession', 'like', '%'.trim($filters['profession']).'%');
+            $profession = '%'.trim($filters['profession']).'%';
+            $query->whereHas('employments', fn (Builder $details) => $details
+                ->where('profession', 'like', $profession)
+                ->orWhere('working_field', 'like', $profession));
         }
 
         if (! empty($filters['city'])) {
             $city = '%'.trim($filters['city']).'%';
             $query->where(function (Builder $inner) use ($city) {
-                $inner->where('location', 'like', $city)
-                    ->orWhere('professionalCity', 'like', $city)
-                    ->orWhere('cityOfEducation', 'like', $city);
+                $inner->where('birth_place', 'like', $city)
+                    ->orWhere('addresses->current->city', 'like', $city)
+                    ->orWhereHas('employments', fn (Builder $details) => $details
+                        ->where('employment_city', 'like', $city));
             });
         }
     }
@@ -219,33 +229,39 @@ class MatchController extends CandidateController
     private function filterOptions(string $opposite): array
     {
         $base = fn () => Profile::query()
-            ->where('groomOrBride', $opposite)
-            ->where('active', 'active');
-
-        $values = function (string $column) use ($base) {
-            return $base()
-                ->whereNotNull($column)
-                ->where($column, '!=', '')
-                ->distinct()
-                ->orderBy($column)
-                ->limit(120)
-                ->pluck($column)
-                ->values();
-        };
+            ->where('groomorbride', ucfirst($opposite))
+            ->where('status', 'active');
 
         return [
-            'religions' => $values('religion'),
-            'castes' => $values('caste'),
+            'religions' => \App\ProfileReligionDetail::query()
+                ->whereHas('profile', fn (Builder $query) => $query
+                    ->where('groomorbride', ucfirst($opposite))
+                    ->where('status', 'active'))
+                ->whereNotNull('religion')->where('religion', '!=', '')
+                ->distinct()->orderBy('religion')->limit(120)->pluck('religion')->values(),
+            'castes' => \App\ProfileReligionDetail::query()
+                ->whereHas('profile', fn (Builder $query) => $query
+                    ->where('groomorbride', ucfirst($opposite))
+                    ->where('status', 'active'))
+                ->whereNotNull('caste')->where('caste', '!=', '')
+                ->distinct()->orderBy('caste')->limit(120)->pluck('caste')->values(),
             'cities' => $base()
-                ->whereNotNull('location')
-                ->where('location', '!=', '')
+                ->whereNotNull('birth_place')
+                ->where('birth_place', '!=', '')
                 ->distinct()
-                ->orderBy('location')
+                ->orderBy('birth_place')
                 ->limit(120)
-                ->pluck('location')
+                ->pluck('birth_place')
                 ->values(),
-            'educations' => $values('education'),
-            'marital_statuses' => $values('maritalStatus'),
+            'educations' => \App\ProfileEducation::query()
+                ->whereHas('profile', fn (Builder $query) => $query
+                    ->where('groomorbride', ucfirst($opposite))
+                    ->where('status', 'active'))
+                ->whereNotNull('education_level')->where('education_level', '!=', '')
+                ->distinct()->orderBy('education_level')->limit(120)->pluck('education_level')->values(),
+            'marital_statuses' => $base()
+                ->whereNotNull('marital_status')->where('marital_status', '!=', '')
+                ->distinct()->orderBy('marital_status')->limit(120)->pluck('marital_status')->values(),
         ];
     }
 }

@@ -571,9 +571,194 @@ class Profile extends Model
      */
     public function calculateCompletionPercentage()
     {
+        $this->loadMissing(['user', 'familyDetails', 'educations', 'employments', 'religionDetails', 'profileDocuments', 'partnerPreferences']);
+
+        $photos = is_array($this->photos) ? $this->photos : (is_string($this->photos) && $this->photos ? json_decode($this->photos, true) : []);
+        if (! is_array($photos)) {
+            $photos = [];
+        }
+
+        $addresses = is_array($this->addresses) ? $this->addresses : (is_string($this->addresses) && $this->addresses ? json_decode($this->addresses, true) : []);
+        if (! is_array($addresses)) {
+            $addresses = [];
+        }
+
+        $religion = $this->religionDetails;
+        $family = $this->familyDetails;
+        $education = $this->educations?->sortByDesc('id')->first();
+        $employment = $this->employments?->sortByDesc('id')->first();
+        $docs = $this->profileDocuments;
+        $preference = $this->partnerPreferences ?: optional($this->user)->preference;
+
+        $get = function (string $field) use ($photos, $addresses, $religion, $family, $education, $employment, $docs) {
+            switch ($field) {
+                case 'phone':
+                    return $this->phone ?: optional($this->user)->username;
+                case 'fullName':
+                    return $this->full_name;
+                case 'source_of_information':
+                    return $this->source_of_information;
+                case 'profilePhoto':
+                    return $photos['profile_photo'] ?? $photos[0] ?? null;
+                case 'full_body_photo':
+                    return $photos['full_body_photo'] ?? null;
+                case 'half_body_photo':
+                    return $photos['half_body_photo'] ?? null;
+                case 'selfie_photo':
+                    return $photos['selfie_photo'] ?? null;
+                case 'groomOrBride':
+                    return $this->groomorbride;
+                case 'religion':
+                    return $religion?->religion;
+                case 'caste':
+                    return $religion?->caste;
+                case 'subCaste':
+                    return $religion?->sub_caste;
+                case 'maritalStatus':
+                    return $this->marital_status;
+                case 'birthDate':
+                    return $this->birth_date;
+                case 'height':
+                    return $this->height_cm;
+                case 'weight':
+                    return $this->weight_kg;
+                case 'havingSpecsLenses':
+                    return $this->has_spectacles;
+                case 'bloodGroup':
+                    return $this->blood_group;
+                case 'motherTongue':
+                    return $this->mother_tongue;
+                case 'language':
+                    return $this->languages;
+                case 'specialCases':
+                    return $this->special_cases;
+                case 'knowAboutMyself':
+                    return $this->about_me;
+                case 'address':
+                    return $addresses['current']['address'] ?? ($addresses['address'] ?? null);
+                case 'permanent_address':
+                    return $addresses['permanent']['address'] ?? ($addresses['permanent_address'] ?? null);
+                case 'timeOfBirth':
+                    return $this->birth_time;
+                case 'placeOfBirth':
+                    return $this->birth_place;
+                case 'education':
+                    return $education?->education_level ?: $education?->degree_name;
+                case 'degreeDiplomaName1':
+                    return $education?->degree_name;
+                case 'degreeDiplomaName2':
+                    return null;
+                case 'specialisation1':
+                    return $education?->specialization;
+                case 'specialisation2':
+                    return null;
+                case 'universityBoardCollege':
+                    return $education?->university_name ?: $education?->college_name;
+                case 'additionalEducation1':
+                    return $education?->additional_qualification;
+                case 'additionalEducation2':
+                    return null;
+                case 'cityOfEducation':
+                    return $education?->education_city;
+                case 'profession':
+                    return $employment?->profession;
+                case 'fieldOfWorking':
+                    return $employment?->working_field;
+                case 'organisationWorkingIn':
+                    return $employment?->organisation_name;
+                case 'professionalCity':
+                    return $employment?->employment_city;
+                case 'designation':
+                    return $employment?->designation;
+                case 'lengthOfEmployment':
+                    return $employment?->employment_duration;
+                case 'monthlyIncome':
+                    return $employment?->monthly_income ?? $this->monthly_income;
+                case 'annualIncome':
+                    return $employment?->annual_income ?? $this->annual_income;
+                case 'hasMedicalHistory':
+                    return $this->has_medical_history;
+                case 'fathersName':
+                    return $family?->father_name;
+                case 'fatherAlive':
+                    return $family?->father_status;
+                case 'fathersNativePlace':
+                    return $family?->father_native_place;
+                case 'fathersOccupation':
+                    return $family?->father_occupation;
+                case 'fatherContactNumber':
+                    return $family?->father_contact;
+                case 'mothersName':
+                    return $family?->mother_name;
+                case 'motherAlive':
+                    return $family?->mother_status;
+                case 'mothersNativePlace':
+                    return $family?->mother_native_place;
+                case 'mothersOccupation':
+                    return $family?->mother_occupation;
+                case 'motherContactNumber':
+                    return $family?->mother_contact;
+                case 'noOfBrothers':
+                    return $family?->brothers_count;
+                case 'noOfSisters':
+                    return $family?->sisters_count;
+                case 'brothersMarried':
+                    return $family?->married_brothers_count;
+                case 'sistersMarried':
+                    return $family?->married_sisters_count;
+                case 'parentsIntercasteMarriage':
+                    return $family?->parents_intercaste_marriage;
+                case 'parentsDifferentCaste':
+                    return $family?->parents_different_caste_details;
+                case 'familyValues':
+                    return $family?->family_values;
+                case 'familyFinancialStatus':
+                    return $family?->family_financial_status;
+                case 'familyAnnualIncome':
+                    return $family?->family_annual_income;
+                case 'profileCreatorName':
+                    return $this->profile_creator_name ?: ($addresses['metadata']['profile_creator_name'] ?? null);
+                case 'profileCreatorRelation':
+                    return $this->creator_relation ?: ($addresses['reference']['relation'] ?? null);
+                case 'referenceName':
+                    return $addresses['reference']['name'] ?? null;
+                case 'referenceRelation':
+                    return $addresses['reference']['relation'] ?? null;
+                case 'referenceAddress':
+                    return $addresses['reference']['address'] ?? null;
+                case 'referenceContactNumber':
+                    return $addresses['reference']['contact'] ?? null;
+                case 'referenceEmail':
+                    return $addresses['reference']['email'] ?? null;
+                case 'identificationProof':
+                    return $docs?->aadhaar_card ?: $docs?->pan_card ?: $docs?->passport;
+                case 'birthDateProof':
+                    return $docs?->birth_certificate;
+                case 'addressProof':
+                    return $docs?->address_proof;
+                case 'educationProof':
+                    return $docs->education_certificate ?? ($education?->education_certificate ?? null);
+                case 'professionProof':
+                    return $docs?->profession_proof;
+                case 'incomeProof':
+                    return $docs?->income_proof;
+                case 'casteCertificate':
+                    return $docs?->caste_certificate;
+                case 'medicalFitnessCertificate':
+                    return $docs?->medical_fitness_certificate;
+                case 'personalMedicalHistory':
+                    return $this->personal_medical_history;
+                case 'currentMedicalProblems':
+                    return $this->current_medical_problems;
+                case 'medications':
+                    return $this->medications;
+                default:
+                    return $this->{$field} ?? null;
+            }
+        };
+
         $allFields = [
-            // Basic Details
-            'phone', // Mobile Number
+            'phone',
             'fullName',
             'source_of_information',
             'profilePhoto',
@@ -595,10 +780,8 @@ class Profile extends Model
             'knowAboutMyself',
             'address',
             'permanent_address',
-            // Horoscope Details
             'timeOfBirth',
             'placeOfBirth',
-            // Educational Details
             'education',
             'degreeDiplomaName1',
             'degreeDiplomaName2',
@@ -608,7 +791,6 @@ class Profile extends Model
             'additionalEducation1',
             'additionalEducation2',
             'cityOfEducation',
-            // Professional Details
             'profession',
             'fieldOfWorking',
             'organisationWorkingIn',
@@ -617,9 +799,7 @@ class Profile extends Model
             'lengthOfEmployment',
             'monthlyIncome',
             'annualIncome',
-            // Medical Details
             'hasMedicalHistory',
-            // Family Details
             'fathersName',
             'fatherAlive',
             'fathersNativePlace',
@@ -634,13 +814,11 @@ class Profile extends Model
             'familyAnnualIncome',
             'profileCreatorName',
             'profileCreatorRelation',
-            // Reference Person's Details
             'referenceName',
             'referenceRelation',
             'referenceAddress',
             'referenceContactNumber',
             'referenceEmail',
-            // Document Details
             'identificationProof',
             'birthDateProof',
             'addressProof',
@@ -656,43 +834,42 @@ class Profile extends Model
 
         foreach ($allFields as $field) {
             $totalCount++;
-            if ($this->isFieldFilled($this->$field)) {
+            if ($this->isFieldFilled($get($field))) {
                 $filledCount++;
             }
         }
 
-        // Conditional profile fields – only counted when they apply.
         $conditionalFields = [];
 
-        if (in_array($this->caste, ['Shwetambar', 'Digambar'], true)) {
+        if (in_array($religion?->caste ?: $this->caste, ['Shwetambar', 'Digambar'], true)) {
             $conditionalFields[] = 'subCaste';
         }
-        if ($this->fatherAlive === 'Yes') {
+        if (in_array($family?->father_status ?: $this->fatherAlive, ['Yes', 'Alive'], true)) {
             $conditionalFields[] = 'fathersOccupation';
             $conditionalFields[] = 'fatherContactNumber';
         }
-        if ($this->motherAlive === 'Yes') {
+        if (in_array($family?->mother_status ?: $this->motherAlive, ['Yes', 'Alive'], true)) {
             $conditionalFields[] = 'mothersOccupation';
             $conditionalFields[] = 'motherContactNumber';
         }
-        if ($this->hasMedicalHistory === 'Yes') {
+        if ($this->has_medical_history) {
             $conditionalFields[] = 'personalMedicalHistory';
             $conditionalFields[] = 'currentMedicalProblems';
             $conditionalFields[] = 'medications';
         }
-        if ($this->parentsIntercasteMarriage === 'Yes') {
+        if ($family && $family->parents_intercaste_marriage) {
             $conditionalFields[] = 'parentsDifferentCaste';
         }
-        if ((int) $this->noOfBrothers > 0) {
+        if ((int) ($family?->brothers_count ?? 0) > 0) {
             $conditionalFields[] = 'brothersMarried';
         }
-        if ((int) $this->noOfSisters > 0) {
+        if ((int) ($family?->sisters_count ?? 0) > 0) {
             $conditionalFields[] = 'sistersMarried';
         }
 
         foreach ($conditionalFields as $field) {
             $totalCount++;
-            if ($this->isFieldFilled($this->$field)) {
+            if ($this->isFieldFilled($get($field))) {
                 $filledCount++;
             }
         }
@@ -764,8 +941,124 @@ class Profile extends Model
 
     public function missingMandatoryFields(): array
     {
+        $this->loadMissing(['user', 'familyDetails', 'educations', 'employments', 'religionDetails', 'profileDocuments', 'partnerPreferences']);
+
+        $photos = is_array($this->photos) ? $this->photos : (is_string($this->photos) && $this->photos ? json_decode($this->photos, true) : []);
+        if (! is_array($photos)) {
+            $photos = [];
+        }
+        $addresses = is_array($this->addresses) ? $this->addresses : (is_string($this->addresses) && $this->addresses ? json_decode($this->addresses, true) : []);
+        if (! is_array($addresses)) {
+            $addresses = [];
+        }
+
+        $religion = $this->religionDetails;
+        $family = $this->familyDetails;
+        $education = $this->educations?->sortByDesc('id')->first();
+        $employment = $this->employments?->sortByDesc('id')->first();
+        $docs = $this->profileDocuments;
+
+        $get = function (string $field) use ($photos, $addresses, $religion, $family, $education, $employment, $docs) {
+            switch ($field) {
+                case 'phone':
+                    return $this->phone ?: optional($this->user)->username;
+                case 'fullName':
+                    return $this->full_name;
+                case 'source_of_information':
+                    return $this->source_of_information;
+                case 'groomOrBride':
+                    return $this->groomorbride;
+                case 'religion':
+                    return $religion?->religion;
+                case 'caste':
+                    return $religion?->caste;
+                case 'subCaste':
+                    return $religion?->sub_caste;
+                case 'maritalStatus':
+                    return $this->marital_status;
+                case 'birthDate':
+                    return $this->birth_date;
+                case 'height':
+                    return $this->height_cm;
+                case 'weight':
+                    return $this->weight_kg;
+                case 'bloodGroup':
+                    return $this->blood_group;
+                case 'motherTongue':
+                    return $this->mother_tongue;
+                case 'address':
+                    return $addresses['current']['address'] ?? ($addresses['address'] ?? null);
+                case 'permanent_address':
+                    return $addresses['permanent']['address'] ?? ($addresses['permanent_address'] ?? null);
+                case 'timeOfBirth':
+                    return $this->birth_time;
+                case 'placeOfBirth':
+                    return $this->birth_place;
+                case 'education':
+                    return $education?->education_level ?: $education?->degree_name;
+                case 'degreeDiplomaName1':
+                    return $education?->degree_name;
+                case 'profession':
+                    return $employment?->profession;
+                case 'fieldOfWorking':
+                    return $employment?->working_field;
+                case 'professionalCity':
+                    return $employment?->employment_city;
+                case 'monthlyIncome':
+                    return $employment?->monthly_income ?? $this->monthly_income;
+                case 'fathersName':
+                    return $family?->father_name;
+                case 'fatherAlive':
+                    return $family?->father_status;
+                case 'fathersOccupation':
+                    return $family?->father_occupation;
+                case 'fatherContactNumber':
+                    return $family?->father_contact;
+                case 'mothersName':
+                    return $family?->mother_name;
+                case 'motherAlive':
+                    return $family?->mother_status;
+                case 'mothersOccupation':
+                    return $family?->mother_occupation;
+                case 'motherContactNumber':
+                    return $family?->mother_contact;
+                case 'noOfBrothers':
+                    return $family?->brothers_count;
+                case 'noOfSisters':
+                    return $family?->sisters_count;
+                case 'brothersMarried':
+                    return $family?->married_brothers_count;
+                case 'sistersMarried':
+                    return $family?->married_sisters_count;
+                case 'parentsIntercasteMarriage':
+                    return $family?->parents_intercaste_marriage;
+                case 'parentsDifferentCaste':
+                    return $family?->parents_different_caste_details;
+                case 'referenceName':
+                    return $addresses['reference']['name'] ?? null;
+                case 'referenceRelation':
+                    return $addresses['reference']['relation'] ?? null;
+                case 'referenceContactNumber':
+                    return $addresses['reference']['contact'] ?? null;
+                case 'profilePhoto':
+                    return $photos['profile_photo'] ?? null;
+                case 'full_body_photo':
+                    return $photos['full_body_photo'] ?? null;
+                case 'half_body_photo':
+                    return $photos['half_body_photo'] ?? null;
+                case 'selfie_photo':
+                    return $photos['selfie_photo'] ?? null;
+                case 'identificationProof':
+                    return $docs?->aadhaar_card ?: $docs?->pan_card ?: $docs?->passport;
+                case 'birthDateProof':
+                    return $docs?->birth_certificate;
+                default:
+                    return null;
+            }
+        };
+
         $mandatoryFields = [
-            'phone', // Mobile Number
+            'phone',
             'fullName',
             'source_of_information',
             'groomOrBride',
@@ -800,48 +1093,42 @@ class Profile extends Model
 
         $missing = [];
         foreach ($mandatoryFields as $field) {
-            if (!$this->isFieldFilled($this->$field)) {
+            if (!$this->isFieldFilled($get($field))) {
                 $missing[] = $field;
             }
         }
 
-        // Profile photo and proofs are marked mandatory in the registration form.
-        if (empty($this->profilePhoto)) {
+        if (!$this->isFieldFilled($get('profilePhoto'))) {
             $missing[] = 'profilePhoto';
         }
-
         foreach (['full_body_photo', 'half_body_photo', 'selfie_photo'] as $photoField) {
-            if (empty($this->{$photoField})) {
+            if (!$this->isFieldFilled($get($photoField))) {
                 $missing[] = $photoField;
             }
         }
-
-        if (empty($this->identificationProof) || empty($this->birthDateProof)) {
-            if (empty($this->identificationProof)) $missing[] = 'identificationProof';
-            if (empty($this->birthDateProof)) $missing[] = 'birthDateProof';
+        if (!$this->isFieldFilled($get('identificationProof'))) {
+            $missing[] = 'identificationProof';
+        }
+        if (!$this->isFieldFilled($get('birthDateProof'))) {
+            $missing[] = 'birthDateProof';
         }
 
-        if (in_array($this->caste, ['Shwetambar', 'Digambar'], true) && empty($this->subCaste)) {
+        if (in_array($religion?->caste ?: $this->caste, ['Shwetambar', 'Digambar'], true) && !$this->isFieldFilled($get('subCaste'))) {
             $missing[] = 'subCaste';
         }
 
-        if ($this->fatherAlive === 'Yes') {
-            if (empty($this->fathersOccupation) || empty($this->fatherContactNumber))
-                if (empty($this->fathersOccupation)) $missing[] = 'fathersOccupation';
-                if (empty($this->fatherContactNumber)) $missing[] = 'fatherContactNumber';
+        if (in_array($family?->father_status ?: $this->fatherAlive, ['Yes', 'Alive'], true)) {
+            if (!$this->isFieldFilled($get('fathersOccupation'))) $missing[] = 'fathersOccupation';
+            if (!$this->isFieldFilled($get('fatherContactNumber'))) $missing[] = 'fatherContactNumber';
         }
-
-        if ($this->motherAlive === 'Yes') {
-            if (empty($this->mothersOccupation) || empty($this->motherContactNumber))
-                if (empty($this->mothersOccupation)) $missing[] = 'mothersOccupation';
-                if (empty($this->motherContactNumber)) $missing[] = 'motherContactNumber';
+        if (in_array($family?->mother_status ?: $this->motherAlive, ['Yes', 'Alive'], true)) {
+            if (!$this->isFieldFilled($get('mothersOccupation'))) $missing[] = 'mothersOccupation';
+            if (!$this->isFieldFilled($get('motherContactNumber'))) $missing[] = 'motherContactNumber';
         }
-
-        if ((int) $this->noOfBrothers > 0 && !$this->isFieldFilled($this->brothersMarried)) {
+        if ((int) ($family?->brothers_count ?? 0) > 0 && !$this->isFieldFilled($get('brothersMarried'))) {
             $missing[] = 'brothersMarried';
         }
-
-        if ((int) $this->noOfSisters > 0 && !$this->isFieldFilled($this->sistersMarried)) {
+        if ((int) ($family?->sisters_count ?? 0) > 0 && !$this->isFieldFilled($get('sistersMarried'))) {
             $missing[] = 'sistersMarried';
         }
 

@@ -83,8 +83,8 @@ function BioDataPaper({ profile, template, orientation, paperRef }) {
                 </div>
               ))}
             </dl>
-            {profile.photo_url && (
-              <img className="bd-photo" src={profile.photo_url} alt={`${display(profile.full_name)} profile`} crossOrigin="anonymous" />
+            {(profile.photo_url || profile.photo || profile.profile_photo) && (
+              <img className="bd-photo" src={apiMediaUrl(profile.photo_url || profile.photo || profile.profile_photo)} alt={`${display(profile.full_name)} profile`} crossOrigin="anonymous" />
             )}
           </div>
         </section>

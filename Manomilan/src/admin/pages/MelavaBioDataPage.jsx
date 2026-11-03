@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { request } from "../../api";
+import { request, apiMediaUrl } from "../../api";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
 import "./melavaBioDataPage.css";
 

@@ -2,7 +2,7 @@
 // npm install react-icons react-router-dom
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiUrl, getToken } from "../api";
+import { apiMediaUrl, apiUrl, getToken } from "../api";
 import AdminLayout from "../admin/components/AdminLayout";
 import BioDataModal from "../admin/pages/Profiles/BioDataModal.jsx";
 import {
@@ -35,11 +35,19 @@ class ApiError extends Error {
 // Only positive whole numbers are allowed as an id (blocks "abc", "-1", "1;DROP", etc.)
 const isValidId = (id) => /^\d{1,12}$/.test(String(id ?? "")) && Number(id) > 0;
 
-// Turns "uploads/x.png" into a full URL
+// Turns stored photo paths into URLs served by the Laravel backend.
 const assetUrl = (path) => {
   if (!path || typeof path !== "string") return "";
-  if (/^https?:\/\//i.test(path)) return path;
-  return `${ASSET_BASE}/${path.replace(/^\/+/, "")}`;
+  if (/^https?:\/\//i.test(path)) {
+    return apiMediaUrl(path);
+  }
+
+  const cleanPath = path.replace(/^\/+/, "");
+  if (/^(?:profile_photos|full_body_photos|half_body_photos|selfie_photos|profile_photos\/candidate)\//i.test(cleanPath)) {
+    return `${ASSET_BASE}/storage/${cleanPath}`;
+  }
+
+  return apiMediaUrl(path) || `${ASSET_BASE}/${cleanPath}`;
 };
 
 /* ---------------- request wrapper ---------------- */
@@ -112,7 +120,16 @@ async function request(path, { method = "GET", signal, expect = "json", body = n
 
 function normalizeProfile(p) {
   const docs = Array.isArray(p.documents) ? p.documents : [];
-  const photos = (Array.isArray(p.photos) ? p.photos : [])
+  const suppliedPhotos = Array.isArray(p.photos) ? p.photos : [];
+  const fallbackPhotos = [
+    ["Profile Photo", p.profile_photo || p.photo],
+    ["Full Body Photo", p.full_body_photo],
+    ["Half Body Photo", p.half_body_photo],
+    ["Selfie Photo", p.selfie_photo],
+    ...(Array.isArray(p.additional_photos) ? p.additional_photos.map((url, i) => [`Additional Photo ${i + 1}`, url]) : []),
+    ...(Array.isArray(p.candidate_photos) ? p.candidate_photos.map((url, i) => [`Candidate Photo ${i + 1}`, url]) : []),
+  ].map(([label, url], i) => ({ id: `fallback-photo-${i}`, label, url }));
+  const photos = (suppliedPhotos.length ? suppliedPhotos : fallbackPhotos)
     .filter((photo) => photo && typeof photo === "object")
     .map((photo, i) => ({
       id: photo.id ?? `photo-${i}`,

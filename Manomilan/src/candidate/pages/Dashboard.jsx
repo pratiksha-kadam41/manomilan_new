@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight, Bell, ChevronRight, CheckCircle2, Eye, Heart, RefreshCw, Send, Settings2, Sparkles, UserRound, Users, X,
+  ArrowRight, BadgeCheck, Bell, BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Eye, Heart, MapPin, RefreshCw, Send, Settings2, Sparkles, UserRound, Users, X,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchResultCard from "../components/MatchResultCard";
 import MatchDetailModal from "../components/MatchDetailModal";
 import {
-  Avatar, DashboardSkeleton, EmptyState, ErrorState, PageHeader, ProgressBar,
+  Avatar, DashboardSkeleton, EmptyState, ErrorState, ProgressBar,
   ProgressRing, SectionCard, Toasts,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
-import { getDashboard, readDashboardCache, sendInterest } from "../api";
+import {
+  getCachedMatches, getDashboard, getMatch, getMatches, readDashboardCache, sendInterest,
+} from "../api";
 import { humanGender, text, timeAgo } from "../utils";
 
 const greeting = () => {
@@ -35,16 +37,130 @@ const STATS = [
   { key: "interests_sent", label: "Interests sent", icon: Send, tone: "orange" },
 ];
 
+const candidatePhotos = (candidate) => [
+  candidate?.photo_url,
+  candidate?.full_body_photo_url,
+  candidate?.half_body_photo_url,
+  candidate?.selfie_photo_url,
+  ...(candidate?.additional_photo_urls || []),
+  ...(candidate?.candidate_photo_urls || []),
+].filter((photo, index, all) => typeof photo === "string" && photo && all.indexOf(photo) === index);
+
+function CandidateImage({ photos = [], name, size = "lg" }) {
+  const [failedPhotos, setFailedPhotos] = useState([]);
+  const src = photos.find((photo) => !failedPhotos.includes(photo));
+
+  return src ? (
+    <img
+      src={src}
+      alt={name ? `${name} profile` : ""}
+      loading="lazy"
+      decoding="async"
+      onError={() => setFailedPhotos((current) => [...current, src])}
+    />
+  ) : <Avatar name={name} size={size} />;
+}
+
+function HomeProfileCard({ match, featured = false, onOpen, onInterest, interestBusy }) {
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  if (!match) return null;
+  const name = text(match.full_name, "Member");
+  const interestDone = Boolean(match.interest_id);
+  const photos = candidatePhotos(match);
+  const activePhoto = photos[activePhotoIndex] || photos[0];
+
+  return (
+    <article className={`mm-profile-card ${featured ? "is-featured" : ""}`}>
+      <button
+        type="button"
+        className="mm-profile-image-button"
+        onClick={() => onOpen(match, activePhotoIndex)}
+        aria-label={`View ${name}'s photos`}
+      >
+        {activePhoto ? (
+          <img
+            className="mm-profile-image-backdrop"
+            src={activePhoto}
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            onError={(event) => { event.currentTarget.hidden = true; }}
+          />
+        ) : null}
+        <span className="mm-profile-image-foreground">
+          <CandidateImage photos={activePhoto ? [activePhoto] : []} name={name} size="xl" />
+        </span>
+      </button>
+      {photos.length > 1 ? (
+        <div className="mm-profile-photo-strip" role="group" aria-label={`${name}'s photos`}>
+          {photos.map((photo, index) => (
+            <button
+              type="button"
+              className={`mm-profile-photo-thumb ${index === activePhotoIndex ? "is-active" : ""}`}
+              key={photo}
+              onClick={() => setActivePhotoIndex(index)}
+              aria-label={`Show photo ${index + 1} of ${photos.length}`}
+              aria-pressed={index === activePhotoIndex}
+            >
+              <img src={photo} alt="" loading="lazy" decoding="async" />
+            </button>
+          ))}
+          <span className="mm-profile-photo-count">{activePhotoIndex + 1} / {photos.length}</span>
+        </div>
+      ) : null}
+      <div className="mm-profile-card-body">
+        <button type="button" className="mm-profile-title" onClick={() => onOpen(match)}>
+          <strong>{name}{match.verified ? <BadgeCheck size={17} /> : null}</strong>
+          {match.age ? <span>, {match.age}</span> : null}
+        </button>
+        <span className="mm-profile-location"><MapPin size={14} /> {text(match.city, "Location not added")}</span>
+        <div className="mm-profile-facts">
+          {match.height ? <span>{match.height}</span> : null}
+          {match.profession ? <span><BriefcaseBusiness size={13} /> {match.profession}</span> : null}
+          {match.marital_status ? <span>{match.marital_status}</span> : null}
+        </div>
+        {featured && match.about ? <p className="mm-profile-about">{match.about}</p> : null}
+        <div className="mm-profile-actions">
+          <button
+            type="button"
+            className={`mm-interest-button ${interestDone ? "is-done" : ""}`}
+            onClick={() => onInterest(match)}
+            disabled={interestDone || interestBusy}
+          >
+            <Heart size={17} fill={interestDone ? "currentColor" : "none"} />
+            {interestDone ? "Interest sent" : "Send interest"}
+          </button>
+          <a className="mm-view-button" href={`/candidate/matches/${match.id}`}>
+            View profile <ArrowRight size={15} />
+          </a>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function Dashboard() {
   const cached = useMemo(() => getCachedHomeData(), []);
   const dashboardCache = useMemo(() => readDashboardCache(), []);
+  const cachedSuggested = useMemo(
+    () => getCachedMatches({ sort: "best_match", per_page: 6 }),
+    [],
+  );
+  const cachedRecent = useMemo(
+    () => getCachedMatches({ sort: "newest", per_page: 6 }),
+    [],
+  );
   const [data, setData] = useState(() => dashboardCache || cached);
-  const [suggested, setSuggested] = useState([]);
+  const [suggested, setSuggested] = useState(cachedSuggested?.matches || []);
+  const [recentProfiles, setRecentProfiles] = useState(cachedRecent?.matches || []);
+  const [matchesLoaded, setMatchesLoaded] = useState(Boolean(cachedSuggested && cachedRecent));
   const [loading, setLoading] = useState(() => !dashboardCache);
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
   const [busy, setBusy] = useState({});
   const [selected, setSelected] = useState(null);
+  const [story, setStory] = useState(null);
   const [showMissingDetails, setShowMissingDetails] = useState(false);
   const { toasts, push, dismiss } = useToasts();
 
@@ -84,6 +200,31 @@ export default function Dashboard() {
     photo: profile?.photo_url || "",
   };
 
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+
+    let active = true;
+    Promise.all([
+      getMatches({ sort: "best_match", per_page: 6 }),
+      getMatches({ sort: "newest", per_page: 6 }),
+    ]).then(([recommended, recent]) => {
+      if (!active) return;
+      setSuggested(Array.isArray(recommended?.matches) ? recommended.matches : []);
+      setRecentProfiles(Array.isArray(recent?.matches) ? recent.matches : []);
+      setSuggestedError("");
+    }).catch((matchError) => {
+      if (active) setSuggestedError(matchError.message || "Could not load compatible profiles.");
+    }).finally(() => {
+      if (active) setMatchesLoaded(true);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id]);
+
+  const matchesLoading = Boolean(profile?.id && !matchesLoaded);
+
   const updateMatch = (profileId, patch) => {
     setSuggested((items) => items.map((item) => (
       item.id === profileId ? { ...item, ...patch } : item
@@ -117,6 +258,59 @@ export default function Dashboard() {
     setSelected({ id: match.id, match });
   };
 
+  const openCandidateStory = async (match, initialIndex = 0) => {
+    setStory({ match, photos: [], activeIndex: initialIndex, loading: true, error: "" });
+    try {
+      const result = await getMatch(match.id);
+      if (!result?.profile) {
+        throw new Error("This candidate profile is no longer available.");
+      }
+      const photos = candidatePhotos(result.profile);
+      setStory((current) => current?.match.id === match.id
+        ? {
+          ...current,
+          match: result.profile,
+          photos,
+          activeIndex: Math.min(initialIndex, Math.max(photos.length - 1, 0)),
+          loading: false,
+        }
+        : current);
+    } catch (storyError) {
+      setStory((current) => current?.match.id === match.id
+        ? { ...current, loading: false, error: storyError.message || "Could not load this candidate's photos." }
+        : current);
+    }
+  };
+
+  const moveStory = useCallback((direction) => {
+    setStory((current) => {
+      if (!current?.photos.length) return current;
+      const count = current.photos.length;
+      return {
+        ...current,
+        activeIndex: (current.activeIndex + direction + count) % count,
+        imageError: "",
+      };
+    });
+  }, []);
+
+  const isStoryOpen = Boolean(story);
+  useEffect(() => {
+    if (!isStoryOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setStory(null);
+      if (event.key === "ArrowLeft") moveStory(-1);
+      if (event.key === "ArrowRight") moveStory(1);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isStoryOpen, moveStory]);
+
   const handleModalUpdate = (updated) => {
     if (!updated) return;
     updateMatch(updated.id, updated);
@@ -135,15 +329,86 @@ export default function Dashboard() {
   return (
     <CandidateLayout currentPath="/candidate" candidateInfo={candidateInfo}>
       <Toasts items={toasts} onDismiss={dismiss} />
-      <PageHeader
-        title={`${greeting()}, ${displayName}`}
-      />
 
       {loading && !data ? <DashboardSkeleton /> : error && !data ? (
         <ErrorState message={error} onRetry={load} />
       ) : (
         <>
           {error ? <ErrorState message={error} onRetry={load} /> : null}
+          <section className="mm-home-welcome">
+            <div>
+              <span className="mm-home-kicker">Manomilan</span>
+              <h1>{greeting()}, {displayName}</h1>
+              <p>Your journey to a meaningful connection starts here.</p>
+            </div>
+            <span className="mm-home-heart" aria-hidden="true">♡</span>
+          </section>
+
+          <section className="mm-home-section mm-recent-section">
+            <div className="mm-section-heading">
+              <h2>New candidates</h2>
+              <a href="/candidate/matches?sort=newest">View all <ArrowRight size={15} /></a>
+            </div>
+            {recentProfiles.length ? (
+              <div className="mm-recent-rail">
+                {recentProfiles.map((match) => (
+                  <button type="button" className="mm-recent-person" key={match.id} onClick={() => openCandidateStory(match)}>
+                    <span className="mm-recent-photo">
+                      <CandidateImage photos={candidatePhotos(match)} name={text(match.full_name, "Member")} />
+                    </span>
+                    <strong>{text(match.full_name, "Member").split(" ")[0]}</strong>
+                    <small>NEW</small>
+                  </button>
+                ))}
+              </div>
+            ) : matchesLoading ? <div className="mm-recent-loading">Loading new candidates...</div> : (
+              <div className="mm-recent-loading">No candidates available right now.</div>
+            )}
+          </section>
+
+          {completion < 100 ? (
+            <section className="mm-completion-note">
+              <div><strong>Complete your profile</strong><span>Add your details to get better recommendations.</span></div>
+              <a href="/candidate/profile">Complete now <ArrowRight size={15} /></a>
+            </section>
+          ) : null}
+
+          {suggested.length ? (
+            <section className="mm-home-section">
+              <div className="mm-section-heading">
+                <h2>Recommended for you</h2>
+                <a href="/candidate/matches">See all <ArrowRight size={15} /></a>
+              </div>
+              <div className="mm-recommended-grid">
+                {suggested.map((match, index) => (
+                  <HomeProfileCard
+                    key={match.id}
+                    match={match}
+                    featured={index === 0}
+                    onOpen={openCandidateStory}
+                    onInterest={handleInterest}
+                    interestBusy={busy[match.id] === "interest"}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : matchesLoading ? (
+            <section className="mm-home-section mm-empty-candidates">
+              <div className="mm-section-heading">
+                <h2>Recommended for you</h2>
+              </div>
+              <div className="mm-recent-loading">Loading recommendations...</div>
+            </section>
+          ) : suggestedError ? <ErrorState message={suggestedError} onRetry={load} /> : (
+            <section className="mm-home-section mm-empty-candidates">
+              <div className="mm-section-heading">
+                <h2>Recommended for you</h2>
+              </div>
+              <div className="mm-recent-loading">No candidates available right now.</div>
+            </section>
+          )}
+
+          <div className="cnd-dashboard-legacy">
           <section className="cnd-hero">
             <div className="cnd-hero-copy">
               <div className="cnd-hero-title-row">
@@ -297,7 +562,37 @@ export default function Dashboard() {
           ) : null}
 
           <SectionCard
-            title={`Suggested ${humanGender(profile?.gender === "groom" ? "bride" : "groom") || "matches"}`}
+            title="Recently joined profiles"
+            subtitle="Meet members who joined recently"
+            icon={Users}
+            action={<a href="/candidate/matches?sort=newest" className="cnd-text-link">View all <ArrowRight size={14} /></a>}
+            className="cnd-suggested cnd-dashboard-recent"
+          >
+            {matchesLoading && !recentProfiles.length ? (
+              <DashboardSkeleton />
+            ) : recentProfiles.length ? (
+              <div className="cnd-match-grid cnd-recent-grid">
+                {recentProfiles.map((match) => (
+                  <MatchResultCard
+                    key={`recent-${match.id}`}
+                    match={match}
+                    onOpen={openProfile}
+                    onInterest={handleInterest}
+                    interestBusy={busy[match.id] === "interest"}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={Users}
+                title="No recently joined profiles"
+                message="New compatible profiles will appear here when available."
+              />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Recommended for you"
             subtitle="Ranked using your preferences and profile compatibility"
             icon={Sparkles}
             action={<a href="/candidate/matches" className="cnd-text-link">See all matches <ArrowRight size={14} /></a>}
@@ -305,6 +600,8 @@ export default function Dashboard() {
           >
             {suggestedError ? (
               <ErrorState message={suggestedError} onRetry={load} />
+            ) : matchesLoading && !suggested.length ? (
+              <DashboardSkeleton />
             ) : suggested.length === 0 ? (
               <EmptyState
                 icon={Users}
@@ -365,6 +662,7 @@ export default function Dashboard() {
               </div>
             </SectionCard>
           </div>
+          </div>
         </>
       )}
 
@@ -375,6 +673,57 @@ export default function Dashboard() {
         onClose={() => setSelected(null)}
         onUpdated={handleModalUpdate}
       />
+      {story ? (
+        <div className="mm-story-overlay" role="dialog" aria-modal="true" aria-label={`${story.match.full_name || "Candidate"} photos`}>
+          <div className="mm-story-viewer">
+            <div className="mm-story-progress" aria-hidden="true">
+              {story.photos.map((photo, index) => (
+                <span key={photo || index} className={index <= story.activeIndex ? "is-active" : ""} />
+              ))}
+            </div>
+            <header className="mm-story-header">
+              <span className="mm-story-avatar"><CandidateImage photos={candidatePhotos(story.match)} name={story.match.full_name} size="sm" /></span>
+              <div>
+                <strong>{text(story.match.full_name, "Candidate")}</strong>
+                <small>{[story.match.age ? `${story.match.age} years` : "", story.match.city].filter(Boolean).join(" · ")}</small>
+              </div>
+              <button type="button" onClick={() => setStory(null)} aria-label="Close photos"><X size={21} /></button>
+            </header>
+            <div className="mm-story-content">
+              {story.loading ? <p>Loading photos...</p> : story.error ? (
+                <p className="mm-story-message" role="alert">{story.error}</p>
+              ) : story.photos.length ? (
+                <img
+                  key={story.photos[story.activeIndex]}
+                  src={story.photos[story.activeIndex]}
+                  alt={`${story.match.full_name || "Candidate"} photo ${story.activeIndex + 1}`}
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
+                    setStory((current) => current ? { ...current, imageError: "This photo could not be loaded." } : current);
+                  }}
+                  onLoad={() => setStory((current) => current?.imageError ? { ...current, imageError: "" } : current)}
+                />
+              ) : (
+                <p className="mm-story-message">No photos have been uploaded for this candidate yet.</p>
+              )}
+              {story.imageError ? <p className="mm-story-image-error" role="status">{story.imageError}</p> : null}
+              {story.photos.length > 1 ? (
+                <>
+                  <button type="button" className="mm-story-arrow is-previous" onClick={() => moveStory(-1)} aria-label="Previous photo">
+                    <ChevronLeft size={28} />
+                  </button>
+                  <button type="button" className="mm-story-arrow is-next" onClick={() => moveStory(1)} aria-label="Next photo">
+                    <ChevronRight size={28} />
+                  </button>
+                </>
+              ) : null}
+            </div>
+            <a className="mm-story-profile-link" href={`/candidate/matches/${story.match.id}`}>
+              View full profile <ArrowRight size={15} />
+            </a>
+          </div>
+        </div>
+      ) : null}
     </CandidateLayout>
   );
 }

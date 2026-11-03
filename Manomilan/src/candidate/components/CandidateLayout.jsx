@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Bell, ChevronDown, Heart, Home, KeyRound, LogOut, Menu, Search,
-  User, Users,
+  Bell, Heart, Home, KeyRound, LogOut, Menu,
+  User, Users, Compass,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import CandidateSidebar from "./CandidateSidebar";
@@ -15,7 +15,7 @@ import "../candidate.css";
 
 const TABS = [
   ["/candidate", "Home", Home],
-  ["/candidate/matches", "Matches", Search],
+  ["/candidate/matches", "Discover", Compass],
   ["/candidate/interests-received", "Interests", Heart],
   ["/candidate/profile", "Profile", User],
 ];
@@ -41,13 +41,6 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
     || sessionUser?.name
     || sessionUser?.username
     || "Candidate";
-  const candidateId =
-    candidateInfo?.id
-    || sessionProfile.registration_number
-    || sessionProfile.profile_id
-    || cachedHome?.profile?.registration_number
-    || cachedHome?.profile?.profile_id
-    || "Member";
   const candidatePhoto =
     apiMediaUrl(
       candidateInfo?.photo
@@ -117,67 +110,50 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
       />
 
       <div className="cnd-main">
-        <header className="cnd-topbar">
-          <div className="cnd-topbar-left">
+        <header className="mm-header">
+          <div className="mm-header-content">
             <button
               type="button"
-              className="cnd-icon-btn cnd-collapse-btn"
+              className="mm-icon-btn cnd-collapse-btn"
               onClick={() => setCollapsed((value) => !value)}
               aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              <Menu size={21} />
+              <Menu size={24} />
             </button>
-            <Link to="/candidate" className="cnd-mobile-brand" aria-label="Candidate dashboard">
-              <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
+            <Link to="/candidate" aria-label="Candidate dashboard" className="mm-logo-link">
+              <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" className="mm-logo" />
             </Link>
-            <div className="cnd-topbar-title">
-              <span>Candidate Portal</span>
-              <small>Find your life partner with confidence</small>
-            </div>
-          </div>
-
-          <div className="cnd-topbar-right">
-            <Link to="/candidate/matches" className="cnd-topbar-search" title="Find matches">
-              <Search size={17} />
-              <span>Find matches</span>
-            </Link>
-
-            <button
-              type="button"
-              className="cnd-icon-btn cnd-bell"
-              aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
-              onClick={() => go("/candidate/notifications")}
-            >
-              <Bell size={20} />
-              {unreadCount > 0 ? (
-                <span className="cnd-bell-count">{unreadCount > 99 ? "99+" : unreadCount}</span>
-              ) : null}
-            </button>
-
-            <div className="cnd-user-menu" ref={menuRef}>
+            <div className="mm-header-actions">
               <button
                 type="button"
-                className={`cnd-user-btn ${menuOpen ? "open" : ""}`}
-                onClick={() => setMenuOpen((value) => !value)}
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
+                className="mm-icon-btn"
+                aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
+                onClick={() => go("/candidate/notifications")}
               >
-                <span className="cnd-user-avatar">
-                  <span>{initials(candidateName)}</span>
+                <Bell size={24} />
+                {unreadCount > 0 ? (
+                  <span className="mm-notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                ) : null}
+              </button>
+
+              <div className="cnd-user-menu" ref={menuRef}>
+                <button
+                  type="button"
+                  className="mm-avatar-small"
+                  onClick={() => setMenuOpen((value) => !value)}
+                  aria-expanded={menuOpen}
+                  aria-haspopup="menu"
+                >
                   {candidatePhoto ? (
                     <img
                       src={candidatePhoto}
                       alt=""
                       onError={(event) => event.currentTarget.remove()}
                     />
-                  ) : null}
-                </span>
-                <span className="cnd-user-meta">
-                  <strong>{candidateName}</strong>
-                  <small>{candidateInfo?.id ? candidateId : "Your profile"}</small>
-                </span>
-                <ChevronDown size={16} className="cnd-user-chevron" />
-              </button>
+                  ) : (
+                    <span style={{display:'flex',alignItems:'center',justifyContent:'center',width:'100%',height:'100%',background:'var(--mm-border)',color:'var(--mm-primary)',fontSize:'12px',fontWeight:'600'}}>{initials(candidateName)}</span>
+                  )}
+                </button>
 
               {menuOpen ? (
                 <div className="cnd-dropdown" role="menu">
@@ -201,29 +177,35 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
                 </div>
               ) : null}
             </div>
+            </div>
           </div>
         </header>
 
-        <main className="cnd-content">{children}</main>
+        <main className="mm-main cnd-content">{children}</main>
       </div>
 
-      <nav className="cnd-bottom-nav" aria-label="Candidate mobile navigation">
-        {TABS.map(([path, label, Icon]) => {
-          const active = currentPath === path
-            || (path === "/candidate/interests-received"
-              && currentPath === "/candidate/interests-sent");
-          return (
-            <Link
-              key={path}
-              to={path}
-              className={`cnd-bottom-tab ${active ? "active" : ""}`}
-              aria-current={active ? "page" : undefined}
-            >
-              <Icon size={21} strokeWidth={active ? 2.6 : 1.9} />
-              <span>{label}</span>
-            </Link>
-          );
-        })}
+      <nav className="mm-bottom-nav" aria-label="Candidate mobile navigation">
+        <div className="mm-bottom-nav-content">
+          {TABS.map(([path, label, Icon]) => {
+            const active = currentPath === path
+              || (path === "/candidate/interests-received"
+                && (currentPath === "/candidate/interests-sent" || currentPath?.includes("interests")));
+            return (
+              <Link
+                key={path}
+                to={path}
+                className={`mm-nav-item ${active ? "active" : ""}`}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon size={22} strokeWidth={active ? 2.5 : 1.8} />
+                <span>{label}</span>
+                {label === "Interests" && unreadCount > 0 ? (
+                  <span className="mm-nav-badge">{unreadCount > 9 ? "9+" : unreadCount}</span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );

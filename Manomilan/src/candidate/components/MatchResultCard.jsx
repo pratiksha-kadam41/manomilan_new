@@ -16,13 +16,21 @@ export default function MatchResultCard({
   const name = text(match.full_name, "Member");
   const age = match.age ? `${match.age} yrs` : "";
   const gender = humanGender(match.gender);
+  const photos = [
+    match.photo_url,
+    match.full_body_photo_url,
+    match.half_body_photo_url,
+    match.selfie_photo_url,
+    ...(Array.isArray(match.additional_photo_urls) ? match.additional_photo_urls : []),
+    ...(Array.isArray(match.candidate_photo_urls) ? match.candidate_photo_urls : []),
+  ].filter((photo, index, all) => typeof photo === "string" && photo && all.indexOf(photo) === index);
 
   return (
     <article className="cnd-match-card">
       <button type="button" className="cnd-match-open" onClick={() => onOpen?.(match)} aria-label={`View ${name}'s profile`}>
         <span className="cnd-match-photo">
-          {match.photo_url ? (
-            <img src={match.photo_url} alt={`${name} profile`} loading="lazy" decoding="async" />
+          {photos[0] ? (
+            <img src={photos[0]} alt={`${name} profile`} loading="lazy" decoding="async" />
           ) : (
             <Avatar name={name} size="xl" />
           )}
@@ -30,6 +38,15 @@ export default function MatchResultCard({
             <span className="cnd-verified" title="Verified profile"><BadgeCheck size={16} /> Verified</span>
           ) : null}
         </span>
+        {photos.length > 1 ? (
+          <span className="cnd-match-thumbnails" aria-label={`${photos.length} profile photos`}>
+            {photos.slice(1, 5).map((photo, index) => (
+              <span className="cnd-match-thumbnail" key={photo}>
+                <img src={photo} alt={`${name}, photo ${index + 2}`} loading="lazy" decoding="async" />
+              </span>
+            ))}
+          </span>
+        ) : null}
 
         <span className="cnd-match-body">
           <span className="cnd-match-title-row">

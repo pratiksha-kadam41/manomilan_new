@@ -94,52 +94,79 @@ abstract class CandidateController extends Controller
 
     protected function presentOwnProfile(Profile $profile, User $user): array
     {
+        $profile->loadMissing(['familyDetails', 'educations', 'employments', 'religionDetails', 'profileDocuments']);
         $profile->calculateCompletionPercentage();
         $profile->refresh();
         $verification = DocumentVerification::where('profile_id', $profile->id)->first();
-        $preference = $user->preference;
+        $preference = $user->preference ?: $profile->partnerPreferences;
+
+        $photos = is_array($profile->photos) ? $profile->photos : (is_string($profile->photos) && $profile->photos ? json_decode($profile->photos, true) : []);
+        if (! is_array($photos)) {
+            $photos = [];
+        }
+
+        $getPhoto = function ($key) use ($photos, $profile) {
+            return $photos[$key] ?? $profile->{$key} ?? $profile->getAttribute($key) ?? null;
+        };
+
+        $docsModel = $profile->profileDocuments;
+        $docMap = [
+            'identificationProof' => $docsModel?->aadhaar_card ?: $docsModel?->pan_card ?: $docsModel?->passport,
+            'birthDateProof' => $docsModel?->birth_certificate,
+            'addressProof' => $docsModel?->address_proof,
+            'educationProof' => $docsModel?->education_certificate,
+            'professionProof' => $docsModel?->profession_proof,
+            'incomeProof' => $docsModel?->income_proof,
+            'casteCertificate' => $docsModel?->caste_certificate,
+            'medicalFitnessCertificate' => $docsModel?->medical_fitness_certificate,
+        ];
 
         $documents = [];
         foreach (self::DOCUMENT_KEYS as $key) {
             $documents[$key] = [
                 'key' => $key,
-                'file_url' => $this->fileUrl($profile->{$key} ?? null, 'document'),
+                'file_url' => $this->fileUrl($docMap[$key] ?? ($profile->{$key} ?? null), 'document'),
                 'status' => $this->cleanDocumentStatus($verification?->{$key.'_status'}),
                 'remarks' => (string) ($verification?->{$key.'_remarks'} ?? ''),
             ];
         }
 
+        $additional = $photos['additional_photos'] ?? $this->normalizePathList($profile->getRawOriginal('additional_photos'));
+        if (! is_array($additional)) {
+            $additional = $this->normalizePathList($additional);
+        }
+
         return [
             'id' => $profile->id,
-            'registration_number' => $profile->registration_number ?: $profile->profile_id,
-            'profile_id' => $profile->profile_id,
+            'registration_number' => $profile->reg_id ?: $profile->registration_number ?: $profile->profile_id,
+            'profile_id' => $profile->reg_id ?: $profile->profile_id,
             'serial_no' => $profile->serial_no,
             'registration_type' => $profile->registration_type,
-            'full_name' => $profile->fullName,
-            'gender' => $profile->groomOrBride,
-            'birth_date' => $profile->birthDate,
-            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
-            'photo_url' => $this->fileUrl($profile->profilePhoto),
-            'full_body_photo_url' => $this->fileUrl($profile->full_body_photo),
-            'half_body_photo_url' => $this->fileUrl($profile->half_body_photo),
-            'selfie_photo_url' => $this->fileUrl($profile->selfie_photo),
-            'additional_photo_urls' => collect($this->normalizePathList($profile->getRawOriginal('additional_photos')))
+            'full_name' => $profile->full_name ?: $profile->fullName,
+            'gender' => $profile->groomorbride ?: $profile->groomOrBride,
+            'birth_date' => $profile->birth_date ?: $profile->birthDate,
+            'age' => ($profile->birth_date ?: $profile->birthDate) ? Carbon::parse($profile->birth_date ?: $profile->birthDate)->age : null,
+            'photo_url' => $this->fileUrl($getPhoto('profile_photo')),
+            'full_body_photo_url' => $this->fileUrl($getPhoto('full_body_photo')),
+            'half_body_photo_url' => $this->fileUrl($getPhoto('half_body_photo')),
+            'selfie_photo_url' => $this->fileUrl($getPhoto('selfie_photo')),
+            'additional_photo_urls' => collect($additional)
                 ->map(fn ($path) => $this->fileUrl($path))
+                ->filter()
                 ->values()
                 ->all(),
             'email' => $profile->email ?: $user->email,
             'mobile' => $user->username ?: $profile->phone,
             'city' => $this->profileCity($profile),
-            'verification_status' => $profile->profileVerificationStatus,
+            'verification_status' => $profile->verification_status ?: $profile->profileVerificationStatus,
             'profile_completion' => (int) $profile->profile_completion,
             'created_at' => optional($profile->created_at)->toIso8601String(),
             'details' => $this->profileDetails($profile),
-            'has_education' => filled($profile->education) && filled($profile->profession),
-            'has_family' => filled($profile->fathersName) && filled($profile->mothersName),
-            'has_photos' => filled($profile->profilePhoto),
+            'has_education' => filled($profile->educations?->first()?->degree_name) || filled($profile->employments?->first()?->profession),
+            'has_family' => filled($profile->familyDetails?->father_name),
+            'has_photos' => filled($getPhoto('profile_photo')),
             'has_preferences' => (bool) $preference,
-            'has_documents' => collect(self::DOCUMENT_KEYS)
-                ->contains(fn (string $key) => filled($profile->{$key} ?? null)),
+            'has_documents' => collect($docMap)->contains(fn ($val) => filled($val)),
             'documents' => $documents,
             'preference' => $this->presentPreference($preference),
         ];
@@ -148,50 +175,60 @@ abstract class CandidateController extends Controller
     protected function presentPublicProfile(Profile $profile): array
     {
         $additionalPhotos = $this->normalizePathList($profile->additional_photos);
-        $melavaRegistration = ProfileMelavaRegistration::where('profile_id', $profile->id)->latest('id')->first();
-        $candidatePhotos = $this->normalizePathList($melavaRegistration?->getRawOriginal('candidate_photos'));
+        $candidatePhotos = [];
+        if (
+            Schema::hasTable('profile_melava_registrations')
+            && Schema::hasColumn('profile_melava_registrations', 'candidate_photos')
+        ) {
+            $melavaRegistration = ProfileMelavaRegistration::where('profile_id', $profile->id)->latest('id')->first();
+            $candidatePhotos = $this->normalizePathList($melavaRegistration?->getRawOriginal('candidate_photos'));
+        }
 
         $details = $this->profileDetails($profile);
+        $profilePhotos = is_array($profile->photos) ? $profile->photos : [];
+        $education = $profile->educations?->sortByDesc('id')->first();
+        $employment = $profile->employments?->sortByDesc('id')->first();
+        $religion = $profile->religionDetails;
 
         return array_merge([
             'id' => $profile->id,
-            'registration_number' => $profile->registration_number ?: $profile->profile_id,
-            'profile_id' => $profile->profile_id,
-            'full_name' => $profile->fullName,
-            'first_name' => strtok((string) $profile->fullName, ' ') ?: $profile->fullName,
-            'photo_url' => $this->fileUrl($profile->profilePhoto),
-            'gender' => $profile->groomOrBride,
-            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
-            'birth_date' => $profile->birthDate,
-            'height' => $profile->height,
+            'registration_number' => $profile->registration_number ?: $profile->reg_id,
+            'profile_id' => $profile->profile_id ?: $profile->reg_id,
+            'full_name' => $profile->full_name,
+            'first_name' => strtok((string) $profile->full_name, ' ') ?: $profile->full_name,
+            'photo_url' => $this->fileUrl($profilePhotos['profile_photo'] ?? $profilePhotos[0] ?? null),
+            'gender' => $this->profileGender($profile),
+            'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
+            'birth_date' => $profile->birth_date,
+            'height' => $profile->height_cm,
             'city' => $this->profileCity($profile),
-            'religion' => $profile->religion,
-            'caste' => $profile->caste,
-            'marital_status' => $profile->maritalStatus,
-            'mother_tongue' => $profile->motherTongue,
-            'education' => $profile->education,
-            'degree' => $profile->degreeDiplomaName1,
-            'college' => $profile->universityBoardCollege,
-            'profession' => $profile->profession,
-            'field_of_working' => $profile->fieldOfWorking,
-            'organisation' => $profile->organisationWorkingIn,
-            'designation' => $profile->designation,
-            'annual_income' => $profile->annualIncome,
-            'about' => $profile->knowAboutMyself,
+            'religion' => $religion?->religion,
+            'caste' => $religion?->caste,
+            'marital_status' => $profile->marital_status,
+            'mother_tongue' => $profile->mother_tongue,
+            'education' => $education?->education_level ?: $education?->degree_name,
+            'degree' => $education?->degree_name,
+            'college' => $education?->university_name ?: $education?->college_name,
+            'profession' => $employment?->profession,
+            'field_of_working' => $employment?->working_field,
+            'organisation' => $employment?->organisation_name,
+            'designation' => $employment?->designation,
+            'annual_income' => $employment?->annual_income ?: $profile->annual_income,
+            'about' => $profile->about_me,
             'family' => [
-                'father_name' => $profile->fathersName,
-                'mother_name' => $profile->mothersName,
-                'brothers' => $profile->noOfBrothers,
-                'sisters' => $profile->noOfSisters,
-                'family_values' => $profile->familyValues,
-                'financial_status' => $profile->familyFinancialStatus,
+                'father_name' => $profile->familyDetails?->father_name,
+                'mother_name' => $profile->familyDetails?->mother_name,
+                'brothers' => $profile->familyDetails?->brothers_count,
+                'sisters' => $profile->familyDetails?->sisters_count,
+                'family_values' => $profile->familyDetails?->family_values,
+                'financial_status' => $profile->familyDetails?->family_financial_status,
             ],
-            'verification_status' => $profile->profileVerificationStatus,
-            'verified' => $profile->profileVerificationStatus === 'Completed',
+            'verification_status' => $profile->verification_status,
+            'verified' => $profile->verification_status === 'Completed',
             'profile_completion' => (int) $profile->profile_completion,
-            'full_body_photo_url' => $this->fileUrl($profile->full_body_photo),
-            'half_body_photo_url' => $this->fileUrl($profile->half_body_photo),
-            'selfie_photo_url' => $this->fileUrl($profile->selfie_photo),
+            'full_body_photo_url' => $this->fileUrl($profilePhotos['full_body_photo'] ?? null),
+            'half_body_photo_url' => $this->fileUrl($profilePhotos['half_body_photo'] ?? null),
+            'selfie_photo_url' => $this->fileUrl($profilePhotos['selfie_photo'] ?? null),
             'additional_photo_urls' => collect($additionalPhotos)->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
             'candidate_photo_urls' => collect($candidatePhotos)->filter()->map(fn ($path) => $this->fileUrl($path))->values()->all(),
             'details' => $details,
@@ -229,85 +266,95 @@ abstract class CandidateController extends Controller
 
     protected function profileDetails(Profile $profile): array
     {
-        $fields = [
-            'religion' => 'religion',
-            'caste' => 'caste',
-            'sub_caste' => 'subCaste',
-            'marital_status' => 'maritalStatus',
-            'height' => 'height',
-            'weight' => 'weight',
-            'having_specs_lenses' => 'havingSpecsLenses',
-            'blood_group' => 'bloodGroup',
-            'mother_tongue' => 'motherTongue',
-            'language' => 'language',
-            'special_cases' => 'specialCases',
-            'source_of_information' => 'source_of_information',
-            'reference_name' => 'referenceName',
-            'reference_relation' => 'referenceRelation',
-            'reference_contact' => 'referenceContactNumber',
-            'reference_address' => 'referenceAddress',
-            'reference_email' => 'referenceEmail',
-            'about' => 'knowAboutMyself',
-            'address' => 'address',
-            'permanent_address' => 'permanent_address',
-            'education' => 'education',
-            'degree' => 'degreeDiplomaName1',
-            'degree_2' => 'degreeDiplomaName2',
-            'specialisation' => 'specialisation1',
-            'specialisation_2' => 'specialisation2',
-            'college' => 'universityBoardCollege',
-            'additional_education' => 'additionalEducation1',
-            'additional_education_2' => 'additionalEducation2',
-            'city_of_education' => 'cityOfEducation',
-            'profession' => 'profession',
-            'field_of_working' => 'fieldOfWorking',
-            'organisation' => 'organisationWorkingIn',
-            'professional_city' => 'professionalCity',
-            'designation' => 'designation',
-            'length_of_employment' => 'lengthOfEmployment',
-            'monthly_income' => 'monthlyIncome',
-            'annual_income' => 'annualIncome',
-            'has_medical_history' => 'hasMedicalHistory',
-            'personal_medical_history' => 'personalMedicalHistory',
-            'current_medical_problems' => 'currentMedicalProblems',
-            'medications' => 'medications',
-            'father_name' => 'fathersName',
-            'father_alive' => 'fatherAlive',
-            'father_occupation' => 'fathersOccupation',
-            'father_contact' => 'fatherContactNumber',
-            'father_native_place' => 'fathersNativePlace',
-            'mother_name' => 'mothersName',
-            'mother_alive' => 'motherAlive',
-            'mother_occupation' => 'mothersOccupation',
-            'mother_contact' => 'motherContactNumber',
-            'mother_native_place' => 'mothersNativePlace',
-            'brothers' => 'noOfBrothers',
-            'brothers_married' => 'brothersMarried',
-            'sisters' => 'noOfSisters',
-            'sisters_married' => 'sistersMarried',
-            'parents_intercaste_marriage' => 'parentsIntercasteMarriage',
-            'parents_different_caste' => 'parentsDifferentCaste',
-            'family_values' => 'familyValues',
-            'family_financial_status' => 'familyFinancialStatus',
-            'family_annual_income' => 'familyAnnualIncome',
-            'profile_creator_name' => 'profileCreatorName',
-            'profile_creator_relation' => 'profileCreatorRelation',
-            'place_of_birth' => 'placeOfBirth',
-            'time_of_birth' => 'timeOfBirth',
-            'birth_time_ampm' => 'birthTime_ampm',
-            'horoscope_caste' => 'horoscopeCaste',
-            'horoscope_sub_caste' => 'horoscopeSubCaste',
-            'horoscope_dob' => 'horoscopeDob',
+        $profile->loadMissing(['familyDetails', 'educations', 'employments', 'religionDetails']);
+        $addresses = is_array($profile->addresses) ? $profile->addresses : [];
+        $metadata = is_array($addresses['metadata'] ?? null) ? $addresses['metadata'] : [];
+        $current = is_array($addresses['current'] ?? null) ? $addresses['current'] : [];
+        $permanent = is_array($addresses['permanent'] ?? null) ? $addresses['permanent'] : [];
+        $reference = is_array($addresses['reference'] ?? null) ? $addresses['reference'] : [];
+        $religion = $profile->religionDetails;
+        $family = $profile->familyDetails;
+        $education = $profile->educations?->sortBy('id')->values() ?? collect();
+        $employment = $profile->employments?->sortByDesc('id')->first();
+
+        return [
+            'religion' => $religion?->religion,
+            'caste' => $religion?->caste,
+            'sub_caste' => $religion?->sub_caste,
+            'marital_status' => $metadata['marital_status'] ?? $profile->marital_status,
+            'height' => $profile->height_cm,
+            'weight' => $profile->weight_kg,
+            'having_specs_lenses' => $metadata['having_specs_lenses']
+                ?? ($profile->has_spectacles ? 'Specs' : 'None'),
+            'blood_group' => $profile->blood_group,
+            'mother_tongue' => $profile->mother_tongue,
+            'language' => is_array($profile->languages) ? implode(', ', $profile->languages) : $profile->languages,
+            'special_cases' => $profile->special_cases,
+            'source_of_information' => $profile->source_of_information,
+            'reference_name' => $reference['name'] ?? null,
+            'reference_relation' => $reference['relation'] ?? null,
+            'reference_contact' => $reference['contact'] ?? null,
+            'reference_address' => $reference['address'] ?? null,
+            'reference_email' => $reference['email'] ?? null,
+            'about' => $profile->about_me,
+            'address' => $current['address'] ?? null,
+            'permanent_address' => $permanent['address'] ?? null,
+            'country' => $current['country'] ?? null,
+            'state' => $current['state'] ?? null,
+            'district' => $current['district'] ?? null,
+            'city' => $current['city'] ?? null,
+            'taluka' => $current['taluka'] ?? null,
+            'village' => $current['village'] ?? null,
+            'pincode' => $current['pincode'] ?? null,
+            'education' => $education->get(0)?->education_level ?: $education->get(0)?->degree_name,
+            'degree' => $education->get(0)?->degree_name,
+            'degree_2' => $education->get(1)?->degree_name,
+            'specialisation' => $education->get(0)?->specialization,
+            'specialisation_2' => $education->get(1)?->specialization,
+            'college' => $education->get(0)?->university_name ?: $education->get(0)?->college_name,
+            'additional_education' => $education->get(0)?->additional_qualification,
+            'additional_education_2' => $education->get(1)?->additional_qualification,
+            'city_of_education' => $education->get(0)?->education_city,
+            'profession' => $employment?->profession,
+            'field_of_working' => $employment?->working_field,
+            'organisation' => $employment?->organisation_name,
+            'professional_city' => $employment?->employment_city,
+            'designation' => $employment?->designation,
+            'length_of_employment' => $employment?->employment_duration,
+            'monthly_income' => $employment?->monthly_income ?? $profile->monthly_income,
+            'annual_income' => $employment?->annual_income ?? $profile->annual_income,
+            'has_medical_history' => $profile->has_medical_history ? 'Yes' : 'No',
+            'personal_medical_history' => $profile->personal_medical_history,
+            'current_medical_problems' => $profile->current_medical_problems,
+            'medications' => $profile->medications,
+            'father_name' => $family?->father_name,
+            'father_alive' => $family?->father_status === 'Alive' ? 'Yes' : ($family?->father_status === 'Deceased' ? 'No' : null),
+            'father_occupation' => $family?->father_occupation,
+            'father_contact' => $family?->father_contact,
+            'father_native_place' => $family?->father_native_place,
+            'mother_name' => $family?->mother_name,
+            'mother_alive' => $family?->mother_status === 'Alive' ? 'Yes' : ($family?->mother_status === 'Deceased' ? 'No' : null),
+            'mother_occupation' => $family?->mother_occupation,
+            'mother_contact' => $family?->mother_contact,
+            'mother_native_place' => $family?->mother_native_place,
+            'brothers' => $family?->brothers_count,
+            'brothers_married' => $family?->married_brothers_count,
+            'sisters' => $family?->sisters_count,
+            'sisters_married' => $family?->married_sisters_count,
+            'parents_intercaste_marriage' => $family?->parents_intercaste_marriage ? 'Yes' : 'No',
+            'parents_different_caste' => $family?->parents_different_caste_details,
+            'family_values' => $family?->family_values,
+            'family_financial_status' => $family?->family_financial_status,
+            'family_annual_income' => $family?->family_annual_income,
+            'profile_creator_name' => $profile->profile_creator_name ?: ($metadata['profile_creator_name'] ?? null),
+            'profile_creator_relation' => $profile->creator_relation ?: ($metadata['profile_creator_relation'] ?? null),
+            'place_of_birth' => $profile->birth_place,
+            'time_of_birth' => $profile->birth_time,
+            'birth_time_ampm' => $metadata['birth_time_ampm'] ?? null,
+            'horoscope_caste' => $metadata['horoscope_caste'] ?? null,
+            'horoscope_sub_caste' => $metadata['horoscope_sub_caste'] ?? null,
+            'horoscope_dob' => $metadata['horoscope_dob'] ?? null,
         ];
-
-        $columns = Schema::getColumnListing((new Profile)->getTable());
-        $details = [];
-
-        foreach ($fields as $key => $column) {
-            $details[$key] = in_array($column, $columns, true) ? $profile->{$column} : null;
-        }
-
-        return $details;
     }
 
     protected function presentInterest(UserInterest $interest, string $direction, Profile $me, ?Preference $preference): array
@@ -445,7 +492,16 @@ abstract class CandidateController extends Controller
             return null;
         }
 
-        return $profile->professionalCity ?: $profile->cityOfEducation;
+        $addresses = is_array($profile->addresses) ? $profile->addresses : [];
+
+        return $profile->professionalCity
+            ?: $profile->cityOfEducation
+            ?: ($addresses['current']['city'] ?? $addresses['city'] ?? null);
+    }
+
+    protected function profileGender(Profile $profile): string
+    {
+        return strtolower(trim((string) ($profile->groomorbride ?: $profile->groomOrBride)));
     }
 
     protected function fileUrl(?string $path, string $mediaType = 'image'): string

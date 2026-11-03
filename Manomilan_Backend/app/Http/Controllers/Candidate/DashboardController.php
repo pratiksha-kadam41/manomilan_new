@@ -35,8 +35,8 @@ class DashboardController extends CandidateController
                     ->distinct('visitor_id')
                     ->count('visitor_id');
                 $stats['matches_available'] = Profile::query()
-                    ->where('groomOrBride', $profile->groomOrBride === 'groom' ? 'bride' : 'groom')
-                    ->where('active', 'active')
+                    ->where('groomorbride', $this->profileGender($profile) === 'groom' ? 'Bride' : 'Groom')
+                    ->where('status', 'active')
                     ->where('id', '!=', $profile->id)
                     ->count();
                 $stats['interests_sent'] = UserInterest::where('user_id', $user->id)->count();
@@ -85,12 +85,14 @@ class DashboardController extends CandidateController
     {
         return [
             'id' => $profile->id,
-            'registration_number' => $profile->registration_number ?: $profile->profile_id,
-            'profile_id' => $profile->profile_id,
-            'full_name' => $profile->fullName,
-            'gender' => $profile->groomOrBride,
-            'age' => $profile->birthDate ? Carbon::parse($profile->birthDate)->age : null,
-            'photo_url' => $this->fileUrl($profile->profilePhoto),
+            'registration_number' => $profile->registration_number ?: $profile->reg_id,
+            'profile_id' => $profile->profile_id ?: $profile->reg_id,
+            'full_name' => $profile->full_name,
+            'gender' => $this->profileGender($profile),
+            'age' => $profile->birth_date ? Carbon::parse($profile->birth_date)->age : null,
+            'photo_url' => $this->fileUrl(
+                is_array($profile->photos) ? ($profile->photos['profile_photo'] ?? $profile->photos[0] ?? null) : null
+            ),
             'city' => $this->profileCity($profile),
             'profile_completion' => (int) $profile->profile_completion,
             'has_documents' => collect(self::documentKeys())

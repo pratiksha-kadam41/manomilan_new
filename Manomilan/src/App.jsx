@@ -106,6 +106,7 @@ const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/software-tickets\/(\d+)\/edit$/, Page: EditTicket },
   { pattern: /^\/admin\/software-tickets\/(\d+)$/, Page: TicketDetail },
   { pattern: /^\/admin\/melava-biodata\/(\d+)$/, Page: MelavaBioDataPage },
+  { pattern: /^\/admin\/unverified-profiles\/(\d+)\/verify$/, Page: ProfileVerify },
   { pattern: /^\/admin\/profiles\/(\d+)(?:\/details)?$/, Page: ProfileDetail },
   { pattern: /^\/admin\/profiles\/edit\/(\d+)$/, Page: ProfileEdit },
   { pattern: /^\/admin\/profiles\/payment\/(\d+)$/, Page: PaymentScreenshot },
@@ -365,7 +366,7 @@ export default function App() {
     return (
       <main className="app-loading" role="status" aria-live="polite">
         <span className="app-loading-mark" aria-hidden="true" />
-        <span className="app-loading-label">Checking your candidate profile…</span>
+        <span className="app-loading-label">Checking your candidate profile...</span>
       </main>
     );
   }

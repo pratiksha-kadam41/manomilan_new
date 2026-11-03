@@ -11,7 +11,9 @@ import {
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
 import { useNavigate } from "react-router-dom";
-import { getCandidateProfile, getMatches, sendInterest } from "../api";
+import {
+  getCachedMatches, getCandidateProfile, getMatches, sendInterest,
+} from "../api";
 import { humanGender, text } from "../utils";
 import "./Matches.css";
 
@@ -38,15 +40,19 @@ const SORTS = [
 export default function Matches() {
   const navigate = useNavigate();
   const cached = useMemo(() => getCachedHomeData(), []);
+  const initialMatches = useMemo(
+    () => getCachedMatches({ ...EMPTY_FILTERS, page: 1, per_page: 12 }),
+    [],
+  );
   const [profile, setProfile] = useState(cached?.profile || null);
   const [account, setAccount] = useState(cached?.user || null);
   const [draft, setDraft] = useState(EMPTY_FILTERS);
   const [applied, setApplied] = useState(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
-  const [matches, setMatches] = useState([]);
-  const [options, setOptions] = useState({});
-  const [pagination, setPagination] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState(initialMatches?.matches || []);
+  const [options, setOptions] = useState(initialMatches?.filters || {});
+  const [pagination, setPagination] = useState(initialMatches?.pagination || null);
+  const [loading, setLoading] = useState(!initialMatches);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState({});
   const [profileChecked, setProfileChecked] = useState(Boolean(cached?.profile));
@@ -77,7 +83,15 @@ export default function Matches() {
     const controller = new AbortController();
     loadAbortController.current = controller;
     const requestId = ++loadRequestId.current;
-    setLoading(true);
+    const cachedMatches = getCachedMatches({ ...applied, page, per_page: 12 });
+    if (cachedMatches) {
+      setMatches(cachedMatches.matches || []);
+      setOptions(cachedMatches.filters || {});
+      setPagination(cachedMatches.pagination || null);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError("");
     try {
       const result = await getMatches({ ...applied, page, per_page: 12 }, { signal: controller.signal });

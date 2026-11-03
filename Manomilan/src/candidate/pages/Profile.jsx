@@ -16,7 +16,7 @@ import {
   createCandidateProfile, getCandidateProfile, removeCandidateDocument,
   removeCandidatePhoto, savePreferences, updateCandidateProfile,
   uploadCandidateAdditionalPhotos, uploadCandidateDocuments, uploadCandidatePhoto,
-  uploadCandidateBodyPhotos,
+  uploadCandidateBodyPhotos, peekCandidateProfile,
 } from "../api";
 import {
   displayValue, fileSizeLabel, formatDate, humanGender, text,
@@ -316,13 +316,16 @@ const tabFromUrl = () => {
 
 export default function CandidateProfile() {
   const cached = useMemo(() => getCachedHomeData(), []);
-  const [profile, setProfile] = useState(null);
-  const [account, setAccount] = useState(cached?.user || null);
-  const [loading, setLoading] = useState(true);
+  const cachedProfileResult = useMemo(() => peekCandidateProfile(), []);
+  const initialProfile = cachedProfileResult?.profile || cached?.profile || null;
+  const initialAccount = cachedProfileResult?.user || cached?.user || null;
+  const [profile, setProfile] = useState(initialProfile);
+  const [account, setAccount] = useState(initialAccount);
+  const [loading, setLoading] = useState(!initialProfile);
   const [error, setError] = useState("");
   const [tab, setTab] = useState(tabFromUrl);
-  const [form, setForm] = useState(() => buildForm(null, cached?.user || null));
-  const [preferenceForm, setPreferenceForm] = useState(() => buildPreferenceForm(null));
+  const [form, setForm] = useState(() => buildForm(initialProfile, initialAccount));
+  const [preferenceForm, setPreferenceForm] = useState(() => buildPreferenceForm(initialProfile?.preference));
   const [fieldErrors, setFieldErrors] = useState({});
   const [preferenceErrors, setPreferenceErrors] = useState({});
   const [formNotice, setFormNotice] = useState("");

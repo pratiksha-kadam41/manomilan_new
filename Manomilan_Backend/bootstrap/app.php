@@ -30,6 +30,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'rbac.api' => EnforceApiModulePermissions::class,
             'superadmin' => RequireSuperAdmin::class,
             'website.availability' => EnsureWebsiteAvailable::class,
+            'candidate.profile.complete' => \App\Http\Middleware\EnsureCandidateProfileComplete::class,
         ]);
         $middleware->redirectGuestsTo(
             fn (Request $request) => $request->is('api/*') ? null : route('login')

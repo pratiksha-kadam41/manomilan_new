@@ -4,13 +4,14 @@ namespace App\Http\Controllers\Candidate;
 
 use App\DocumentVerification;
 use App\Models\CandidateNotification;
+use App\ProfileDocument;
 use App\Profile;
 use App\Http\Requests\Candidate\UpdateProfileRequest;
 use App\Http\Requests\Candidate\UploadDocumentsRequest;
 use App\Http\Requests\Candidate\UploadPhotoRequest;
+use App\Services\CandidateProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -18,78 +19,15 @@ use Throwable;
 
 class ProfileController extends CandidateController
 {
-    private const FIELD_MAP = [
-        'full_name' => 'fullName',
-        'gender' => 'groomOrBride',
-        'birth_date' => 'birthDate',
-        'religion' => 'religion',
-        'caste' => 'caste',
-        'sub_caste' => 'subCaste',
-        'marital_status' => 'maritalStatus',
-        'height' => 'height',
-        'weight' => 'weight',
-        'having_specs_lenses' => 'havingSpecsLenses',
-        'blood_group' => 'bloodGroup',
-        'mother_tongue' => 'motherTongue',
-        'language' => 'language',
-        'special_cases' => 'specialCases',
-        'about' => 'knowAboutMyself',
-        'address' => 'address',
-        'permanent_address' => 'permanent_address',
-        'source_of_information' => 'source_of_information',
-        'reference_name' => 'referenceName',
-        'reference_relation' => 'referenceRelation',
-        'reference_contact' => 'referenceContactNumber',
-        'reference_address' => 'referenceAddress',
-        'reference_email' => 'referenceEmail',
-        'education' => 'education',
-        'degree' => 'degreeDiplomaName1',
-        'degree_2' => 'degreeDiplomaName2',
-        'specialisation' => 'specialisation1',
-        'specialisation_2' => 'specialisation2',
-        'college' => 'universityBoardCollege',
-        'additional_education' => 'additionalEducation1',
-        'additional_education_2' => 'additionalEducation2',
-        'city_of_education' => 'cityOfEducation',
-        'profession' => 'profession',
-        'field_of_working' => 'fieldOfWorking',
-        'organisation' => 'organisationWorkingIn',
-        'professional_city' => 'professionalCity',
-        'designation' => 'designation',
-        'length_of_employment' => 'lengthOfEmployment',
-        'monthly_income' => 'monthlyIncome',
-        'annual_income' => 'annualIncome',
-        'has_medical_history' => 'hasMedicalHistory',
-        'personal_medical_history' => 'personalMedicalHistory',
-        'current_medical_problems' => 'currentMedicalProblems',
-        'medications' => 'medications',
-        'father_name' => 'fathersName',
-        'father_alive' => 'fatherAlive',
-        'father_occupation' => 'fathersOccupation',
-        'father_contact' => 'fatherContactNumber',
-        'father_native_place' => 'fathersNativePlace',
-        'mother_name' => 'mothersName',
-        'mother_alive' => 'motherAlive',
-        'mother_occupation' => 'mothersOccupation',
-        'mother_contact' => 'motherContactNumber',
-        'mother_native_place' => 'mothersNativePlace',
-        'brothers' => 'noOfBrothers',
-        'brothers_married' => 'brothersMarried',
-        'sisters' => 'noOfSisters',
-        'sisters_married' => 'sistersMarried',
-        'parents_intercaste_marriage' => 'parentsIntercasteMarriage',
-        'parents_different_caste' => 'parentsDifferentCaste',
-        'family_values' => 'familyValues',
-        'family_financial_status' => 'familyFinancialStatus',
-        'family_annual_income' => 'familyAnnualIncome',
-        'profile_creator_name' => 'profileCreatorName',
-        'profile_creator_relation' => 'profileCreatorRelation',
-        'place_of_birth' => 'placeOfBirth',
-        'time_of_birth' => 'timeOfBirth',
-        'birth_time_ampm' => 'birthTime_ampm',
-        'horoscope_caste' => 'horoscopeCaste',
-        'horoscope_sub_caste' => 'horoscopeSubCaste',
-        'horoscope_dob' => 'horoscopeDob',
+    private const DOCUMENT_COLUMN_MAP = [
+        'identificationProof' => 'aadhaar_card',
+        'birthDateProof' => 'birth_certificate',
+        'addressProof' => 'address_proof',
+        'educationProof' => 'education_certificate',
+        'professionProof' => 'profession_proof',
+        'incomeProof' => 'income_proof',
+        'casteCertificate' => 'caste_certificate',
+        'medicalFitnessCertificate' => 'medical_fitness_certificate',
     ];
 
     public function show(Request $request)
@@ -120,7 +58,7 @@ class ProfileController extends CandidateController
         }
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CandidateProfileService $profileService)
     {
         $user = $this->candidate($request);
 
@@ -139,15 +77,8 @@ class ProfileController extends CandidateController
         ]);
 
         try {
-            $profile = DB::transaction(function () use ($user, $data) {
-                $profile = Profile::create([
-                    'fullName' => $data['full_name'],
-                    'groomOrBride' => $data['gender'],
-                    'birthDate' => $data['birth_date'],
-                    'email' => $data['email'] ?? $user->email,
-                    'phone' => $user->username,
-                    'registration_type' => 'quick',
-                ]);
+            $profile = DB::transaction(function () use ($user, $data, $profileService) {
+                $profile = $profileService->create($user, $data);
 
                 $user->profile_id = $profile->id;
                 if (! empty($data['email'])) {
@@ -156,7 +87,6 @@ class ProfileController extends CandidateController
                 $user->name = $data['full_name'];
                 $user->save();
 
-                $profile->load('user');
                 $this->refreshCompletion($profile);
 
                 return $profile;
@@ -183,28 +113,16 @@ class ProfileController extends CandidateController
         }
     }
 
-    public function update(UpdateProfileRequest $request)
+    public function update(UpdateProfileRequest $request, CandidateProfileService $profileService)
     {
         $user = $this->candidate($request);
         $profile = $this->candidateProfile($request, true);
         $validated = $request->validated();
 
         try {
-            DB::transaction(function () use ($user, $profile, $validated) {
+            DB::transaction(function () use ($user, $profile, $validated, $profileService) {
                 $locked = Profile::lockForUpdate()->find($profile->id);
-                $columns = Schema::getColumnListing((new Profile)->getTable());
-                $payload = [];
-
-                foreach (self::FIELD_MAP as $input => $column) {
-                    if (array_key_exists($input, $validated) && in_array($column, $columns, true)) {
-                        $payload[$column] = $validated[$input];
-                    }
-                }
-
-                if ($payload) {
-                    $locked->fill($payload);
-                    $locked->save();
-                }
+                $profileService->update($locked, $validated);
 
                 $userChanged = false;
                 if (array_key_exists('full_name', $validated)) {
@@ -252,20 +170,24 @@ class ProfileController extends CandidateController
         $user = $this->candidate($request);
         $profile = $this->candidateProfile($request, true);
         $newPath = null;
+        $oldPath = null;
+        $committed = false;
 
         try {
             $newPath = $request->file('photo')->store('candidate_images', 'public');
 
-            DB::transaction(function () use ($profile, $newPath) {
+            DB::transaction(function () use ($profile, $newPath, &$oldPath) {
                 $locked = Profile::lockForUpdate()->find($profile->id);
-                $oldPath = $locked->profilePhoto;
-
-                $locked->profilePhoto = $newPath;
+                $photos = is_array($locked->photos) ? $locked->photos : [];
+                $oldPath = $photos['profile_photo'] ?? $photos[0] ?? null;
+                $photos['profile_photo'] = $newPath;
+                $locked->photos = $photos;
                 $locked->save();
 
-                $this->deleteStoredFile($oldPath);
                 $this->refreshCompletion($locked);
             });
+            $committed = true;
+            $this->deleteStoredFile($oldPath);
 
             $freshProfile = Profile::with(['user', 'preference'])->find($profile->id);
 
@@ -280,7 +202,7 @@ class ProfileController extends CandidateController
             $this->rethrowClientError($e);
             report($e);
 
-            if ($newPath) {
+            if ($newPath && ! $committed) {
                 Storage::disk('public')->delete($newPath);
             }
 
@@ -295,17 +217,20 @@ class ProfileController extends CandidateController
     {
         $user = $this->candidate($request);
         $profile = $this->candidateProfile($request, true);
+        $oldPath = null;
 
         try {
-            DB::transaction(function () use ($profile) {
+            DB::transaction(function () use ($profile, &$oldPath) {
                 $locked = Profile::lockForUpdate()->find($profile->id);
-                $oldPath = $locked->profilePhoto;
-                $locked->profilePhoto = null;
+                $photos = is_array($locked->photos) ? $locked->photos : [];
+                $oldPath = $photos['profile_photo'] ?? $photos[0] ?? null;
+                unset($photos['profile_photo'], $photos[0]);
+                $locked->photos = $photos ?: null;
                 $locked->save();
 
-                $this->deleteStoredFile($oldPath);
                 $this->refreshCompletion($locked);
             });
+            $this->deleteStoredFile($oldPath);
 
             $freshProfile = Profile::with(['user', 'preference'])->find($profile->id);
 
@@ -346,6 +271,8 @@ class ProfileController extends CandidateController
         $user = $this->candidate($request);
         $profile = $this->candidateProfile($request, true);
         $stored = [];
+        $oldPaths = [];
+        $committed = false;
 
         try {
             foreach ($photoFields as $field) {
@@ -357,21 +284,23 @@ class ProfileController extends CandidateController
                 }
             }
 
-            DB::transaction(function () use ($profile, $stored) {
+            DB::transaction(function () use ($profile, $stored, &$oldPaths) {
                 $locked = Profile::lockForUpdate()->findOrFail($profile->id);
-                $oldPaths = [];
+                $photos = is_array($locked->photos) ? $locked->photos : [];
 
                 foreach ($stored as $field => $path) {
-                    $oldPaths[$field] = $locked->{$field};
-                    $locked->{$field} = $path;
+                    $oldPaths[] = $photos[$field] ?? null;
+                    $photos[$field] = $path;
                 }
 
+                $locked->photos = $photos;
                 $locked->save();
-                foreach ($oldPaths as $path) {
-                    $this->deleteStoredFile($path);
-                }
                 $this->refreshCompletion($locked);
             });
+            $committed = true;
+            foreach ($oldPaths as $path) {
+                $this->deleteStoredFile($path);
+            }
 
             $freshProfile = Profile::with(['user', 'preference'])->findOrFail($profile->id);
 
@@ -384,8 +313,10 @@ class ProfileController extends CandidateController
             ]);
         } catch (Throwable $e) {
             $this->rethrowClientError($e);
-            foreach ($stored as $path) {
-                Storage::disk('public')->delete($path);
+            if (! $committed) {
+                foreach ($stored as $path) {
+                    Storage::disk('public')->delete($path);
+                }
             }
             report($e);
 
@@ -406,6 +337,7 @@ class ProfileController extends CandidateController
         $user = $this->candidate($request);
         $profile = $this->candidateProfile($request, true);
         $stored = [];
+        $committed = false;
 
         try {
             foreach ($request->file('photos', []) as $photo) {
@@ -426,6 +358,7 @@ class ProfileController extends CandidateController
                 $locked->save();
                 $this->refreshCompletion($locked);
             });
+            $committed = true;
 
             $freshProfile = Profile::with(['user', 'preference'])->findOrFail($profile->id);
 
@@ -437,8 +370,10 @@ class ProfileController extends CandidateController
                 ],
             ]);
         } catch (Throwable $e) {
-            foreach ($stored as $path) {
-                Storage::disk('public')->delete($path);
+            if (! $committed) {
+                foreach ($stored as $path) {
+                    Storage::disk('public')->delete($path);
+                }
             }
             $this->rethrowClientError($e);
             report($e);
@@ -455,6 +390,8 @@ class ProfileController extends CandidateController
         $user = $this->candidate($request);
         $profile = $this->candidateProfile($request, true);
         $stored = [];
+        $oldFiles = [];
+        $committed = false;
 
         try {
             foreach (self::DOCUMENT_KEYS as $key) {
@@ -473,16 +410,19 @@ class ProfileController extends CandidateController
                 ], 422);
             }
 
-            DB::transaction(function () use ($profile, $stored) {
+            DB::transaction(function () use ($profile, $stored, &$oldFiles) {
                 $locked = Profile::lockForUpdate()->find($profile->id);
-                $oldFiles = [];
-
+                $documents = ProfileDocument::firstOrNew(['profile_id' => $locked->id]);
                 foreach ($stored as $key => $path) {
-                    $oldFiles[$key] = $locked->{$key};
-                    $locked->{$key} = $path;
+                    $column = self::DOCUMENT_COLUMN_MAP[$key] ?? null;
+                    if ($column === null) {
+                        continue;
+                    }
+                    $oldFiles[] = $documents->{$column};
+                    $documents->{$column} = $path;
                 }
 
-                $locked->save();
+                $documents->save();
 
                 $verification = DocumentVerification::firstOrCreate(['profile_id' => $locked->id]);
                 foreach ($stored as $key => $path) {
@@ -491,12 +431,12 @@ class ProfileController extends CandidateController
                 }
                 $verification->save();
 
-                foreach ($oldFiles as $path) {
-                    $this->deleteStoredFile($path);
-                }
-
                 $this->refreshCompletion($locked);
             });
+            $committed = true;
+            foreach ($oldFiles as $path) {
+                $this->deleteStoredFile($path);
+            }
 
             $freshProfile = Profile::with(['user', 'preference'])->find($profile->id);
             $this->notifyUser(
@@ -518,8 +458,10 @@ class ProfileController extends CandidateController
             $this->rethrowClientError($e);
             report($e);
 
-            foreach ($stored as $path) {
-                Storage::disk('public')->delete($path);
+            if (! $committed) {
+                foreach ($stored as $path) {
+                    Storage::disk('public')->delete($path);
+                }
             }
 
             return response()->json([
@@ -541,21 +483,24 @@ class ProfileController extends CandidateController
             ], 404);
         }
 
+        $oldPath = null;
         try {
-            DB::transaction(function () use ($profile, $key) {
+            DB::transaction(function () use ($profile, $key, &$oldPath) {
                 $locked = Profile::lockForUpdate()->find($profile->id);
-                $oldPath = $locked->{$key};
-                $locked->{$key} = null;
-                $locked->save();
+                $column = self::DOCUMENT_COLUMN_MAP[$key];
+                $documents = ProfileDocument::firstOrNew(['profile_id' => $locked->id]);
+                $oldPath = $documents->{$column};
+                $documents->{$column} = null;
+                $documents->save();
 
                 $verification = DocumentVerification::firstOrCreate(['profile_id' => $locked->id]);
                 $verification->{$key.'_status'} = 'pending';
                 $verification->{$key.'_remarks'} = null;
                 $verification->save();
 
-                $this->deleteStoredFile($oldPath);
                 $this->refreshCompletion($locked);
             });
+            $this->deleteStoredFile($oldPath);
 
             $freshProfile = Profile::with(['user', 'preference'])->find($profile->id);
 

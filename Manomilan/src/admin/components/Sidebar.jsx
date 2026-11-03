@@ -103,19 +103,21 @@ export default function Sidebar({ currentPath, onNavigate }) {
         <WebsiteSidebarGroup currentPath={currentPath} onNavigate={onNavigate} />
       </nav>
 
-      <a
-        href="/"
-        className="adm-link adm-logout"
-        title="Logout"
-        onClick={(event) => {
-          event.preventDefault();
-          clearSession();
-          window.location.replace("/");
-        }}
-      >
-        <LogOut size={20} />
-        <span className="adm-link-text">Logout</span>
-      </a>
+      <div className="adm-sidebar-footer">
+        <a
+          href="/"
+          className="adm-link adm-logout"
+          title="Logout"
+          onClick={(event) => {
+            event.preventDefault();
+            clearSession();
+            window.location.replace("/");
+          }}
+        >
+          <LogOut size={20} />
+          <span className="adm-link-text">Logout</span>
+        </a>
+      </div>
     </aside>
   );
 }

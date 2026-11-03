@@ -30,9 +30,10 @@ class InterestController extends CandidateController
             if (! empty($filters['q'])) {
                 $term = '%'.trim($filters['q']).'%';
                 $query->whereHas('user.profile', function ($inner) use ($term) {
-                    $inner->where('fullName', 'like', $term)
-                        ->orWhere('profile_id', 'like', $term)
-                        ->orWhere('profession', 'like', $term);
+                    $inner->where('full_name', 'like', $term)
+                        ->orWhere('reg_id', 'like', $term)
+                        ->orWhere('phone', 'like', $term)
+                        ->orWhereHas('employments', fn ($employment) => $employment->where('profession', 'like', $term));
                 });
             }
 
@@ -76,9 +77,10 @@ class InterestController extends CandidateController
             if (! empty($filters['q'])) {
                 $term = '%'.trim($filters['q']).'%';
                 $query->whereHas('profile', function ($inner) use ($term) {
-                    $inner->where('fullName', 'like', $term)
-                        ->orWhere('profile_id', 'like', $term)
-                        ->orWhere('profession', 'like', $term);
+                    $inner->where('full_name', 'like', $term)
+                        ->orWhere('reg_id', 'like', $term)
+                        ->orWhere('phone', 'like', $term)
+                        ->orWhereHas('employments', fn ($employment) => $employment->where('profession', 'like', $term));
                 });
             }
 
@@ -114,7 +116,7 @@ class InterestController extends CandidateController
         try {
             $user = $this->candidate($request);
             $me = $this->candidateProfile($request, true);
-            $profile = Profile::where('active', 'active')->find($request->validated('to_profile_id'));
+            $profile = Profile::where('status', 'active')->find($request->validated('to_profile_id'));
 
             if (! $profile) {
                 return response()->json([
@@ -130,7 +132,7 @@ class InterestController extends CandidateController
                 ], 422);
             }
 
-            if ($profile->groomOrBride === $me->groomOrBride) {
+            if ($this->profileGender($profile) === $this->profileGender($me)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Interests can only be sent to matching candidate profiles.',
