@@ -9,6 +9,7 @@ use App\Models\CandidateNotification;
 use App\Models\User;
 use App\Preference;
 use App\Profile;
+use App\ProfilePartnerPreference;
 use App\UserInterest;
 use Carbon\Carbon;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -235,7 +236,7 @@ abstract class CandidateController extends Controller
         ], $details);
     }
 
-    protected function presentPreference(?Preference $preference): ?array
+    protected function presentPreference(Preference|ProfilePartnerPreference|null $preference): ?array
     {
         if (! $preference) {
             return null;
@@ -290,7 +291,7 @@ abstract class CandidateController extends Controller
             'mother_tongue' => $profile->mother_tongue,
             'language' => is_array($profile->languages) ? implode(', ', $profile->languages) : $profile->languages,
             'special_cases' => $profile->special_cases,
-            'source_of_information' => $profile->source_of_information,
+            'source_of_information' => $metadata['source_of_information'] ?? $profile->source_of_information,
             'reference_name' => $reference['name'] ?? null,
             'reference_relation' => $reference['relation'] ?? null,
             'reference_contact' => $reference['contact'] ?? null,

@@ -54,7 +54,7 @@ class UpdateProfileRequest extends FormRequest
             'source_of_information' => ['sometimes', 'nullable', 'string', 'max:255'],
             'reference_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'reference_relation' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'reference_contact' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'reference_contact' => ['sometimes', 'nullable', 'regex:/^\d{10}$/'],
             'reference_address' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'reference_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'education' => ['sometimes', 'nullable', 'string', 'max:255'],

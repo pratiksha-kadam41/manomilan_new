@@ -1003,7 +1003,7 @@ class ProfileController extends Controller
             'reference_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'reference_relation' => ['sometimes', 'nullable', 'string', 'max:255'],
             'reference_address' => ['sometimes', 'nullable', 'string', 'max:5000'],
-            'reference_phone' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'reference_phone' => ['sometimes', 'nullable', 'regex:/^\d{10}$/'],
             'reference_email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'profile_creator_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'profile_creator_relation' => ['sometimes', 'nullable', 'string', 'max:255'],

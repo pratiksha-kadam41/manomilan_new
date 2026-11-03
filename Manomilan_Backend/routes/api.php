@@ -212,13 +212,12 @@ Route::prefix('admin/success-stories')->group(function () {
         Route::post('/profile/additional-photos', [CandidateProfileController::class, 'uploadAdditionalPhotos']);
         Route::post('/profile/documents', [CandidateProfileController::class, 'uploadDocuments']);
         Route::delete('/profile/documents/{key}', [CandidateProfileController::class, 'deleteDocument']);
+        Route::get('/preferences', [CandidatePreferenceController::class, 'show']);
+        Route::put('/preferences', [CandidatePreferenceController::class, 'update']);
+        Route::post('/preferences', [CandidatePreferenceController::class, 'update']);
 
         Route::middleware('candidate.profile.complete')->group(function () {
             Route::get('/dashboard', [CandidateDashboardController::class, 'index']);
-
-            Route::get('/preferences', [CandidatePreferenceController::class, 'show']);
-            Route::put('/preferences', [CandidatePreferenceController::class, 'update']);
-            Route::post('/preferences', [CandidatePreferenceController::class, 'update']);
 
             Route::get('/matches', [CandidateMatchController::class, 'index']);
             Route::get('/matches/{id}', [CandidateMatchController::class, 'show'])->whereNumber('id');

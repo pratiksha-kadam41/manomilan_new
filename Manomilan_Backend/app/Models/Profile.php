@@ -597,7 +597,7 @@ class Profile extends Model
                 case 'fullName':
                     return $this->full_name;
                 case 'source_of_information':
-                    return $this->source_of_information;
+                    return $this->source_of_information ?: ($addresses['metadata']['source_of_information'] ?? null);
                 case 'profilePhoto':
                     return $photos['profile_photo'] ?? $photos[0] ?? null;
                 case 'full_body_photo':
@@ -615,7 +615,7 @@ class Profile extends Model
                 case 'subCaste':
                     return $religion?->sub_caste;
                 case 'maritalStatus':
-                    return $this->marital_status;
+                    return $this->marital_status ?: ($addresses['metadata']['marital_status'] ?? null);
                 case 'birthDate':
                     return $this->birth_date;
                 case 'height':
@@ -960,7 +960,7 @@ class Profile extends Model
                 case 'fullName':
                     return $this->full_name;
                 case 'source_of_information':
-                    return $this->source_of_information;
+                    return $this->source_of_information ?: ($addresses['metadata']['source_of_information'] ?? null);
                 case 'groomOrBride':
                     return $this->groomorbride;
                 case 'religion':
@@ -970,7 +970,7 @@ class Profile extends Model
                 case 'subCaste':
                     return $religion?->sub_caste;
                 case 'maritalStatus':
-                    return $this->marital_status;
+                    return $this->marital_status ?: ($addresses['metadata']['marital_status'] ?? null);
                 case 'birthDate':
                     return $this->birth_date;
                 case 'height':

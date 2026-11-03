@@ -239,7 +239,7 @@ const EDIT_SECTIONS = [
       { name: "reference_name", label: "Name", required: true, placeholder: "Reference person's name" },
       { name: "reference_relation", label: "Relation to candidate", required: true, placeholder: "Relation to you" },
       { name: "reference_address", label: "Address", placeholder: "Address" },
-      { name: "reference_contact", label: "Contact", required: true, placeholder: "Mobile number" },
+      { name: "reference_contact", label: "Contact", type: "tel", inputMode: "numeric", maxLength: 10, placeholder: "10-digit mobile number" },
       { name: "reference_email", label: "Email", type: "email", placeholder: "Email address" },
     ],
   },
@@ -254,9 +254,9 @@ const PREFERENCE_SECTIONS = [
     subtitle: "Age, community and education",
     icon: Heart,
     fields: [
-      { name: "preferred_religion", label: "Preferred religion", placeholder: "Any religion" },
-      { name: "preferred_caste", label: "Preferred community", placeholder: "Any community" },
-      { name: "preferred_sub_caste", label: "Preferred sub community", placeholder: "Optional" },
+      { name: "preferred_religion", label: "Preferred religion", readOnly: true },
+      { name: "preferred_caste", label: "Preferred caste", type: "select", options: [["Any", "Any"], ["Shwetambar", "Shwetambar"], ["Digambar", "Digambar"]] },
+      { name: "preferred_sub_caste", label: "Preferred sub caste", type: "select" },
       { name: "preferred_education", label: "Preferred education", placeholder: "Any education" },
       { name: "age_from", label: "Age from", type: "number", min: 18, max: 100 },
       { name: "age_to", label: "Age to", type: "number", min: 18, max: 100 },
@@ -273,9 +273,9 @@ const PREFERENCE_SECTIONS = [
       { name: "working_partner", label: "Working partner", type: "select", options: [["", "No preference"], ["Yes", "Yes"], ["No", "No"], ["Doesn't matter", "Doesn't matter"]] },
       { name: "preferred_working_field", label: "Preferred working field", placeholder: "Any field" },
       { name: "expected_income", label: "Expected income", placeholder: "Optional" },
-      { name: "family_type", label: "Family type", placeholder: "Joint / nuclear" },
-      { name: "financial_background", label: "Financial background", placeholder: "Optional" },
-      { name: "family_values", label: "Family values", placeholder: "Traditional / moderate" },
+      { name: "family_type", label: "Family type", type: "select", options: [["", "Select family type"], ["Joint", "Joint"], ["Nuclear", "Nuclear"]] },
+      { name: "financial_background", label: "Financial background", type: "select", options: [["", "Select financial background"], ["Lower", "Lower"], ["Middle", "Middle"], ["Upper", "Upper"]] },
+      { name: "family_values", label: "Family values", type: "select", options: [["", "Select family values"], ["Traditional", "Traditional"], ["Modern", "Modern"], ["Liberal", "Liberal"]] },
     ],
   },
   {
@@ -401,6 +401,7 @@ const buildPreferenceForm = (preference) => {
   ALL_PREFERENCE_FIELDS.forEach(({ name }) => {
     form[name] = preference?.[name] ?? "";
   });
+  form.preferred_religion = "Jain";
   return form;
 };
 
@@ -415,6 +416,13 @@ const candidateDraftKey = (user) => {
   return identity == null || String(identity).trim() === ""
     ? ""
     : `candidate_profile_draft:${encodeURIComponent(String(identity).trim().toLowerCase())}`;
+};
+
+const candidatePreferenceDraftKey = (user) => {
+  const identity = user?.id ?? user?.username;
+  return identity == null || String(identity).trim() === ""
+    ? ""
+    : `candidate_preference_draft:${encodeURIComponent(String(identity).trim().toLowerCase())}`;
 };
 
 const readCandidateDraft = (key) => {
@@ -443,7 +451,7 @@ const clearCandidateDraft = (key) => {
   try {
     window.localStorage.removeItem(key);
   } catch (draftError) {
-    console.error("Unable to clear the completed candidate profile draft.", draftError);
+    console.error("Unable to clear the saved candidate draft.", draftError);
   }
 };
 
@@ -456,6 +464,16 @@ const restoreCandidateDraft = (baseForm, draft) => {
       : baseForm[field];
     if (!restored[field].length) restored[field] = [""];
   }
+  return restored;
+};
+
+const restorePreferenceDraft = (baseForm, draft) => {
+  if (!draft) return baseForm;
+  const restored = { ...baseForm };
+  ALL_PREFERENCE_FIELDS.forEach(({ name }) => {
+    if (typeof draft[name] === "string") restored[name] = draft[name];
+  });
+  restored.preferred_religion = "Jain";
   return restored;
 };
 
@@ -472,6 +490,7 @@ export default function CandidateProfile() {
   const [tab, setTab] = useState(tabFromUrl);
   const [form, setForm] = useState(() => buildForm(initialProfile, initialAccount));
   const [preferenceForm, setPreferenceForm] = useState(() => buildPreferenceForm(initialProfile?.preference));
+  const [preferenceDraftPending, setPreferenceDraftPending] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [preferenceErrors, setPreferenceErrors] = useState({});
   const [formNotice, setFormNotice] = useState("");
@@ -504,10 +523,15 @@ export default function CandidateProfile() {
       const baseForm = buildForm(result?.profile, currentUser);
       const complete = Number(result?.profile?.profile_completion || 0) >= 100;
       const draft = complete ? null : readCandidateDraft(candidateDraftKey(currentUser));
+      const preferenceDraft = readCandidateDraft(candidatePreferenceDraftKey(currentUser));
       setProfile(result?.profile || null);
       setAccount(currentUser);
       setForm(restoreCandidateDraft(baseForm, draft));
-      setPreferenceForm(buildPreferenceForm(result?.profile?.preference));
+      setPreferenceForm(restorePreferenceDraft(
+        buildPreferenceForm(result?.profile?.preference),
+        preferenceDraft,
+      ));
+      setPreferenceDraftPending(Boolean(preferenceDraft));
       setDraftLoaded(true);
       const requestedTab = new URLSearchParams(window.location.search).get("tab");
       setTab(complete
@@ -524,6 +548,12 @@ export default function CandidateProfile() {
           readCandidateDraft(candidateDraftKey(account)),
         ));
       }
+      const preferenceDraft = readCandidateDraft(candidatePreferenceDraftKey(account));
+      setPreferenceForm(restorePreferenceDraft(
+        buildPreferenceForm(profile?.preference),
+        preferenceDraft,
+      ));
+      setPreferenceDraftPending(Boolean(preferenceDraft));
       setDraftLoaded(true);
     } finally {
       setLoading(false);
@@ -536,6 +566,7 @@ export default function CandidateProfile() {
   }, []);
 
   const profileDraftStorageKey = candidateDraftKey(account);
+  const preferenceDraftStorageKey = candidatePreferenceDraftKey(account);
   const completion = Number(profile?.profile_completion || 0);
   const profileComplete = completion >= 100;
 
@@ -543,6 +574,11 @@ export default function CandidateProfile() {
     if (!draftLoaded || profileComplete || !profileDraftStorageKey) return;
     writeCandidateDraft(profileDraftStorageKey, form);
   }, [draftLoaded, form, profileComplete, profileDraftStorageKey]);
+
+  useEffect(() => {
+    if (!draftLoaded || !preferenceDraftPending || !preferenceDraftStorageKey) return;
+    writeCandidateDraft(preferenceDraftStorageKey, preferenceForm);
+  }, [draftLoaded, preferenceDraftPending, preferenceDraftStorageKey, preferenceForm]);
 
   const candidateInfo = {
     name: profile?.full_name || account?.name || account?.username,
@@ -571,7 +607,7 @@ export default function CandidateProfile() {
       && (form.brothers === "" || Number(value) > Number(form.brothers))) return;
     if (name === "sisters_married" && value !== ""
       && (form.sisters === "" || Number(value) > Number(form.sisters))) return;
-    const fieldValue = ["father_contact", "mother_contact"].includes(name)
+    const fieldValue = ["father_contact", "mother_contact", "reference_contact"].includes(name)
       ? value.replace(/\D/g, "").slice(0, 10)
       : siblingCountFields.includes(name)
         ? value
@@ -676,8 +712,20 @@ export default function CandidateProfile() {
   };
 
   const updatePreference = (name, value) => {
-    setPreferenceForm((current) => ({ ...current, [name]: value }));
-    setPreferenceErrors((current) => ({ ...current, [name]: undefined }));
+    if (name === "preferred_religion") return;
+    setPreferenceDraftPending(true);
+    setPreferenceForm((current) => ({
+      ...current,
+      [name]: value,
+      ...(name === "preferred_caste"
+        ? { preferred_sub_caste: value === "Any" ? "Any" : "" }
+        : {}),
+    }));
+    setPreferenceErrors((current) => ({
+      ...current,
+      [name]: undefined,
+      ...(name === "preferred_caste" ? { preferred_sub_caste: undefined } : {}),
+    }));
   };
 
   const saveProfile = async (event) => {
@@ -723,6 +771,8 @@ export default function CandidateProfile() {
       const result = await savePreferences(preferenceForm);
       setProfile((current) => current ? { ...current, preference: result?.preference, has_preferences: true } : current);
       setPreferenceForm(buildPreferenceForm(result?.preference));
+      setPreferenceDraftPending(false);
+      clearCandidateDraft(preferenceDraftStorageKey);
       push("Partner preferences saved. Your matches will now be ranked accordingly.");
     } catch (saveError) {
       setPreferenceErrors(saveError.errors || {});
@@ -898,10 +948,14 @@ export default function CandidateProfile() {
       ? "caste"
       : field.name === "horoscope_sub_caste"
         ? "horoscope_caste"
-        : null;
+        : field.name === "preferred_sub_caste"
+          ? "preferred_caste"
+          : null;
+    const preferenceSubCaste = field.name === "preferred_sub_caste";
     const options = subCasteParent
       ? [
           ["", "Select sub caste"],
+          ...(preferenceSubCaste ? [["Any", "Any"]] : []),
           ...(SUBCASTES[values[subCasteParent]] || [])
             .filter((subCaste) => subCaste !== "Any")
             .map((subCaste) => [subCaste, subCaste]),
@@ -1312,11 +1366,26 @@ export default function CandidateProfile() {
                           ) : <small>Not uploaded</small>}
                         </div>
                         <div className="cnd-doc-actions">
-                          {selected ? <span className="cnd-doc-selected">{selected.name} ({fileSizeLabel(selected.size)})</span> : null}
-                          <label className="cnd-btn cnd-btn-ghost cnd-btn-sm cnd-upload-label">
-                            <Upload size={15} /> {doc.file_url ? "Replace" : "Choose file"}
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => chooseDocument(key, event)} />
-                          </label>
+                          {selected ? (
+                            <>
+                              <span className="cnd-doc-selected">{selected.name} ({fileSizeLabel(selected.size)})</span>
+                              <button
+                                type="button"
+                                className="cnd-icon-btn cnd-doc-delete"
+                                onClick={() => setDocFiles((current) => ({ ...current, [key]: null }))}
+                                aria-label={`Remove selected ${label}`}
+                                title="Remove selected file"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          ) : null}
+                          {!doc.file_url && !selected ? (
+                            <label className="cnd-btn cnd-btn-ghost cnd-btn-sm cnd-upload-label">
+                              <Upload size={15} /> Choose file
+                              <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => chooseDocument(key, event)} />
+                            </label>
+                          ) : null}
                           {doc.file_url ? (
                             <>
                               <button type="button" className="cnd-icon-btn cnd-doc-delete" onClick={() => setRemoveDoc(key)} aria-label={`Remove ${label}`}>
@@ -1457,15 +1526,30 @@ export default function CandidateProfile() {
                           )}
                         </div>
                         <div className="cnd-doc-actions">
-                          {selected ? <span className="cnd-doc-selected">{selected.name} ({fileSizeLabel(selected.size)})</span> : null}
-                          <label className="cnd-btn cnd-btn-ghost cnd-btn-sm cnd-upload-label">
-                            <Upload size={15} /> {doc.file_url ? "Replace" : "Choose file"}
-                            <input
-                              type="file"
-                              accept=".pdf,.jpg,.jpeg,.png"
-                              onChange={(event) => chooseDocument(key, event)}
-                            />
-                          </label>
+                          {selected ? (
+                            <>
+                              <span className="cnd-doc-selected">{selected.name} ({fileSizeLabel(selected.size)})</span>
+                              <button
+                                type="button"
+                                className="cnd-icon-btn cnd-doc-delete"
+                                onClick={() => setDocFiles((current) => ({ ...current, [key]: null }))}
+                                aria-label={`Remove selected ${label}`}
+                                title="Remove selected file"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </>
+                          ) : null}
+                          {!doc.file_url && !selected ? (
+                            <label className="cnd-btn cnd-btn-ghost cnd-btn-sm cnd-upload-label">
+                              <Upload size={15} /> Choose file
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                onChange={(event) => chooseDocument(key, event)}
+                              />
+                            </label>
+                          ) : null}
                           {doc.file_url ? (
                             <button type="button" className="cnd-icon-btn cnd-doc-delete" onClick={() => setRemoveDoc(key)} aria-label={`Remove ${label}`}>
                               <Trash2 size={16} />
