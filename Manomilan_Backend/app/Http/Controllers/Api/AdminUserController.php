@@ -22,6 +22,7 @@ class AdminUserController extends Controller
 
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:255'],
+            'gender' => ['nullable', 'in:groom,bride'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -35,8 +36,8 @@ class AdminUserController extends Controller
             ->whereDoesntHave('role', fn ($query) => $query
                 ->whereRaw("REPLACE(LOWER(name), ' ', '') = ?", ['superadmin'])
                 ->orWhere('user_type', '00'))
-            ->when($term !== '', function ($query) use ($term) {
-                $query->where(function ($search) use ($term) {
+            ->when($term !== '', function ($query) use ($term, $profileSearchColumns) {
+                $query->where(function ($search) use ($term, $profileSearchColumns) {
                     $search->where('name', 'like', '%' . $term . '%')
                         ->orWhere('username', 'like', '%' . $term . '%')
                         ->orWhere('email', 'like', '%' . $term . '%')
@@ -49,7 +50,11 @@ class AdminUserController extends Controller
                             });
                         });
                 });
-            });
+            })
+            ->when($filters['gender'] ?? null, fn ($query, $gender) => $query->whereHas(
+                'profile',
+                fn ($profile) => $profile->where('groomorbride', ucfirst($gender))
+            ));
 
         $stats = (clone $baseQuery)
             ->selectRaw("

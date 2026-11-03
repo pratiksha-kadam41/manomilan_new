@@ -8,9 +8,10 @@ import { request } from "../../api";
 import "../components/admin-ui.css";
 import "./resetPasswords.css";
 
-const loadUsers = ({ query, page }) => {
+const loadUsers = ({ query, gender, page }) => {
   const params = new URLSearchParams({ per_page: "20", page: String(page) });
   if (query) params.set("q", query);
+  if (gender !== "all") params.set("gender", gender);
   return request(`/admin/users?${params}`);
 };
 
@@ -19,6 +20,7 @@ const resetPassword = (id) =>
 
 export default function ResetPasswords() {
   const [search, setSearch] = useState("");
+  const [gender, setGender] = useState("all");
   const [page, setPage] = useState(1);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
@@ -40,7 +42,7 @@ export default function ResetPasswords() {
     setLoading(true);
     setError("");
     try {
-      const response = await loadUsers({ query: activeQuery, page });
+      const response = await loadUsers({ query: activeQuery, gender, page });
       if (id !== requestId.current) return;
       setUsers(Array.isArray(response?.data?.data) ? response.data.data : []);
       setPagination(response?.data || null);
@@ -50,7 +52,7 @@ export default function ResetPasswords() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [activeQuery, page]);
+  }, [activeQuery, gender, page]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -135,6 +137,16 @@ export default function ResetPasswords() {
               <button type="button" onClick={() => { setSearch(""); setPage(1); }} aria-label="Clear search"><X size={16} /></button>
             ) : null}
           </label>
+          <select
+            className="ui-select"
+            value={gender}
+            onChange={(event) => { setGender(event.target.value); setPage(1); }}
+            aria-label="Filter by groom or bride"
+          >
+            <option value="all">All Profiles</option>
+            <option value="groom">Groom</option>
+            <option value="bride">Bride</option>
+          </select>
         </div>
 
         <div className="ui-card ui-table-card">
