@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Candidate\ProfileController;
 use App\Models\User;
+use App\Services\CandidateProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -62,5 +63,41 @@ class CandidateRegistrationProfileDetailsTest extends TestCase
         $this->assertSame('1995-06-15', $profileResponse->getData(true)['data']['user']['birth_date']);
         $this->assertSame('bride', $profileResponse->getData(true)['data']['user']['gender']);
         $this->assertNull($profileResponse->getData(true)['data']['profile']);
+    }
+
+    public function test_candidate_can_create_a_profile_with_the_current_schema(): void
+    {
+        DB::table('roles')->insert([
+            'name' => 'Candidate',
+            'user_type' => '21',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $registration = $this->postJson('/api/register', [
+            'name' => 'Candidate Example',
+            'email' => 'candidate@example.test',
+            'phone' => '9876543210',
+            'password' => 'secret123',
+            'birth_date' => '1995-06-15',
+            'gender' => 'bride',
+        ])->assertCreated();
+
+        $user = User::findOrFail($registration->json('user.id'));
+        $request = Request::create('/api/candidate/profile', 'POST', [
+            'full_name' => 'Candidate Example',
+            'gender' => 'bride',
+            'birth_date' => '1995-06-15',
+            'email' => 'candidate@example.test',
+        ]);
+        $request->setUserResolver(fn () => $user);
+
+        $response = (new ProfileController())->store($request, new CandidateProfileService());
+        $body = $response->getData(true);
+
+        $this->assertSame(201, $response->getStatusCode());
+        $this->assertSame('Candidate Example', $body['data']['profile']['full_name']);
+        $this->assertNotEmpty($body['data']['profile']['profile_id']);
+        $this->assertNotNull($user->fresh()->profile_id);
     }
 }

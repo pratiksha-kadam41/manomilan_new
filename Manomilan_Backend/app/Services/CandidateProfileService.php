@@ -5,12 +5,13 @@ namespace App\Services;
 use App\Profile;
 use App\Models\User;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 
 class CandidateProfileService
 {
     public function create(User $user, array $data): Profile
     {
-        return Profile::create([
+        $profileData = [
             'groomorbride' => ucfirst($data['gender']),
             'full_name' => $data['full_name'],
             'email' => $data['email'] ?? $user->email,
@@ -19,8 +20,13 @@ class CandidateProfileService
             'created_by' => $user->id,
             'verification_status' => 'Pending',
             'status' => 'active',
-            'registration_type' => 'quick',
-        ]);
+        ];
+
+        if (Schema::hasColumn('profiles', 'registration_type')) {
+            $profileData['registration_type'] = 'quick';
+        }
+
+        return Profile::create($profileData);
     }
 
     public function update(Profile $profile, array $data): Profile

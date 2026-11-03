@@ -39,16 +39,60 @@ const EDIT_SECTIONS = [
       { name: "full_name", label: "Full name", required: true, placeholder: "Full name as per documents" },
       { name: "gender", label: "Profile type", type: "select", required: true, options: [["groom", "Groom"], ["bride", "Bride"]] },
       { name: "email", label: "Email address", type: "email", placeholder: "you@example.com" },
-      { name: "source_of_information", label: "Source of information", required: true, placeholder: "WhatsApp, friend, website..." },
+      {
+        name: "source_of_information",
+        label: "Source of information",
+        type: "select",
+        required: true,
+        options: [
+          ["", "Select source"],
+          ["WhatsApp", "WhatsApp"],
+          ["Instagram", "Instagram"],
+          ["Facebook", "Facebook"],
+          ["Poster/Flex in Temple", "Poster/Flex in Temple"],
+          ["Outside Banner", "Outside Banner"],
+          ["People References", "People References"],
+          ["Call by Manomilan Executive", "Call by Manomilan Executive"],
+          ["Family/Friends", "Family/Friends"],
+        ],
+      },
       { name: "religion", label: "Religion", required: true, readOnly: true },
       { name: "caste", label: "Community", required: true, placeholder: "Community" },
       { name: "sub_caste", label: "Sub community", placeholder: "Sub community" },
-      { name: "marital_status", label: "Marital status", required: true, placeholder: "Never married, divorced..." },
+      {
+        name: "marital_status",
+        label: "Marital status",
+        type: "select",
+        required: true,
+        options: [
+          ["", "Select marital status"],
+          ["Unmarried", "Unmarried"],
+          ["Divorced", "Divorced"],
+          ["Widowed", "Widowed"],
+          ["Separated", "Separated"],
+        ],
+      },
       { name: "birth_date", label: "Date of birth", type: "date", required: true },
       { name: "height", label: "Height", required: true, placeholder: "5 ft 6 in" },
       { name: "weight", label: "Weight", required: true, placeholder: "60 kg" },
       { name: "having_specs_lenses", label: "Specs / lenses", type: "select", options: [["", "Select"], ["None", "None"], ["Specs", "Specs"], ["Lenses", "Lenses"], ["Both", "Both"]] },
-      { name: "blood_group", label: "Blood group", required: true, placeholder: "B+" },
+      {
+        name: "blood_group",
+        label: "Blood group",
+        type: "select",
+        required: true,
+        options: [
+          ["", "Select blood group"],
+          ["A+", "A+"],
+          ["A-", "A-"],
+          ["B+", "B+"],
+          ["B-", "B-"],
+          ["AB+", "AB+"],
+          ["AB-", "AB-"],
+          ["O+", "O+"],
+          ["O-", "O-"],
+        ],
+      },
       { name: "mother_tongue", label: "Mother tongue", required: true, placeholder: "Marathi" },
       { name: "language", label: "Other languages known", placeholder: "Hindi, English..." },
       { name: "special_cases", label: "Special cases", placeholder: "None / details" },
@@ -285,10 +329,11 @@ const timeValue = (value) => {
 
 const buildForm = (profile, user = null) => {
   const details = profile?.details || {};
+  const gender = profile?.gender || profile?.groomOrBride || user?.gender || user?.groomOrBride || "";
   const form = {
-    full_name: profile?.full_name || user?.name || user?.full_name || "",
-    gender: profile?.gender || user?.gender || "",
-    birth_date: dateValue(profile?.birth_date || user?.birth_date),
+    full_name: profile?.full_name || profile?.fullName || user?.name || user?.full_name || user?.fullName || "",
+    gender: String(gender).toLowerCase(),
+    birth_date: dateValue(profile?.birth_date || profile?.birthDate || user?.birth_date || user?.birthDate),
     email: profile?.email || user?.email || "",
     mobile: profile?.mobile || user?.mobile || user?.username || "",
   };
@@ -443,7 +488,13 @@ export default function CandidateProfile() {
       setForm(buildForm(result?.profile, currentUser));
       setPreferenceForm(buildPreferenceForm(result?.profile?.preference));
       push(profile ? "Your profile has been updated." : "Your candidate profile has been created.");
-      setTab(Number(result?.profile?.profile_completion || 0) >= 100 ? "overview" : "edit");
+      const nextTab = Number(result?.profile?.profile_completion || 0) >= 100 ? "overview" : "edit";
+      setTab(nextTab);
+      if (!profile) {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("tab", nextTab);
+        window.history.replaceState(window.history.state, "", nextUrl);
+      }
     } catch (saveError) {
       setFieldErrors(saveError.errors || {});
       setFormNotice(saveError.message || "Could not save your profile.");
@@ -663,6 +714,7 @@ export default function CandidateProfile() {
                 onClick={() => onChange("address", values.permanent_address || "")}
               >
                 <Copy size={16} aria-hidden="true" />
+                <span>Same as Permanent Address</span>
               </button>
             ) : null}
             <textarea {...common} rows={field.rows || 3} />
