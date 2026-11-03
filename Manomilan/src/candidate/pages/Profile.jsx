@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck, Briefcase, Camera, CheckCircle2, Copy, FileText, GraduationCap,
-  Eye, Heart, Loader2, MapPin, Save, Settings2, ShieldCheck, Sparkles,
+  Eye, Heart, Loader2, MapPin, Minus, Plus, Save, Settings2, ShieldCheck, Sparkles,
   Trash2, Upload, UserRound, Users,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
@@ -12,6 +12,7 @@ import {
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
+import { CASTE_OPTIONS, SUBCASTES } from "../../data/casteOptions";
 import {
   createCandidateProfile, getCandidateProfile, removeCandidateDocument,
   removeCandidatePhoto, savePreferences, updateCandidateProfile,
@@ -57,8 +58,14 @@ const EDIT_SECTIONS = [
         ],
       },
       { name: "religion", label: "Religion", required: true, readOnly: true },
-      { name: "caste", label: "Community", required: true, placeholder: "Community" },
-      { name: "sub_caste", label: "Sub community", placeholder: "Sub community" },
+      {
+        name: "caste",
+        label: "Caste",
+        type: "select",
+        required: true,
+        options: [["", "Select caste"], ...CASTE_OPTIONS.map((caste) => [caste, caste])],
+      },
+      { name: "sub_caste", label: "Sub caste", type: "select" },
       {
         name: "marital_status",
         label: "Marital status",
@@ -110,8 +117,13 @@ const EDIT_SECTIONS = [
       { name: "time_of_birth", label: "Time of birth", required: true, type: "time" },
       { name: "place_of_birth", label: "Place of birth", required: true, placeholder: "City or town" },
       { name: "birth_time_ampm", label: "AM / PM", type: "select", options: [["", "Select"], ["AM", "AM"], ["PM", "PM"]] },
-      { name: "horoscope_caste", label: "Horoscope community", placeholder: "Community" },
-      { name: "horoscope_sub_caste", label: "Horoscope sub community", placeholder: "Sub community" },
+      {
+        name: "horoscope_caste",
+        label: "Horoscope caste",
+        type: "select",
+        options: [["", "Select caste"], ...CASTE_OPTIONS.map((caste) => [caste, caste])],
+      },
+      { name: "horoscope_sub_caste", label: "Horoscope sub caste", type: "select" },
       { name: "horoscope_dob", label: "Horoscope date of birth", type: "date" },
     ],
   },
@@ -121,15 +133,26 @@ const EDIT_SECTIONS = [
     subtitle: "Your qualifications and institutions",
     icon: GraduationCap,
     fields: [
-      { name: "education", label: "Education", required: true, placeholder: "Highest education" },
-      { name: "degree", label: "Degree / diploma", required: true, placeholder: "Degree name" },
-      { name: "degree_2", label: "Additional degree", placeholder: "Second degree" },
-      { name: "specialisation", label: "Specialisation 1", placeholder: "Specialisation" },
-      { name: "specialisation_2", label: "Specialisation 2", placeholder: "Additional specialisation" },
-      { name: "college", label: "University / college", placeholder: "Institute name" },
-      { name: "city_of_education", label: "City of education", placeholder: "City" },
-      { name: "additional_education", label: "Additional education 1", placeholder: "Certifications or courses" },
-      { name: "additional_education_2", label: "Additional education 2", placeholder: "Additional qualification" },
+      {
+        name: "education",
+        label: "Education",
+        type: "select",
+        required: true,
+        className: "cnd-education-level",
+        options: [
+          ["", "Select education"],
+          ["10th", "10th"],
+          ["12th", "12th"],
+          ["UG", "UG"],
+          ["PG", "PG"],
+          ["PhD", "PhD"],
+          ["Diploma", "Diploma"],
+        ],
+      },
+      { name: "degree", label: "Degree / diploma", required: true, placeholder: "Degree name", className: "cnd-education-degree" },
+      { name: "degree_2", label: "Additional degree", placeholder: "Second degree", className: "cnd-education-degree-extra" },
+      { name: "college", label: "University / college", placeholder: "Institute name", className: "cnd-education-college" },
+      { name: "city_of_education", label: "City of education", placeholder: "City", className: "cnd-education-city" },
     ],
   },
   {
@@ -155,7 +178,15 @@ const EDIT_SECTIONS = [
     icon: ShieldCheck,
     fields: [
       { name: "has_medical_history", label: "Any medical history?", required: true, type: "select", options: [["", "Select"], ["Yes", "Yes"], ["No", "No"]] },
-      { name: "personal_medical_history", label: "Personal medical history", type: "textarea", rows: 3, full: true, placeholder: "Add details if applicable" },
+      {
+        name: "personal_medical_history",
+        label: "Personal medical history",
+        type: "textarea",
+        rows: 3,
+        full: true,
+        placeholder: "Add details if applicable",
+        showWhen: { field: "has_medical_history", value: "Yes" },
+      },
       { name: "current_medical_problems", label: "Current medical problems", type: "textarea", rows: 3, full: true, placeholder: "Add details if applicable" },
       { name: "medications", label: "Medications", placeholder: "Add details if applicable" },
     ],
@@ -168,22 +199,32 @@ const EDIT_SECTIONS = [
     fields: [
       { name: "father_name", label: "Father's name", required: true, placeholder: "Father's name" },
       { name: "father_alive", label: "Father alive", required: true, type: "select", options: [["", "Select"], ["Yes", "Yes"], ["No", "No"]] },
-      { name: "father_contact", label: "Father's contact number", placeholder: "Contact number" },
-      { name: "father_occupation", label: "Father's occupation", placeholder: "Occupation" },
-      { name: "father_native_place", label: "Father's native place", placeholder: "Native place" },
+      { name: "father_contact", label: "Father's contact number", type: "tel", inputMode: "numeric", maxLength: 10, placeholder: "10-digit contact number", showWhen: { field: "father_alive", value: "Yes" } },
+      { name: "father_occupation", label: "Father's occupation", placeholder: "Occupation", showWhen: { field: "father_alive", value: "Yes" } },
+      { name: "father_native_place", label: "Father's native place", placeholder: "Native place", showWhen: { field: "father_alive", value: "Yes" } },
       { name: "mother_name", label: "Mother's name", required: true, placeholder: "Mother's name" },
       { name: "mother_alive", label: "Mother alive", required: true, type: "select", options: [["", "Select"], ["Yes", "Yes"], ["No", "No"]] },
-      { name: "mother_contact", label: "Mother's contact number", placeholder: "Contact number" },
-      { name: "mother_occupation", label: "Mother's occupation", placeholder: "Occupation" },
-      { name: "mother_native_place", label: "Mother's native place", placeholder: "Native place" },
-      { name: "brothers", label: "Number of brothers", required: true, type: "number", min: 0, max: 20 },
-      { name: "brothers_married", label: "Brothers married", type: "number", min: 0, max: 20 },
-      { name: "sisters", label: "Number of sisters", required: true, type: "number", min: 0, max: 20 },
-      { name: "sisters_married", label: "Sisters married", type: "number", min: 0, max: 20 },
+      { name: "mother_contact", label: "Mother's contact number", type: "tel", inputMode: "numeric", maxLength: 10, placeholder: "10-digit contact number", showWhen: { field: "mother_alive", value: "Yes" } },
+      { name: "mother_occupation", label: "Mother's occupation", placeholder: "Occupation", showWhen: { field: "mother_alive", value: "Yes" } },
+      { name: "mother_native_place", label: "Mother's native place", placeholder: "Native place", showWhen: { field: "mother_alive", value: "Yes" } },
+      { name: "brothers", label: "Number of brothers", required: true, type: "number", min: 0, max: 20, step: 1, inputMode: "numeric" },
+      { name: "brothers_married", label: "Brothers married", type: "number", min: 0, max: 20, step: 1, inputMode: "numeric" },
+      { name: "sisters", label: "Number of sisters", required: true, type: "number", min: 0, max: 20, step: 1, inputMode: "numeric" },
+      { name: "sisters_married", label: "Sisters married", type: "number", min: 0, max: 20, step: 1, inputMode: "numeric" },
       { name: "parents_intercaste_marriage", label: "Parents inter-caste marriage?", type: "select", options: [["", "Select"], ["Yes", "Yes"], ["No", "No"]] },
-      { name: "parents_different_caste", label: "If yes, which different caste", placeholder: "Caste details" },
-      { name: "family_values", label: "Family values", placeholder: "Traditional, moderate..." },
-      { name: "family_financial_status", label: "Financial status", placeholder: "Middle class" },
+      { name: "parents_different_caste", label: "If yes, which different caste", placeholder: "Caste details", showWhen: { field: "parents_intercaste_marriage", value: "Yes" } },
+      {
+        name: "family_values",
+        label: "Family values",
+        type: "select",
+        options: [["", "Select family values"], ["Traditional", "Traditional"], ["Modern", "Modern"], ["Liberal", "Liberal"]],
+      },
+      {
+        name: "family_financial_status",
+        label: "Financial status",
+        type: "select",
+        options: [["", "Select financial status"], ["Lower", "Lower"], ["Middle", "Middle"], ["Upper", "Upper"]],
+      },
       { name: "family_annual_income", label: "Family income (annual)", placeholder: "Annual income" },
       { name: "profile_creator_name", label: "Profile created by", placeholder: "Creator's name" },
       { name: "profile_creator_relation", label: "Creator's relation to candidate", placeholder: "Self, parent..." },
@@ -340,6 +381,16 @@ const buildForm = (profile, user = null) => {
   ALL_EDIT_FIELDS.forEach(({ name }) => {
     if (!(name in form)) form[name] = details[name] ?? "";
   });
+  if (!form.horoscope_caste) form.horoscope_caste = form.caste;
+  if (!form.horoscope_sub_caste) form.horoscope_sub_caste = form.sub_caste;
+  form.specialisations = Array.isArray(details.specialisations)
+    ? [...details.specialisations]
+    : [details.specialisation, details.specialisation_2].filter(Boolean);
+  form.additional_qualifications = Array.isArray(details.additional_qualifications)
+    ? [...details.additional_qualifications]
+    : [details.additional_education, details.additional_education_2].filter(Boolean);
+  if (!form.specialisations.length) form.specialisations = [""];
+  if (!form.additional_qualifications.length) form.additional_qualifications = [""];
   form.religion = "Jain";
   form.time_of_birth = timeValue(details.time_of_birth);
   return form;
@@ -359,6 +410,55 @@ const tabFromUrl = () => {
   return TABS.some(([key]) => key === value) ? value : "overview";
 };
 
+const candidateDraftKey = (user) => {
+  const identity = user?.id ?? user?.username;
+  return identity == null || String(identity).trim() === ""
+    ? ""
+    : `candidate_profile_draft:${encodeURIComponent(String(identity).trim().toLowerCase())}`;
+};
+
+const readCandidateDraft = (key) => {
+  if (!key) return null;
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(key));
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return null;
+    return saved;
+  } catch (draftError) {
+    console.error("Unable to read the candidate profile draft.", draftError);
+    return null;
+  }
+};
+
+const writeCandidateDraft = (key, draft) => {
+  if (!key) return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(draft));
+  } catch (draftError) {
+    console.error("Unable to save the candidate profile draft.", draftError);
+  }
+};
+
+const clearCandidateDraft = (key) => {
+  if (!key) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch (draftError) {
+    console.error("Unable to clear the completed candidate profile draft.", draftError);
+  }
+};
+
+const restoreCandidateDraft = (baseForm, draft) => {
+  if (!draft) return baseForm;
+  const restored = { ...baseForm, ...draft };
+  for (const field of ["specialisations", "additional_qualifications"]) {
+    restored[field] = Array.isArray(draft[field])
+      ? draft[field].filter((value) => typeof value === "string")
+      : baseForm[field];
+    if (!restored[field].length) restored[field] = [""];
+  }
+  return restored;
+};
+
 export default function CandidateProfile() {
   const cached = useMemo(() => getCachedHomeData(), []);
   const cachedProfileResult = useMemo(() => peekCandidateProfile(), []);
@@ -367,6 +467,7 @@ export default function CandidateProfile() {
   const [profile, setProfile] = useState(initialProfile);
   const [account, setAccount] = useState(initialAccount);
   const [loading, setLoading] = useState(!initialProfile);
+  const [draftLoaded, setDraftLoaded] = useState(false);
   const [error, setError] = useState("");
   const [tab, setTab] = useState(tabFromUrl);
   const [form, setForm] = useState(() => buildForm(initialProfile, initialAccount));
@@ -400,12 +501,15 @@ export default function CandidateProfile() {
     try {
       const result = await getCandidateProfile();
       const currentUser = result?.user || cached?.user || account || null;
+      const baseForm = buildForm(result?.profile, currentUser);
+      const complete = Number(result?.profile?.profile_completion || 0) >= 100;
+      const draft = complete ? null : readCandidateDraft(candidateDraftKey(currentUser));
       setProfile(result?.profile || null);
       setAccount(currentUser);
-      setForm(buildForm(result?.profile, currentUser));
+      setForm(restoreCandidateDraft(baseForm, draft));
       setPreferenceForm(buildPreferenceForm(result?.profile?.preference));
+      setDraftLoaded(true);
       const requestedTab = new URLSearchParams(window.location.search).get("tab");
-      const complete = Number(result?.profile?.profile_completion || 0) >= 100;
       setTab(complete
         ? tabFromUrl()
         : ["overview", "documents"].includes(requestedTab)
@@ -413,6 +517,14 @@ export default function CandidateProfile() {
           : "edit");
     } catch (loadError) {
       setError(loadError.message || "Could not load your profile.");
+      const complete = Number(profile?.profile_completion || 0) >= 100;
+      if (!complete) {
+        setForm(restoreCandidateDraft(
+          buildForm(profile, account),
+          readCandidateDraft(candidateDraftKey(account)),
+        ));
+      }
+      setDraftLoaded(true);
     } finally {
       setLoading(false);
     }
@@ -423,19 +535,25 @@ export default function CandidateProfile() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const profileDraftStorageKey = candidateDraftKey(account);
+  const completion = Number(profile?.profile_completion || 0);
+  const profileComplete = completion >= 100;
+
+  useEffect(() => {
+    if (!draftLoaded || profileComplete || !profileDraftStorageKey) return;
+    writeCandidateDraft(profileDraftStorageKey, form);
+  }, [draftLoaded, form, profileComplete, profileDraftStorageKey]);
+
   const candidateInfo = {
     name: profile?.full_name || account?.name || account?.username,
     id: profile?.registration_number || profile?.profile_id || account?.username,
     photo: profile?.photo_url || "",
   };
 
-  const completion = Number(profile?.profile_completion || 0);
-  const profileComplete = completion >= 100;
   const conditionalRequiredFields = new Set([
     ...(["Shwetambar", "Digambar"].includes(form.caste) ? ["sub_caste"] : []),
     ...(form.father_alive === "Yes" ? ["father_occupation", "father_contact"] : []),
     ...(form.mother_alive === "Yes" ? ["mother_occupation", "mother_contact"] : []),
-    ...(form.has_medical_history === "Yes" ? ["personal_medical_history", "current_medical_problems", "medications"] : []),
     ...(Number(form.brothers) > 0 ? ["brothers_married"] : []),
     ...(Number(form.sisters) > 0 ? ["sisters_married"] : []),
   ]);
@@ -447,11 +565,50 @@ export default function CandidateProfile() {
   const uploadedDocuments = DOCUMENT_LABELS.filter(([key]) => documents[key]?.file_url);
 
   const updateField = (name, value) => {
+    const siblingCountFields = ["brothers", "brothers_married", "sisters", "sisters_married"];
+    if (siblingCountFields.includes(name) && !/^\d*$/.test(value)) return;
+    if (name === "brothers_married" && value !== ""
+      && (form.brothers === "" || Number(value) > Number(form.brothers))) return;
+    if (name === "sisters_married" && value !== ""
+      && (form.sisters === "" || Number(value) > Number(form.sisters))) return;
+    const fieldValue = ["father_contact", "mother_contact"].includes(name)
+      ? value.replace(/\D/g, "").slice(0, 10)
+      : siblingCountFields.includes(name)
+        ? value
+        : value;
     setForm((current) => {
-      const next = { ...current, [name]: value };
+      const next = { ...current, [name]: fieldValue };
+      if (name === "brothers" && next.brothers !== ""
+        && Number(next.brothers_married || 0) > Number(next.brothers)) {
+        next.brothers_married = next.brothers;
+      }
+      if (name === "sisters" && next.sisters !== ""
+        && Number(next.sisters_married || 0) > Number(next.sisters)) {
+        next.sisters_married = next.sisters;
+      }
+      if (name === "caste") {
+        next.sub_caste = "";
+        next.horoscope_caste = value;
+        next.horoscope_sub_caste = "";
+      }
+      if (name === "sub_caste") next.horoscope_sub_caste = value;
+      if (name === "horoscope_caste") next.horoscope_sub_caste = "";
+      if (name === "father_alive" && fieldValue !== "Yes") {
+        next.father_contact = "";
+        next.father_occupation = "";
+        next.father_native_place = "";
+      }
+      if (name === "mother_alive" && fieldValue !== "Yes") {
+        next.mother_contact = "";
+        next.mother_occupation = "";
+        next.mother_native_place = "";
+      }
+      if (name === "parents_intercaste_marriage" && fieldValue !== "Yes") {
+        next.parents_different_caste = "";
+      }
       if (name === "monthly_income") {
-        const monthlyAmount = Number(String(value).replace(/,/g, ""));
-        next.annual_income = String(value).trim() && Number.isFinite(monthlyAmount)
+        const monthlyAmount = Number(String(fieldValue).replace(/,/g, ""));
+        next.annual_income = String(fieldValue).trim() && Number.isFinite(monthlyAmount)
           ? String(Number((monthlyAmount * 12).toFixed(2)))
           : "";
       }
@@ -460,8 +617,62 @@ export default function CandidateProfile() {
     setFieldErrors((current) => ({
       ...current,
       [name]: undefined,
+      ...(name === "caste" ? {
+        sub_caste: undefined,
+        horoscope_caste: undefined,
+        horoscope_sub_caste: undefined,
+      } : {}),
+      ...(name === "sub_caste" ? { horoscope_sub_caste: undefined } : {}),
+      ...(name === "horoscope_caste" ? { horoscope_sub_caste: undefined } : {}),
+      ...(name === "father_alive" ? {
+        father_contact: undefined,
+        father_occupation: undefined,
+        father_native_place: undefined,
+      } : {}),
+      ...(name === "mother_alive" ? {
+        mother_contact: undefined,
+        mother_occupation: undefined,
+        mother_native_place: undefined,
+      } : {}),
+      ...(name === "parents_intercaste_marriage" ? { parents_different_caste: undefined } : {}),
       ...(name === "monthly_income" ? { annual_income: undefined } : {}),
+      ...(name === "brothers" || name === "brothers_married" ? {
+        brothers: undefined,
+        brothers_married: undefined,
+      } : {}),
+      ...(name === "sisters" || name === "sisters_married" ? {
+        sisters: undefined,
+        sisters_married: undefined,
+      } : {}),
     }));
+  };
+
+  const updateEducationList = (name, index, value) => {
+    setForm((current) => ({
+      ...current,
+      [name]: current[name].map((item, itemIndex) => itemIndex === index ? value : item),
+    }));
+  };
+
+  const addEducationListItem = (name) => {
+    setForm((current) => ({ ...current, [name]: [...current[name], ""] }));
+  };
+
+  const removeEducationListItem = (name, index) => {
+    setForm((current) => ({
+      ...current,
+      [name]: current[name].length > 1
+        ? current[name].filter((_, itemIndex) => itemIndex !== index)
+        : [""],
+    }));
+  };
+
+  const applyProfileResponse = (nextProfile) => {
+    if (!nextProfile) return;
+    setProfile(nextProfile);
+    if (Number(nextProfile.profile_completion || 0) >= 100) {
+      clearCandidateDraft(profileDraftStorageKey);
+    }
   };
 
   const updatePreference = (name, value) => {
@@ -483,9 +694,9 @@ export default function CandidateProfile() {
       });
       const result = await payload;
       const currentUser = result?.user || account;
-      setProfile(result?.profile || null);
+      applyProfileResponse(result?.profile);
       setAccount(currentUser);
-      setForm(buildForm(result?.profile, currentUser));
+      setForm((current) => ({ ...buildForm(result?.profile, currentUser), ...current }));
       setPreferenceForm(buildPreferenceForm(result?.profile?.preference));
       push(profile ? "Your profile has been updated." : "Your candidate profile has been created.");
       const nextTab = Number(result?.profile?.profile_completion || 0) >= 100 ? "overview" : "edit";
@@ -537,7 +748,7 @@ export default function CandidateProfile() {
     setPhotoBusy(true);
     try {
       const result = await uploadCandidatePhoto(file);
-      setProfile(result?.profile || profile);
+      applyProfileResponse(result?.profile);
       push("Profile photo updated.");
     } catch (uploadError) {
       setPhotoError(uploadError.message || "Could not upload the photo.");
@@ -550,7 +761,7 @@ export default function CandidateProfile() {
     setPhotoBusy(true);
     try {
       const result = await removeCandidatePhoto();
-      setProfile(result?.profile || profile);
+      applyProfileResponse(result?.profile);
       setRemovePhotoOpen(false);
       push("Profile photo removed.");
     } catch (removeError) {
@@ -577,7 +788,7 @@ export default function CandidateProfile() {
     setBodyPhotoError("");
     try {
       const result = await uploadCandidateBodyPhotos({ [field]: file });
-      setProfile(result?.profile || profile);
+      applyProfileResponse(result?.profile);
       push("Photo updated successfully.");
     } catch (uploadError) {
       setBodyPhotoError(uploadError.message || "Could not upload the photo.");
@@ -620,7 +831,7 @@ export default function CandidateProfile() {
     setAdditionalPhotoError("");
     try {
       const result = await uploadCandidateAdditionalPhotos(additionalPhotoFiles);
-      setProfile(result?.profile || profile);
+      applyProfileResponse(result?.profile);
       setAdditionalPhotoFiles([]);
       push("Additional photos uploaded.");
     } catch (uploadError) {
@@ -640,7 +851,7 @@ export default function CandidateProfile() {
     setDocError("");
     try {
       const result = await uploadCandidateDocuments(selected);
-      setProfile(result?.profile || profile);
+      applyProfileResponse(result?.profile);
       setDocFiles({});
       push("Documents uploaded. Verification is now pending.");
     } catch (uploadError) {
@@ -655,7 +866,7 @@ export default function CandidateProfile() {
     setRemoveDocBusy(true);
     try {
       const result = await removeCandidateDocument(removeDoc);
-      setProfile(result?.profile || profile);
+      applyProfileResponse(result?.profile);
       setRemoveDoc(null);
       push("Document removed.");
     } catch (removeError) {
@@ -683,13 +894,41 @@ export default function CandidateProfile() {
 
   const renderField = (field, values, onChange, errors = {}) => {
     const error = Array.isArray(errors[field.name]) ? errors[field.name][0] : errors[field.name];
+    const subCasteParent = field.name === "sub_caste"
+      ? "caste"
+      : field.name === "horoscope_sub_caste"
+        ? "horoscope_caste"
+        : null;
+    const options = subCasteParent
+      ? [
+          ["", "Select sub caste"],
+          ...(SUBCASTES[values[subCasteParent]] || [])
+            .filter((subCaste) => subCaste !== "Any")
+            .map((subCaste) => [subCaste, subCaste]),
+        ]
+      : [...(field.options || [])];
+    const casteField = field.name === "caste" || field.name === "horoscope_caste";
+    const siblingLimit = field.name === "brothers_married"
+      ? values.brothers
+      : field.name === "sisters_married"
+        ? values.sisters
+        : null;
+    if (casteField && values[field.name] && !options.some(([value]) => value === values[field.name])) {
+      options.push([values[field.name], values[field.name]]);
+    }
+    if (subCasteParent && values[field.name] && !options.some(([value]) => value === values[field.name])) {
+      options.push([values[field.name], values[field.name]]);
+    }
     const common = {
       id: field.name,
       name: field.name,
       value: values[field.name] ?? "",
       placeholder: field.placeholder,
       min: field.min,
-      max: field.max,
+      max: siblingLimit !== null ? siblingLimit || 0 : field.max,
+      step: field.step,
+      maxLength: field.maxLength,
+      inputMode: field.inputMode,
       readOnly: field.readOnly,
       onChange: (event) => onChange(field.name, event.target.value),
     };
@@ -701,7 +940,7 @@ export default function CandidateProfile() {
         name={field.name}
         required={field.required}
         error={error}
-        className={field.full ? "cnd-field-wide" : ""}
+        className={[field.full ? "cnd-field-wide" : "", field.className].filter(Boolean).join(" ")}
       >
         {field.type === "textarea" ? (
           <>
@@ -721,7 +960,7 @@ export default function CandidateProfile() {
           </>
         ) : field.type === "select" ? (
           <select {...common}>
-            {field.options.map(([value, label]) => <option key={`${field.name}-${value}`} value={value}>{label}</option>)}
+            {options.map(([value, label]) => <option key={`${field.name}-${value}`} value={value}>{label}</option>)}
           </select>
         ) : (
           <input {...common} type={field.type || "text"} />
@@ -729,6 +968,44 @@ export default function CandidateProfile() {
       </FormField>
     );
   };
+
+  const renderEducationRepeater = (name, label, placeholder, className) => (
+    <div className={`cnd-education-repeater ${className}`} key={name}>
+      <span className="cnd-education-repeater-label">{label}<span aria-hidden="true">*</span></span>
+      <div className="cnd-education-repeater-rows">
+        {form[name].map((value, index) => (
+          <div className="cnd-education-repeater-row" key={`${name}-${index}`}>
+            <input
+              className="cnd-education-repeater-input"
+              id={`${name}-${index}`}
+              name={`${name}[${index}]`}
+              value={value}
+              placeholder={placeholder}
+              onChange={(event) => updateEducationList(name, index, event.target.value)}
+            />
+            <button
+              type="button"
+              className="cnd-education-repeater-remove"
+              aria-label={`Remove ${label.toLowerCase()} ${index + 1}`}
+              onClick={() => removeEducationListItem(name, index)}
+            >
+              <Minus size={18} />
+            </button>
+            {index === form[name].length - 1 ? (
+              <button
+                type="button"
+                className="cnd-education-repeater-add"
+                aria-label={`Add ${label.toLowerCase()}`}
+                onClick={() => addEducationListItem(name)}
+              >
+                <Plus size={18} />
+              </button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   if (loading && !profile) {
     return (
@@ -977,12 +1254,39 @@ export default function CandidateProfile() {
                     {section.key === "medical" ? (
                       <InlineNote>Share health details only when applicable. This information is handled as part of your private profile.</InlineNote>
                     ) : null}
-                    <div className="cnd-form-grid">
-                      {section.fields.map((field) => renderField({
-                        ...field,
-                        required: field.required || conditionalRequiredFields.has(field.name),
-                      }, form, updateField, fieldErrors))}
-                    </div>
+                    {section.key === "education" ? (
+                      <div className="cnd-form-grid cnd-education-grid">
+                        {section.fields.slice(0, 3).map((field) => renderField({
+                          ...field,
+                          required: field.required || conditionalRequiredFields.has(field.name),
+                        }, form, updateField, fieldErrors))}
+                        {renderEducationRepeater(
+                          "specialisations",
+                          "Specialisation",
+                          "Specialisation",
+                          "cnd-education-specialisations",
+                        )}
+                        {section.fields.slice(3).map((field) => renderField({
+                          ...field,
+                          required: field.required || conditionalRequiredFields.has(field.name),
+                        }, form, updateField, fieldErrors))}
+                        {renderEducationRepeater(
+                          "additional_qualifications",
+                          "Additional education",
+                          "Additional qualification",
+                          "cnd-education-additional",
+                        )}
+                      </div>
+                    ) : (
+                      <div className="cnd-form-grid">
+                        {section.fields
+                          .filter((field) => !field.showWhen || form[field.showWhen.field] === field.showWhen.value)
+                          .map((field) => renderField({
+                            ...field,
+                            required: field.required || conditionalRequiredFields.has(field.name),
+                          }, form, updateField, fieldErrors))}
+                      </div>
+                    )}
                   </SectionCard>
                 );
               })}

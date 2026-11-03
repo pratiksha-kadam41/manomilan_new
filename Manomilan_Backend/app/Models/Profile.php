@@ -852,11 +852,6 @@ class Profile extends Model
             $conditionalFields[] = 'mothersOccupation';
             $conditionalFields[] = 'motherContactNumber';
         }
-        if ($this->has_medical_history) {
-            $conditionalFields[] = 'personalMedicalHistory';
-            $conditionalFields[] = 'currentMedicalProblems';
-            $conditionalFields[] = 'medications';
-        }
         if ($family && $family->parents_intercaste_marriage) {
             $conditionalFields[] = 'parentsDifferentCaste';
         }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
 import { request } from "../api";
 import { getSession, isAdminRole } from "../auth";
+import { SUBCASTES } from "../data/casteOptions";
 import "./MelavaRegistration.css";
 
 const ICONS = {
@@ -35,18 +36,6 @@ const EMPTY_SETTINGS = {
   booklet_fee: 0,
   qr_image_url: "",
   booklet_available: false,
-};
-
-const SUBCASTES = {
-  Digambar: [
-    "Any", "Dashambar", "Saitwal", "Chaturth", "Pancham", "Dhakad", "Kambhoj",
-    "Kasar", "Bagerwal", "Jaiswal", "Agarwal", "Bogar", "Porwar", "Humbad",
-    "Visa Humbad", "Khandelwal", "Bannore",
-  ],
-  Shwetambar: [
-    "Any", "Oswal", "Porwal", "Shrimali", "Humad", "Modi", "Khandelwal",
-    "Gadiya", "Bagherwal", "Dasha Shrimal", "Visa Shrimali", "Soni", "Lunka",
-  ],
 };
 
 // Friendly example text shown inside empty inputs (a field's own `p` wins).

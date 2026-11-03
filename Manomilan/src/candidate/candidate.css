@@ -3334,6 +3334,117 @@ body.candidate-mode *::after {
   gap: 14px;
 }
 
+.cnd-education-repeater {
+  min-width: 0;
+}
+
+.cnd-education-grid > .cnd-education-level {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.cnd-education-grid > .cnd-education-degree {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.cnd-education-grid > .cnd-education-degree-extra {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.cnd-education-grid > .cnd-education-specialisations {
+  grid-column: 4;
+  grid-row: 1 / span 2;
+}
+
+.cnd-education-grid > .cnd-education-college {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+}
+
+.cnd-education-grid > .cnd-education-city {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.cnd-education-grid > .cnd-education-additional {
+  grid-column: 1 / span 2;
+  grid-row: 3;
+}
+
+.cnd-education-repeater-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--cnd-ink);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.cnd-education-repeater-label > span {
+  margin-left: 3px;
+  color: #d72d63;
+}
+
+.cnd-education-repeater-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.cnd-education-repeater-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cnd-education-repeater-row .cnd-education-repeater-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--cnd-line-strong);
+  border-radius: 10px;
+  outline: 0;
+  color: var(--cnd-ink);
+  background: #fff;
+  font-size: 12px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.cnd-education-repeater-input::placeholder {
+  color: #b9a3ab;
+}
+
+.cnd-education-repeater-input:focus {
+  border-color: #e497af;
+  box-shadow: 0 0 0 3px rgba(232, 62, 108, 0.1);
+}
+
+.cnd-education-repeater-row button {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--cnd-burgundy);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.cnd-education-repeater-row button:hover {
+  background: var(--cnd-pink);
+  transform: translateY(-1px);
+}
+
+.cnd-education-repeater-row .cnd-education-repeater-remove {
+  color: var(--cnd-burgundy);
+  background: #ffe4ed;
+}
+
 .cnd-profile-editor .cnd-form-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -4096,6 +4207,11 @@ body.candidate-mode *::after {
 
   .cnd-profile-editor .cnd-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cnd-education-grid > * {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .cnd-field-wide {

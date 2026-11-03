@@ -187,26 +187,64 @@ class CandidateProfileService
     private function syncEducation(Profile $profile, array $data): void
     {
         $rows = $profile->educations()->orderBy('id')->get();
-        $sets = [
-            [
-                'education_level' => $data['education'] ?? null,
-                'degree_name' => $data['degree'] ?? null,
-                'specialization' => $data['specialisation'] ?? null,
-                'university_name' => $data['college'] ?? null,
-                'additional_qualification' => $data['additional_education'] ?? null,
-                'education_city' => $data['city_of_education'] ?? null,
-            ],
-            [
-                'degree_name' => $data['degree_2'] ?? null,
-                'specialization' => $data['specialisation_2'] ?? null,
-                'additional_qualification' => $data['additional_education_2'] ?? null,
-            ],
-        ];
+        $specialisations = array_key_exists('specialisations', $data)
+            ? $data['specialisations']
+            : [$data['specialisation'] ?? null, $data['specialisation_2'] ?? null];
+        $additionalQualifications = array_key_exists('additional_qualifications', $data)
+            ? $data['additional_qualifications']
+            : [$data['additional_education'] ?? null, $data['additional_education_2'] ?? null];
+        $specialisations = array_values(array_filter($specialisations, fn ($value) => filled($value)));
+        $additionalQualifications = array_values(array_filter($additionalQualifications, fn ($value) => filled($value)));
+        $rowCount = max(
+            1,
+            $rows->count(),
+            count($specialisations),
+            count($additionalQualifications),
+            filled($data['degree_2'] ?? null) ? 2 : 1,
+        );
 
-        foreach ($sets as $index => $values) {
-            if (! collect($values)->contains(fn ($value) => filled($value))) continue;
+        for ($index = 0; $index < $rowCount; $index++) {
+            $values = [];
+            if ($index === 0) {
+                foreach ([
+                    'education' => 'education_level',
+                    'degree' => 'degree_name',
+                    'college' => 'university_name',
+                    'city_of_education' => 'education_city',
+                ] as $input => $column) {
+                    if (array_key_exists($input, $data)) {
+                        $values[$column] = $data[$input];
+                    }
+                }
+            } elseif ($index === 1 && array_key_exists('degree_2', $data)) {
+                $values['degree_name'] = $data['degree_2'];
+            }
+
+            if (array_key_exists('specialisations', $data)) {
+                $values['specialization'] = $specialisations[$index] ?? null;
+            } elseif ($index < 2 && array_key_exists($index === 0 ? 'specialisation' : 'specialisation_2', $data)) {
+                $values['specialization'] = $index === 0
+                    ? $data['specialisation']
+                    : $data['specialisation_2'];
+            }
+
+            if (array_key_exists('additional_qualifications', $data)) {
+                $values['additional_qualification'] = $additionalQualifications[$index] ?? null;
+            } elseif ($index < 2 && array_key_exists($index === 0 ? 'additional_education' : 'additional_education_2', $data)) {
+                $values['additional_qualification'] = $index === 0
+                    ? $data['additional_education']
+                    : $data['additional_education_2'];
+            }
+
+            if (! $values) {
+                continue;
+            }
+
             $row = $rows->get($index) ?: $profile->educations()->make();
-            $row->fill(array_filter($values, fn ($value) => $value !== null));
+            if (! $rows->get($index) && ! collect($values)->contains(fn ($value) => filled($value))) {
+                continue;
+            }
+            $row->fill($values);
             $row->profile_id = $profile->id;
             $row->save();
         }

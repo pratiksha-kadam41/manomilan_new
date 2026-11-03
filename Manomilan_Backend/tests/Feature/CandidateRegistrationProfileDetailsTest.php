@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Http\Controllers\Candidate\ProfileController;
 use App\Models\User;
+use App\Profile;
 use App\Services\CandidateProfileService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -99,5 +100,61 @@ class CandidateRegistrationProfileDetailsTest extends TestCase
         $this->assertSame('Candidate Example', $body['data']['profile']['full_name']);
         $this->assertNotEmpty($body['data']['profile']['profile_id']);
         $this->assertNotNull($user->fresh()->profile_id);
+    }
+
+    public function test_candidate_education_rows_can_be_added_removed_and_reloaded(): void
+    {
+        DB::table('roles')->insert([
+            'name' => 'Candidate',
+            'user_type' => '21',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $registration = $this->postJson('/api/register', [
+            'name' => 'Candidate Example',
+            'email' => 'candidate@example.test',
+            'phone' => '9876543210',
+            'password' => 'secret123',
+            'birth_date' => '1995-06-15',
+            'gender' => 'bride',
+        ])->assertCreated();
+
+        $user = User::findOrFail($registration->json('user.id'));
+        $createRequest = Request::create('/api/candidate/profile', 'POST', [
+            'full_name' => 'Candidate Example',
+            'gender' => 'bride',
+            'birth_date' => '1995-06-15',
+            'email' => 'candidate@example.test',
+        ]);
+        $createRequest->setUserResolver(fn () => $user);
+        $created = (new ProfileController())->store($createRequest, new CandidateProfileService());
+        $profile = Profile::findOrFail($created->getData(true)['data']['profile']['id']);
+        $service = new CandidateProfileService();
+
+        $service->update($profile, [
+            'education' => 'Graduate',
+            'degree' => 'Bachelor degree',
+            'degree_2' => 'Master degree',
+            'specialisations' => ['Physics', 'Data Science', 'Statistics'],
+            'additional_qualifications' => ['Course A', 'Course B', 'Course C'],
+        ]);
+
+        $service->update($profile->fresh(), [
+            'education' => 'Graduate',
+            'degree' => 'Bachelor degree',
+            'degree_2' => 'Master degree',
+            'specialisations' => ['Data Science'],
+            'additional_qualifications' => ['Course B'],
+        ]);
+
+        $showRequest = Request::create('/api/candidate/profile', 'GET');
+        $showRequest->setUserResolver(fn () => $user->fresh());
+        $profileResponse = (new ProfileController())->show($showRequest);
+        $details = $profileResponse->getData(true)['data']['profile']['details'];
+
+        $this->assertSame(['Data Science'], $details['specialisations']);
+        $this->assertSame(['Course B'], $details['additional_qualifications']);
+        $this->assertSame(3, Profile::findOrFail($profile->id)->educations()->count());
     }
 }

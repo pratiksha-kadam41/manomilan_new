@@ -311,9 +311,19 @@ abstract class CandidateController extends Controller
             'degree_2' => $education->get(1)?->degree_name,
             'specialisation' => $education->get(0)?->specialization,
             'specialisation_2' => $education->get(1)?->specialization,
+            'specialisations' => $education
+                ->pluck('specialization')
+                ->filter(fn ($value) => filled($value))
+                ->values()
+                ->all(),
             'college' => $education->get(0)?->university_name ?: $education->get(0)?->college_name,
             'additional_education' => $education->get(0)?->additional_qualification,
             'additional_education_2' => $education->get(1)?->additional_qualification,
+            'additional_qualifications' => $education
+                ->pluck('additional_qualification')
+                ->filter(fn ($value) => filled($value))
+                ->values()
+                ->all(),
             'city_of_education' => $education->get(0)?->education_city,
             'profession' => $employment?->profession,
             'field_of_working' => $employment?->working_field,
