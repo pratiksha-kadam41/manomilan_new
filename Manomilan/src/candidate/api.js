@@ -27,6 +27,7 @@ let candidateProfileCachedAt = 0;
 let matchesCache = new Map();
 let matchesRequestCache = new Map();
 let matchesCacheVersion = 0;
+let candidateFeedCache = null;
 let matchCache = new Map();
 let matchRequestCache = new Map();
 
@@ -99,6 +100,36 @@ export const getCachedMatches = (params = {}) => {
   return readQueryCache(`matches:${query}`, true);
 };
 
+export const getCachedCandidateFeed = () => (
+  candidateFeedCache && Date.now() - candidateFeedCache.cachedAt < MATCHES_CACHE_MS
+    ? candidateFeedCache.result
+    : null
+);
+
+export const cacheCandidateFeed = (filters, result, append = false) => {
+  const previous = candidateFeedCache?.result;
+  const seen = new Set(append ? (previous?.matches || []).map((item) => String(item.id)) : []);
+  const matches = append
+    ? [...(previous?.matches || []), ...(result?.matches || []).filter((item) => {
+      const id = String(item.id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })]
+    : result?.matches || [];
+  candidateFeedCache = {
+    cachedAt: Date.now(),
+    result: {
+      ...result,
+      matches,
+      filters: append
+        ? (result?.filters?.length ? result.filters : previous?.filters || {})
+        : result?.filters || {},
+      feed_filters: filters,
+    },
+  };
+};
+
 export const getCachedInterests = (mode = "sent", params = {}) =>
   readQueryCache(interestCacheKey(mode, params), true);
 
@@ -151,6 +182,14 @@ export const getCandidateProfile = async () => {
 export const invalidateCandidateProfileCache = () => {
   candidateProfileCache = null;
   candidateProfileCachedAt = 0;
+  dashboardRequest = null;
+  invalidateMatchesCache();
+  try {
+    sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+  } catch {
+    clearQueryCache("");
+    return;
+  }
   clearQueryCache("");
 };
 
@@ -253,10 +292,11 @@ export const savePreferences = async (payload) =>
 export const getMatches = async (params = {}, { signal } = {}) => {
   const query = queryString(params);
   const cacheKey = query || "__default__";
+  const cacheable = !params.feed || Number(params.page || 1) === 1;
   const cached = matchesCache.get(cacheKey);
-  if (cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
+  if (cacheable && cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
   if (cached) matchesCache.delete(cacheKey);
-  const persisted = readQueryCache(`matches:${query}`);
+  const persisted = cacheable ? readQueryCache(`matches:${query}`) : null;
   if (persisted) {
     matchesCache.set(cacheKey, { result: persisted, cachedAt: Date.now() });
     return persisted;
@@ -266,7 +306,7 @@ export const getMatches = async (params = {}, { signal } = {}) => {
   const path = `/candidate/matches${query ? `?${query}` : ""}`;
   if (signal) {
     const result = data(await request(path, { signal }));
-    if (cacheVersion === matchesCacheVersion) {
+    if (cacheable && cacheVersion === matchesCacheVersion) {
       matchesCache.set(cacheKey, { result, cachedAt: Date.now() });
       writeQueryCache(`matches:${query}`, result);
     }
@@ -277,7 +317,7 @@ export const getMatches = async (params = {}, { signal } = {}) => {
     matchesRequestCache.set(cacheKey, request(path)
       .then((body) => data(body))
       .then((result) => {
-        if (cacheVersion === matchesCacheVersion) {
+        if (cacheable && cacheVersion === matchesCacheVersion) {
           matchesCache.set(cacheKey, { result, cachedAt: Date.now() });
           writeQueryCache(`matches:${query}`, result);
         }
@@ -308,6 +348,7 @@ export const getMatch = async (id) => {
 export const invalidateMatchesCache = () => {
   matchesCacheVersion += 1;
   matchesCache.clear();
+  candidateFeedCache = null;
   matchCache.clear();
   clearQueryCache("matches:");
 };

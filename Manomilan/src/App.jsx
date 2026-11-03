@@ -7,7 +7,8 @@ import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
 import { request } from "./api.js";
 import { AdminPermissionContext } from "./permission-context.jsx";
-import { getCandidateProfile, invalidateCandidateProfileCache } from "./candidate/api.js";
+import { invalidateCandidateProfileCache } from "./candidate/api.js";
+import { ProfileCompletionContext } from "./candidate/profile-completion-context.jsx";
 import { getPublicWebsiteSettings } from "./website/api.js";
 
 const Home = lazy(() => import("./pages/Home.jsx"));
@@ -156,7 +157,7 @@ export default function App() {
   const [websiteSettings, setWebsiteSettings] = useState(null);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    if (!path.startsWith("/candidate")) window.scrollTo(0, 0);
   }, [path]);
 
   useEffect(() => {
@@ -175,8 +176,8 @@ export default function App() {
   const sessionRole = session?.role;
   const candidateProfileCheckEnabled =
     sessionRole === "candidate" &&
+    path.startsWith("/candidate") &&
     path !== "/candidate/change-password" &&
-    path !== "/candidate/profile" &&
     session?.user?.is_password_changed !== false;
   const isSuperAdmin = isSuperAdminSession(session?.user);
 
@@ -186,19 +187,17 @@ export default function App() {
     }
 
     let active = true;
-    const verifyProfile = (showChecking = false) => {
-      invalidateCandidateProfileCache();
-      if (showChecking) {
-        setCandidateProfileState({ token: sessionToken, status: "checking", error: "" });
-      }
-      getCandidateProfile()
-        .then((result) => {
+    const verifyProfile = () => {
+      request("/candidate/profile/status")
+        .then((response) => {
+          const result = response?.data;
           if (active) {
             setCandidateProfileState({
               token: sessionToken,
-              status: Number(result?.profile?.profile_completion || 0) >= 100
-                ? "complete"
-                : "required",
+              status: result?.complete ? "complete" : "required",
+              completion: Number(result?.profile_completion) || 0,
+              hasProfile: Boolean(result?.has_profile),
+              gender: result?.gender || "",
               error: "",
             });
           }
@@ -208,6 +207,9 @@ export default function App() {
             setCandidateProfileState({
               token: sessionToken,
               status: "error",
+              completion: 0,
+              hasProfile: false,
+              gender: "",
               error: error.message || "Could not verify your candidate profile.",
             });
           }
@@ -221,10 +223,13 @@ export default function App() {
           status: Number(event.detail.profile.profile_completion || 0) >= 100
             ? "complete"
             : "required",
+          completion: Number(event.detail.profile.profile_completion) || 0,
+          hasProfile: true,
+          gender: String(event.detail.profile.gender || "").toLowerCase(),
           error: "",
         });
       } else {
-        verifyProfile(true);
+        verifyProfile();
       }
     };
 
@@ -329,17 +334,6 @@ export default function App() {
   const candidateProfileStatus = candidateProfileState.token === sessionToken
     ? candidateProfileState.status
     : "checking";
-  const needsCandidateProfile =
-    candidateProfileCheckEnabled &&
-    candidateProfileStatus === "required" &&
-    path !== "/candidate/profile";
-  const checkingCandidateProfile =
-    candidateProfileCheckEnabled &&
-    (candidateProfileStatus === "checking" || candidateProfileStatus === "idle");
-
-  useEffect(() => {
-    if (needsCandidateProfile) window.location.replace("/candidate/profile");
-  }, [needsCandidateProfile]);
 
   useEffect(() => {
     if (wrongRole) window.location.replace(homeForRole(session.role));
@@ -365,24 +359,6 @@ export default function App() {
   }, [mustChangePassword, session?.role]);
   if (wrongRole) return null;
   if (mustChangePassword) return null;
-  if (checkingCandidateProfile) {
-    return (
-      <main className="app-loading" role="status" aria-live="polite">
-        <span className="app-loading-mark" aria-hidden="true" />
-        <span className="app-loading-label">Checking your candidate profile...</span>
-      </main>
-    );
-  }
-  if (candidateProfileCheckEnabled && candidateProfileStatus === "error") {
-    return (
-      <main className="app-access-error" role="alert">
-        <h1>Unable to verify your profile</h1>
-        <p>{candidateProfileState.error}</p>
-        <button type="button" onClick={() => window.location.reload()}>Try again</button>
-      </main>
-    );
-  }
-  if (needsCandidateProfile) return null;
   if (isAdminPath && loggedIn && session.role === "admin" && !isChangePasswordPath) {
     if (adminRouteDenied) {
       return (
@@ -418,14 +394,21 @@ export default function App() {
       {!hideChrome && <Header />}
       {Page ? (
         <AdminPermissionContext.Provider value={permissionContext}>
-          <Suspense fallback={path === "/candidate/profile" ? null : (
-            <main className="app-loading" role="status" aria-live="polite">
-              <span className="app-loading-mark" aria-hidden="true" />
-              <span className="app-loading-label">Loading…</span>
-            </main>
-          )}>
-            <Page key={`${path}-${params.id || ""}`} params={params} />
-          </Suspense>
+          <ProfileCompletionContext.Provider value={{
+            status: candidateProfileCheckEnabled ? candidateProfileStatus : "idle",
+            completion: candidateProfileState.token === sessionToken ? candidateProfileState.completion || 0 : 0,
+            hasProfile: candidateProfileState.token === sessionToken ? candidateProfileState.hasProfile : undefined,
+            gender: candidateProfileState.token === sessionToken ? candidateProfileState.gender || "" : "",
+          }}>
+            <Suspense fallback={path.startsWith("/candidate") ? null : (
+              <main className="app-loading" role="status" aria-live="polite">
+                <span className="app-loading-mark" aria-hidden="true" />
+                <span className="app-loading-label">Loading…</span>
+              </main>
+            )}>
+              <Page key={`${path}-${params.id || ""}`} params={params} />
+            </Suspense>
+          </ProfileCompletionContext.Provider>
         </AdminPermissionContext.Provider>
       ) : <ComingSoon path={path} />}
       {!hideChrome && <Footer />}

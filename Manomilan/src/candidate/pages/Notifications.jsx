@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Bell, CheckCheck, CheckCircle2, Heart, Inbox, Loader2, Settings2, Trash2,
   UserRound, Sparkles,
@@ -267,7 +268,7 @@ export default function Notifications() {
               <button type="button" className="cnd-btn cnd-btn-ghost" onClick={() => changeFilter("all")}>
                 View all notifications
               </button>
-            ) : <a href="/candidate/matches" className="cnd-btn cnd-btn-primary">Browse matches</a>}
+            ) : <Link to="/candidate/matches" className="cnd-btn cnd-btn-primary">Browse matches</Link>}
           />
         ) : (
           <div className="cnd-notification-groups">

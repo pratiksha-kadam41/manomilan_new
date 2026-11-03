@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight, BadgeCheck, Bell, BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Eye, Heart, MapPin, RefreshCw, Send, Settings2, Sparkles, UserRound, Users, X,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchResultCard from "../components/MatchResultCard";
 import MatchDetailModal from "../components/MatchDetailModal";
 import {
-  Avatar, DashboardSkeleton, EmptyState, ErrorState, ProgressBar,
+  Avatar, CardGridSkeleton, DashboardSkeleton, EmptyState, ErrorState, ProgressBar,
   ProgressRing, SectionCard, Toasts,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
@@ -131,9 +132,9 @@ function HomeProfileCard({ match, featured = false, onOpen, onInterest, interest
             <Heart size={17} fill={interestDone ? "currentColor" : "none"} />
             {interestDone ? "Interest sent" : "Send interest"}
           </button>
-          <a className="mm-view-button" href={`/candidate/matches/${match.id}`}>
+          <Link className="mm-view-button" to={`/candidate/matches/${match.id}`}>
             View profile <ArrowRight size={15} />
-          </a>
+          </Link>
         </div>
       </div>
     </article>
@@ -154,14 +155,20 @@ export default function Dashboard() {
   const [data, setData] = useState(() => dashboardCache || cached);
   const [suggested, setSuggested] = useState(cachedSuggested?.matches || []);
   const [recentProfiles, setRecentProfiles] = useState(cachedRecent?.matches || []);
-  const [matchesLoaded, setMatchesLoaded] = useState(Boolean(cachedSuggested && cachedRecent));
+  const [suggestedLoading, setSuggestedLoading] = useState(!cachedSuggested);
+  const [recentLoading, setRecentLoading] = useState(!cachedRecent);
   const [loading, setLoading] = useState(() => !dashboardCache);
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
+  const [recentError, setRecentError] = useState("");
   const [busy, setBusy] = useState({});
   const [selected, setSelected] = useState(null);
   const [story, setStory] = useState(null);
   const [showMissingDetails, setShowMissingDetails] = useState(false);
+  const recentSection = useRef(null);
+  const suggestedSection = useRef(null);
+  const recentRequestProfile = useRef(null);
+  const suggestedRequestProfile = useRef(null);
   const { toasts, push, dismiss } = useToasts();
 
   const load = useCallback(async (force = false) => {
@@ -201,29 +208,67 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (!profile?.id) return undefined;
+    if (!loading && completion < 100) {
+      setSuggestedLoading(false);
+      setRecentLoading(false);
+    }
+  }, [loading, completion]);
 
-    let active = true;
-    Promise.all([
-      getMatches({ sort: "best_match", per_page: 6 }),
-      getMatches({ sort: "newest", per_page: 6 }),
-    ]).then(([recommended, recent]) => {
-      if (!active) return;
-      setSuggested(Array.isArray(recommended?.matches) ? recommended.matches : []);
-      setRecentProfiles(Array.isArray(recent?.matches) ? recent.matches : []);
-      setSuggestedError("");
-    }).catch((matchError) => {
-      if (active) setSuggestedError(matchError.message || "Could not load compatible profiles.");
-    }).finally(() => {
-      if (active) setMatchesLoaded(true);
-    });
+  const loadSuggested = useCallback(async () => {
+    if (!profile?.id || completion < 100 || suggestedRequestProfile.current === profile.id) return;
+    suggestedRequestProfile.current = profile.id;
+    setSuggestedLoading(true);
+    setSuggestedError("");
+    try {
+      const result = await getMatches({ sort: "best_match", per_page: 6, include_filters: 0 });
+      setSuggested(Array.isArray(result?.matches) ? result.matches : []);
+    } catch (matchError) {
+      suggestedRequestProfile.current = null;
+      setSuggestedError(matchError.message || "Could not load compatible profiles.");
+    } finally {
+      setSuggestedLoading(false);
+    }
+  }, [profile?.id, completion]);
 
-    return () => {
-      active = false;
-    };
-  }, [profile?.id]);
+  const loadRecent = useCallback(async () => {
+    if (!profile?.id || completion < 100 || recentRequestProfile.current === profile.id) return;
+    recentRequestProfile.current = profile.id;
+    setRecentLoading(true);
+    setRecentError("");
+    try {
+      const result = await getMatches({ sort: "newest", per_page: 6, include_filters: 0 });
+      setRecentProfiles(Array.isArray(result?.matches) ? result.matches : []);
+    } catch (matchError) {
+      recentRequestProfile.current = null;
+      setRecentError(matchError.message || "Could not load new candidates.");
+    } finally {
+      setRecentLoading(false);
+    }
+  }, [profile?.id, completion]);
 
-  const matchesLoading = Boolean(profile?.id && !matchesLoaded);
+  useEffect(() => {
+    const section = recentSection.current;
+    if (!section || !profile?.id || completion < 100 || recentRequestProfile.current === profile.id) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      loadRecent();
+    }, { rootMargin: "400px 0px" });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [profile?.id, completion, loadRecent]);
+
+  useEffect(() => {
+    const section = suggestedSection.current;
+    if (!section || !profile?.id || completion < 100 || suggestedRequestProfile.current === profile.id) return undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      observer.disconnect();
+      loadSuggested();
+    }, { rootMargin: "400px 0px" });
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [profile?.id, completion, loadSuggested]);
 
   const updateMatch = (profileId, patch) => {
     setSuggested((items) => items.map((item) => (
@@ -344,10 +389,10 @@ export default function Dashboard() {
             <span className="mm-home-heart" aria-hidden="true">♡</span>
           </section>
 
-          <section className="mm-home-section mm-recent-section">
+          <section className="mm-home-section mm-recent-section" ref={recentSection}>
             <div className="mm-section-heading">
               <h2>New candidates</h2>
-              <a href="/candidate/matches?sort=newest">View all <ArrowRight size={15} /></a>
+              <Link to="/candidate/matches?sort=newest">View all <ArrowRight size={15} /></Link>
             </div>
             {recentProfiles.length ? (
               <div className="mm-recent-rail">
@@ -361,24 +406,26 @@ export default function Dashboard() {
                   </button>
                 ))}
               </div>
-            ) : matchesLoading ? <div className="mm-recent-loading">Loading new candidates...</div> : (
+            ) : recentError ? (
+              <ErrorState message={recentError} onRetry={loadRecent} />
+            ) : recentLoading ? (
+              <CardGridSkeleton count={3} />
+            ) : completion < 100 ? (
+              <div className="mm-recent-loading">Complete your profile to unlock new candidate recommendations.</div>
+            ) : (
               <div className="mm-recent-loading">No candidates available right now.</div>
             )}
           </section>
 
-          {completion < 100 ? (
-            <section className="mm-completion-note">
-              <div><strong>Complete your profile</strong><span>Add your details to get better recommendations.</span></div>
-              <a href="/candidate/profile">Complete now <ArrowRight size={15} /></a>
-            </section>
-          ) : null}
-
-          {suggested.length ? (
-            <section className="mm-home-section">
-              <div className="mm-section-heading">
-                <h2>Recommended for you</h2>
-                <a href="/candidate/matches">See all <ArrowRight size={15} /></a>
-              </div>
+          <section
+            className={`mm-home-section ${suggested.length ? "" : "mm-empty-candidates"}`}
+            ref={suggestedSection}
+          >
+            <div className="mm-section-heading">
+              <h2>Recommended for you</h2>
+              <Link to="/candidate/matches">See all <ArrowRight size={15} /></Link>
+            </div>
+            {suggested.length ? (
               <div className="mm-recommended-grid">
                 {suggested.map((match, index) => (
                   <HomeProfileCard
@@ -391,22 +438,16 @@ export default function Dashboard() {
                   />
                 ))}
               </div>
-            </section>
-          ) : matchesLoading ? (
-            <section className="mm-home-section mm-empty-candidates">
-              <div className="mm-section-heading">
-                <h2>Recommended for you</h2>
-              </div>
-              <div className="mm-recent-loading">Loading recommendations...</div>
-            </section>
-          ) : suggestedError ? <ErrorState message={suggestedError} onRetry={load} /> : (
-            <section className="mm-home-section mm-empty-candidates">
-              <div className="mm-section-heading">
-                <h2>Recommended for you</h2>
-              </div>
+            ) : suggestedError ? (
+              <ErrorState message={suggestedError} onRetry={loadSuggested} />
+            ) : suggestedLoading ? (
+              <CardGridSkeleton count={3} />
+            ) : completion < 100 ? (
+              <div className="mm-recent-loading">Complete your profile to unlock personalized recommendations.</div>
+            ) : (
               <div className="mm-recent-loading">No candidates available right now.</div>
-            </section>
-          )}
+            )}
+          </section>
 
           <div className="cnd-dashboard-legacy">
           <section className="cnd-hero">
@@ -473,9 +514,9 @@ export default function Dashboard() {
               <div>
                 <h3>{completion >= 100 ? "Your profile is complete" : "Complete your profile"}</h3>
                 <p>{completion >= 100 ? "Looking great" : "Add the remaining details to improve your matches."}</p>
-                <a href="/candidate/profile" className="cnd-btn cnd-btn-primary cnd-btn-sm">
+                <Link to="/candidate/profile" className="cnd-btn cnd-btn-primary cnd-btn-sm">
                   {completion >= 100 ? "View profile" : "Complete profile"} <ArrowRight size={14} />
-                </a>
+                </Link>
               </div>
             </div>
             <button
@@ -507,10 +548,10 @@ export default function Dashboard() {
               {data?.completion?.missing?.length ? (
                 <div className="cnd-missing-detail-list">
                   {data.completion.missing.map((item) => (
-                    <a href="/candidate/profile?tab=edit" key={item}>
+                    <Link to="/candidate/profile?tab=edit" key={item}>
                       <span>{item}</span>
                       <ChevronRight size={17} />
-                    </a>
+                    </Link>
                   ))}
                 </div>
               ) : (
@@ -525,7 +566,7 @@ export default function Dashboard() {
               title="Your profile"
               subtitle="Keep your details fresh for better matches"
               icon={UserRound}
-              action={<a href="/candidate/profile" className="cnd-text-link">Edit profile <ArrowRight size={14} /></a>}
+              action={<Link to="/candidate/profile" className="cnd-text-link">Edit profile <ArrowRight size={14} /></Link>}
               className="cnd-profile-snapshot"
             >
               {profile ? (
@@ -553,7 +594,7 @@ export default function Dashboard() {
                   icon={UserRound}
                   title="No candidate profile yet"
                   message="Create your profile to start receiving compatible matches."
-                  action={<a href="/candidate/profile" className="cnd-btn cnd-btn-primary">Create profile</a>}
+                  action={<Link to="/candidate/profile" className="cnd-btn cnd-btn-primary">Create profile</Link>}
                 />
               )}
             </SectionCard>
@@ -565,11 +606,13 @@ export default function Dashboard() {
             title="Recently joined profiles"
             subtitle="Meet members who joined recently"
             icon={Users}
-            action={<a href="/candidate/matches?sort=newest" className="cnd-text-link">View all <ArrowRight size={14} /></a>}
+            action={<Link to="/candidate/matches?sort=newest" className="cnd-text-link">View all <ArrowRight size={14} /></Link>}
             className="cnd-suggested cnd-dashboard-recent"
           >
-            {matchesLoading && !recentProfiles.length ? (
-              <DashboardSkeleton />
+            {recentLoading && !recentProfiles.length ? (
+              <CardGridSkeleton count={3} />
+            ) : recentError ? (
+              <ErrorState message={recentError} onRetry={loadRecent} />
             ) : recentProfiles.length ? (
               <div className="cnd-match-grid cnd-recent-grid">
                 {recentProfiles.map((match) => (
@@ -595,13 +638,13 @@ export default function Dashboard() {
             title="Recommended for you"
             subtitle="Ranked using your preferences and profile compatibility"
             icon={Sparkles}
-            action={<a href="/candidate/matches" className="cnd-text-link">See all matches <ArrowRight size={14} /></a>}
+            action={<Link to="/candidate/matches" className="cnd-text-link">See all matches <ArrowRight size={14} /></Link>}
             className="cnd-suggested cnd-dashboard-suggested"
           >
             {suggestedError ? (
-              <ErrorState message={suggestedError} onRetry={load} />
-            ) : matchesLoading && !suggested.length ? (
-              <DashboardSkeleton />
+              <ErrorState message={suggestedError} onRetry={loadSuggested} />
+            ) : suggestedLoading && !suggested.length ? (
+              <CardGridSkeleton count={3} />
             ) : suggested.length === 0 ? (
               <EmptyState
                 icon={Users}
@@ -629,7 +672,7 @@ export default function Dashboard() {
               title="Notifications"
               subtitle="Latest updates on your account"
               icon={Bell}
-              action={<a href="/candidate/notifications" className="cnd-text-link">View all <ArrowRight size={14} /></a>}
+              action={<Link to="/candidate/notifications" className="cnd-text-link">View all <ArrowRight size={14} /></Link>}
             >
               {data?.recent_notifications?.length ? (
                 <ul className="cnd-notification-mini">
@@ -654,11 +697,11 @@ export default function Dashboard() {
 
             <SectionCard title="Quick actions" subtitle="Shortcuts to manage your account" icon={Settings2}>
               <div className="cnd-quick-actions">
-                <a href="/candidate/profile"><span><UserRound size={19} /></span><div><strong>Edit profile</strong><small>Update your details and photos</small></div></a>
-                <a href="/candidate/matches"><span><Users size={19} /></span><div><strong>Find matches</strong><small>Search compatible candidates</small></div></a>
-                <a href="/candidate/interests-sent"><span><Send size={19} /></span><div><strong>Interests sent</strong><small>Track your sent interests</small></div></a>
-                <a href="/candidate/profile?tab=preferences"><span><Settings2 size={19} /></span><div><strong>Preferences</strong><small>Refine your partner criteria</small></div></a>
-                <a href="/candidate/profile?tab=documents"><span><CheckCircle2 size={19} /></span><div><strong>Documents</strong><small>Complete verification</small></div></a>
+                <Link to="/candidate/profile"><span><UserRound size={19} /></span><div><strong>Edit profile</strong><small>Update your details and photos</small></div></Link>
+                <Link to="/candidate/matches"><span><Users size={19} /></span><div><strong>Find matches</strong><small>Search compatible candidates</small></div></Link>
+                <Link to="/candidate/interests-sent"><span><Send size={19} /></span><div><strong>Interests sent</strong><small>Track your sent interests</small></div></Link>
+                <Link to="/candidate/profile?tab=preferences"><span><Settings2 size={19} /></span><div><strong>Preferences</strong><small>Refine your partner criteria</small></div></Link>
+                <Link to="/candidate/profile?tab=documents"><span><CheckCircle2 size={19} /></span><div><strong>Documents</strong><small>Complete verification</small></div></Link>
               </div>
             </SectionCard>
           </div>
@@ -718,9 +761,9 @@ export default function Dashboard() {
                 </>
               ) : null}
             </div>
-            <a className="mm-story-profile-link" href={`/candidate/matches/${story.match.id}`}>
+            <Link className="mm-story-profile-link" to={`/candidate/matches/${story.match.id}`}>
               View full profile <ArrowRight size={15} />
-            </a>
+            </Link>
           </div>
         </div>
       ) : null}

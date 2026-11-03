@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Clock3, Loader2, Search, Send, Users, X } from "lucide-react";
+import { Link } from "react-router-dom";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchDetailModal from "../components/MatchDetailModal";
 import {
@@ -103,18 +104,18 @@ export default function Activity({ currentPath, mode = "sent" }) {
         eyebrow="Interests"
         title={mode === "received" ? "Interests Received" : "Interests Sent"}
         subtitle={mode === "received" ? "Review interests sent by other candidates." : "Profiles you have sent interest to."}
-        actions={<a href="/candidate/matches" className="cnd-btn cnd-btn-primary"><Users size={17} /> Find more matches</a>}
+        actions={<Link to="/candidate/matches" className="cnd-btn cnd-btn-primary"><Users size={17} /> Find more matches</Link>}
       />
 
       <section className="cnd-card cnd-activity-card">
         <header className="cnd-activity-toolbar">
           <div className="cnd-segmented" aria-label="Interest type">
-            <a className={mode === "received" ? "active" : ""} href="/candidate/interests-received">
+            <Link className={mode === "received" ? "active" : ""} to="/candidate/interests-received">
               Received{counts.received ? ` (${counts.received})` : ""}
-            </a>
-            <a className={mode === "sent" ? "active" : ""} href="/candidate/interests-sent">
+            </Link>
+            <Link className={mode === "sent" ? "active" : ""} to="/candidate/interests-sent">
               Sent{counts.sent ? ` (${counts.sent})` : ""}
-            </a>
+            </Link>
           </div>
           <form className="cnd-search-box" onSubmit={submitSearch}>
             <Search size={16} />
@@ -140,7 +141,7 @@ export default function Activity({ currentPath, mode = "sent" }) {
               : mode === "received"
                 ? "When another candidate sends you an interest, it will appear here."
                 : "Profiles you send interest to will appear here."}
-            action={<a href="/candidate/matches" className="cnd-btn cnd-btn-primary">Browse matches</a>}
+            action={<Link to="/candidate/matches" className="cnd-btn cnd-btn-primary">Browse matches</Link>}
           />
         ) : (
           <>

@@ -32,9 +32,24 @@ class MatchController extends CandidateController
                 'sort' => ['nullable', 'in:best_match,newest,age_asc,age_desc'],
                 'page' => ['nullable', 'integer', 'min:1'],
                 'per_page' => ['nullable', 'integer', 'min:6', 'max:48'],
+                'feed' => ['nullable', 'boolean'],
+                'include_filters' => ['nullable', 'boolean'],
+                'exclude_ids' => ['nullable', 'string', 'max:12000', function ($attribute, $value, $fail) {
+                    if ($value !== null && collect(explode(',', $value))->contains(
+                        fn ($id) => ! ctype_digit($id)
+                    )) {
+                        $fail('The excluded profile IDs must be comma-separated integers.');
+                    }
+                }],
             ]);
 
             $opposite = $this->profileGender($me) === 'groom' ? 'bride' : 'groom';
+            $feed = (bool) ($filters['feed'] ?? false);
+            $excludeIds = collect(explode(',', (string) ($filters['exclude_ids'] ?? '')))
+                ->filter(fn ($id) => ctype_digit($id))
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
 
             $query = Profile::query()
                 ->with(['educations', 'employments', 'religionDetails', 'familyDetails'])
@@ -44,26 +59,25 @@ class MatchController extends CandidateController
                 ->whereNotNull('full_name');
 
             $this->applyFilters($query, $filters);
-
             $sort = $filters['sort'] ?? 'best_match';
             $perPage = (int) ($filters['per_page'] ?? 12);
             $page = (int) ($filters['page'] ?? 1);
+            $this->applyRecommendationOrdering($query, $sort, $preference);
 
-            if ($sort === 'newest') {
-                $query->orderByDesc('id');
-            } elseif ($sort === 'age_asc') {
-                $query->orderBy('birth_date', 'desc');
-            } elseif ($sort === 'age_desc') {
-                $query->orderBy('birth_date', 'asc');
-            }
-
-            if ($sort !== 'best_match') {
-                $total = (clone $query)->count();
-                $lastPage = max(1, (int) ceil($total / $perPage));
+            $total = (clone $query)->count();
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            if ($feed) {
+                if ($excludeIds->isNotEmpty()) {
+                    $query->whereNotIn('id', $excludeIds);
+                }
+                $profiles = $query->limit($perPage + 1)->get();
+                $hasMore = $profiles->count() > $perPage;
+                $profiles = $profiles->take($perPage)->values();
+                $page = min($page, $lastPage);
+            } else {
                 $page = min($page, $lastPage);
                 $profiles = $query->offset(($page - 1) * $perPage)->limit($perPage)->get();
-            } else {
-                $profiles = $query->limit(500)->get();
+                $hasMore = $page < $lastPage;
             }
 
             $profileIds = $profiles->pluck('id');
@@ -83,30 +97,23 @@ class MatchController extends CandidateController
                 ]);
             });
 
-            if ($sort === 'best_match') {
-                $matches = $matches->sortByDesc('match_percentage')->values();
-                $total = $matches->count();
-                $lastPage = max(1, (int) ceil($total / $perPage));
-                $page = min($page, $lastPage);
-                $items = $matches->forPage($page, $perPage)->values();
-            } else {
-                $matches = $matches->values();
-                $items = $matches;
-            }
-
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'matches' => $items,
+                    'matches' => $matches->values(),
                     'pagination' => [
                         'current_page' => $page,
-                        'last_page' => $lastPage,
+                        'last_page' => max(1, (int) ceil($total / $perPage)),
                         'per_page' => $perPage,
                         'total' => $total,
                         'from' => $total ? (($page - 1) * $perPage) + 1 : 0,
-                        'to' => $total ? min($total, $page * $perPage) : 0,
+                        'to' => $total ? min($total, (($page - 1) * $perPage) + $matches->count()) : 0,
+                        'has_more' => $hasMore,
+                        'next_page' => $hasMore ? $page + 1 : null,
                     ],
-                    'filters' => $this->filterOptions($opposite),
+                    'filters' => (bool) ($filters['include_filters'] ?? true)
+                        ? $this->filterOptions($opposite)
+                        : [],
                 ],
             ]);
         } catch (Throwable $e) {
@@ -169,6 +176,74 @@ class MatchController extends CandidateController
                 'message' => 'Unable to load this profile right now.',
             ], 500);
         }
+    }
+
+    private function applyRecommendationOrdering(Builder $query, string $sort, $preference): void
+    {
+        if ($sort === 'newest') {
+            $query->orderByDesc('profiles.id');
+        } elseif ($sort === 'age_asc') {
+            $query->orderBy('profiles.birth_date', 'desc');
+        } elseif ($sort === 'age_desc') {
+            $query->orderBy('profiles.birth_date', 'asc');
+        } else {
+            $query->orderByDesc('profiles.profile_completion');
+            if ($preference) {
+                $ageFrom = (int) ($preference->age_from ?? 0);
+                $ageTo = (int) ($preference->age_to ?? 0);
+                if ($ageFrom > 0 && $ageTo > 0) {
+                    $youngestBirthDate = Carbon::now()->subYears($ageTo + 1)->addDay()->toDateString();
+                    $oldestBirthDate = Carbon::now()->subYears($ageFrom)->toDateString();
+                    $query->orderByRaw(
+                        'CASE WHEN profiles.birth_date BETWEEN ? AND ? THEN 1 ELSE 0 END DESC',
+                        [$youngestBirthDate, $oldestBirthDate]
+                    );
+                }
+
+                if (filled($preference->preferred_religion)) {
+                    $query->orderByRaw(
+                        'CASE WHEN EXISTS (SELECT 1 FROM profile_religion_details AS recommendation_religion WHERE recommendation_religion.profile_id = profiles.id AND LOWER(recommendation_religion.religion) = LOWER(?)) THEN 1 ELSE 0 END DESC',
+                        [$preference->preferred_religion]
+                    );
+                }
+
+                if (filled($preference->preferred_caste)) {
+                    $query->orderByRaw(
+                        'CASE WHEN EXISTS (SELECT 1 FROM profile_religion_details AS recommendation_caste WHERE recommendation_caste.profile_id = profiles.id AND LOWER(recommendation_caste.caste) = LOWER(?)) THEN 1 ELSE 0 END DESC',
+                        [$preference->preferred_caste]
+                    );
+                }
+
+                if (filled($preference->preferred_education)) {
+                    $education = '%'.trim($preference->preferred_education).'%';
+                    $query->orderByRaw(
+                        'CASE WHEN EXISTS (SELECT 1 FROM profile_education AS recommendation_education WHERE recommendation_education.profile_id = profiles.id AND (recommendation_education.education_level LIKE ? OR recommendation_education.degree_name LIKE ?)) THEN 1 ELSE 0 END DESC',
+                        [$education, $education]
+                    );
+                }
+
+                if (filled($preference->preferred_working_field)) {
+                    $workingField = '%'.trim($preference->preferred_working_field).'%';
+                    $query->orderByRaw(
+                        'CASE WHEN EXISTS (SELECT 1 FROM profile_employment AS recommendation_employment WHERE recommendation_employment.profile_id = profiles.id AND (recommendation_employment.working_field LIKE ? OR recommendation_employment.profession LIKE ?)) THEN 1 ELSE 0 END DESC',
+                        [$workingField, $workingField]
+                    );
+                }
+
+                if (filled($preference->preferred_city)) {
+                    $city = '%'.trim($preference->preferred_city).'%';
+                    $query->orderByRaw(
+                        'CASE WHEN profiles.birth_place LIKE ? OR EXISTS (SELECT 1 FROM profile_employment AS recommendation_city WHERE recommendation_city.profile_id = profiles.id AND recommendation_city.employment_city LIKE ?) THEN 1 ELSE 0 END DESC',
+                        [$city, $city]
+                    );
+                }
+            }
+
+            $query->orderByDesc('profiles.updated_at')
+                ->orderByRaw("CASE WHEN profiles.verification_status = 'Completed' THEN 1 ELSE 0 END DESC");
+        }
+
+        $query->orderByDesc('profiles.id');
     }
 
     private function applyFilters(Builder $query, array $filters): void

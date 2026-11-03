@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import CandidateSidebar from "./CandidateSidebar";
+import { useProfileCompletion } from "../profile-completion-context";
 import {
   clearSession, getCachedHomeData, getSession,
 } from "../../auth";
@@ -25,6 +26,7 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const profileCompletion = useProfileCompletion();
   const cachedHome = getCachedHomeData();
   const menuRef = useRef(null);
   const session = getSession();
@@ -181,7 +183,19 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
           </div>
         </header>
 
-        <main className="mm-main cnd-content">{children}</main>
+          {profileCompletion.status === "required" && currentPath !== "/candidate/profile" ? (
+              <section className="cnd-profile-completion-banner" role="status">
+                <div>
+                  <strong>Complete your profile to unlock all features</strong>
+                  <span>Your profile is {profileCompletion.completion}% complete.</span>
+                </div>
+                <Link to="/candidate/profile">
+                  {profileCompletion.hasProfile ? "Complete profile" : "Create profile"}
+                </Link>
+              </section>
+            ) : null}
+
+          <main className="mm-main cnd-content">{children}</main>
       </div>
 
       <nav className="mm-bottom-nav" aria-label="Candidate mobile navigation">

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   BadgeCheck, Briefcase, Camera, CheckCircle2, Copy, FileText, GraduationCap,
   Eye, Heart, Loader2, MapPin, Minus, Plus, Save, Settings2, ShieldCheck, Sparkles,
@@ -1082,9 +1083,9 @@ export default function CandidateProfile() {
             : "Complete the required profile details, photos and documents to unlock the candidate portal."
           : "Add the essentials now. You can complete the remaining details and preferences afterwards."}
         actions={profile && profileComplete ? (
-          <a href="/candidate/matches" className="cnd-btn cnd-btn-primary">
+          <Link to="/candidate/matches" className="cnd-btn cnd-btn-primary">
             <Heart size={17} /> Find matches
-          </a>
+          </Link>
         ) : null}
       />
 

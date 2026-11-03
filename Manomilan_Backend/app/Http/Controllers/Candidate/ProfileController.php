@@ -58,6 +58,25 @@ class ProfileController extends CandidateController
         }
     }
 
+    public function status(Request $request)
+    {
+        $user = $this->candidate($request);
+        $profile = $user->profile_id
+            ? Profile::query()->find($user->profile_id, ['id', 'profile_completion', 'groomorbride'])
+            : null;
+        $completion = (int) ($profile?->profile_completion ?? 0);
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'has_profile' => $profile !== null,
+                'profile_completion' => $completion,
+                'complete' => $profile !== null && $completion >= 100,
+                'gender' => strtolower((string) $profile?->groomorbride),
+            ],
+        ]);
+    }
+
     public function store(Request $request, CandidateProfileService $profileService)
     {
         $user = $this->candidate($request);

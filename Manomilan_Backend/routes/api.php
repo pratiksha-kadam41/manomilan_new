@@ -203,6 +203,7 @@ Route::prefix('admin/success-stories')->group(function () {
     Route::get('/profiles/{profileId}/receipt', [ReceiptController::class, 'show'])->whereNumber('profileId');
 
     Route::prefix('candidate')->group(function () {
+        Route::get('/profile/status', [CandidateProfileController::class, 'status']);
         Route::get('/profile', [CandidateProfileController::class, 'show']);
         Route::post('/profile', [CandidateProfileController::class, 'store']);
         Route::put('/profile', [CandidateProfileController::class, 'update']);
@@ -216,9 +217,8 @@ Route::prefix('admin/success-stories')->group(function () {
         Route::put('/preferences', [CandidatePreferenceController::class, 'update']);
         Route::post('/preferences', [CandidatePreferenceController::class, 'update']);
 
+        Route::get('/dashboard', [CandidateDashboardController::class, 'index']);
         Route::middleware('candidate.profile.complete')->group(function () {
-            Route::get('/dashboard', [CandidateDashboardController::class, 'index']);
-
             Route::get('/matches', [CandidateMatchController::class, 'index']);
             Route::get('/matches/{id}', [CandidateMatchController::class, 'show'])->whereNumber('id');
 
