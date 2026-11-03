@@ -87,7 +87,13 @@ After migrations, run `php artisan db:seed` to create the Super Admin user (`use
 - PUT /melava-campaigns/{id}/status (admin) - Open or close registration for a batch
 
 ## Workshop Registrations
-- POST /workshop-registrations (public)
+- GET /workshop-events/active (public) - Active workshop titles, schedule, fee, and payment QR images
+- GET /workshop-events (admin) - Paginated, searchable workshop event list and counts
+- POST /workshop-events (admin, multipart/form-data) - Create a workshop event with fee and QR image
+- PUT /workshop-events/{id} (admin, multipart/form-data) - Update workshop event details and optionally replace its QR image
+- PATCH /workshop-events/{id}/status (admin) - Open or close a workshop for registration
+- DELETE /workshop-events/{id} (admin) - Delete a workshop only when it has no registrations
+- POST /workshop-registrations (public) - Submit candidate details, payment screenshot, and the selected `workshop_event_id`; registration fee/currency are read and stored from the active event, not trusted from the client
 - GET /workshop-registrations (admin) - Paginated candidate list; supports `name`, `mobile`, `city`, `status`, `page`, and `per_page` query parameters
 - GET /workshop-registrations/{id} (admin) - Candidate details and payment screenshot URL
 - PATCH /workshop-registrations/{id}/status (admin with approve permission) - Set status to `Verified` or `Rejected`; optional `remarks` for rejected registrations

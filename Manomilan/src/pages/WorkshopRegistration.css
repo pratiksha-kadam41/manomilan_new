@@ -306,6 +306,66 @@
   font-size: .8rem;
 }
 
+.workshop-event-choice {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 18px;
+  border: 1px solid #f1c0d0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff8fa, #fff);
+}
+
+.workshop-event-choice h2 {
+  margin: 0;
+  color: var(--workshop-accent-dark);
+  font-size: 1.12rem;
+  font-weight: 800;
+}
+
+.workshop-event-choice p,
+.workshop-event-choice small {
+  margin: 0;
+  color: #6f6670;
+}
+
+.workshop-event-kicker {
+  color: var(--workshop-accent);
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.workshop-availability {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 30px 16px;
+  border: 1px solid #f1c0d0;
+  border-radius: 14px;
+  background: #fff8fa;
+  text-align: center;
+}
+
+.workshop-availability h2,
+.workshop-availability p {
+  margin: 0;
+}
+
+.workshop-availability h2 {
+  color: var(--workshop-accent-dark);
+  font-size: 1.2rem;
+}
+
+.workshop-availability p {
+  color: #6f6670;
+}
+
+.workshop-availability button {
+  margin-top: 8px;
+}
+
 .workshop-field-spaced {
   margin-top: 18px;
 }

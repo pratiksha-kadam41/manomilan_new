@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\SystemManagementController;
 use App\Http\Controllers\Api\TicketController;
 use App\Http\Controllers\Api\WebsiteManagementController;
 use App\Http\Controllers\Api\WorkshopRegistrationController;
+use App\Http\Controllers\Api\WorkshopEventController;
 use App\Http\Controllers\Candidate\DashboardController as CandidateDashboardController;
 use App\Http\Controllers\Candidate\InterestController as CandidateInterestController;
 use App\Http\Controllers\Candidate\MatchController as CandidateMatchController;
@@ -36,6 +37,7 @@ Route::middleware('website.availability')->group(function () {
     Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('throttle:10,1');
     Route::get('/melava-registrations/settings', [MelavaRegistrationController::class, 'settings']);
     Route::get('/melava-campaigns/active', [MelavaCampaignController::class, 'active']);
+    Route::get('/workshop-events/active', [WorkshopEventController::class, 'active']);
     Route::get('/melava-registrations/check', [MelavaRegistrationController::class, 'check'])->middleware('throttle:20,1');
     Route::post('/melava-registrations/draft', [MelavaRegistrationController::class, 'saveDraft'])->middleware('throttle:60,1');
     Route::post('/melava-registrations', [MelavaRegistrationController::class, 'store'])->middleware('throttle:10,1');
@@ -185,6 +187,11 @@ Route::prefix('admin/success-stories')->group(function () {
     Route::get('/workshop-registrations', [WorkshopRegistrationController::class, 'index']);
     Route::get('/workshop-registrations/{id}', [WorkshopRegistrationController::class, 'show'])->whereNumber('id');
     Route::patch('/workshop-registrations/{id}/status', [WorkshopRegistrationController::class, 'updateStatus'])->whereNumber('id');
+    Route::get('/workshop-events', [WorkshopEventController::class, 'index']);
+    Route::post('/workshop-events', [WorkshopEventController::class, 'store']);
+    Route::put('/workshop-events/{id}', [WorkshopEventController::class, 'update'])->whereNumber('id');
+    Route::patch('/workshop-events/{id}/status', [WorkshopEventController::class, 'updateStatus'])->whereNumber('id');
+    Route::delete('/workshop-events/{id}', [WorkshopEventController::class, 'destroy'])->whereNumber('id');
 
     Route::post('/payments/upload', [PaymentController::class, 'uploadScreenshot']);
     Route::get('/payments/my', [PaymentController::class, 'myPayments']);

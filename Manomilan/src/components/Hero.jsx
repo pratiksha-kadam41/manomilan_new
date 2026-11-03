@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { request } from "../api";
 
 const REGISTER_URL = "/melava-registration";
 const SHOW_WORKSHOP_REGISTRATION = true;
@@ -65,11 +66,126 @@ function ReelFrame({ reels }) {
 
 export default function Hero() {
   const [active, setActive] = useState(0);
+  const [workshopEvents, setWorkshopEvents] = useState([]);
+  const [workshopEventsError, setWorkshopEventsError] = useState(false);
+  const [workshopEventsLoading, setWorkshopEventsLoading] = useState(true);
+  const [melavaEvents, setMelavaEvents] = useState([]);
+  const [melavaEventsError, setMelavaEventsError] = useState(false);
+  const [melavaEventsLoading, setMelavaEventsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    request("/workshop-events/active", { auth: false })
+      .then((response) => {
+        if (!cancelled) {
+          setWorkshopEvents(Array.isArray(response?.data) ? response.data : []);
+          setWorkshopEventsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkshopEventsError(true);
+          setWorkshopEventsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    request("/melava-campaigns/active", { auth: false })
+      .then((response) => {
+        if (!cancelled) {
+          setMelavaEvents(Array.isArray(response?.data) ? response.data : []);
+          setMelavaEventsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMelavaEventsError(true);
+          setMelavaEventsLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const id = setInterval(() => setActive((a) => (a + 1) % BACKGROUNDS.length), 5000);
     return () => clearInterval(id);
   }, []);
+
+  const workshopFee = (() => {
+    if (workshopEventsLoading) return "Loading workshop fee…";
+    if (workshopEventsError) return "Workshop details unavailable";
+    if (workshopEvents.length === 0) return "No active Workshop";
+    const currencies = new Set(workshopEvents.map((event) => event.currency || "INR"));
+    if (currencies.size > 1) return "Choose a workshop for pricing";
+    const fee = Math.min(...workshopEvents.map((event) => Number(event.registration_fee || 0)));
+    try {
+      const formatted = new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: workshopEvents[0].currency || "INR",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(fee);
+      return workshopEvents.length > 1 ? `From ${formatted}` : `Fee: ${formatted}`;
+    } catch {
+      return workshopEvents.length > 1 ? `From ${fee}` : `Fee: ${fee}`;
+    }
+  })();
+
+  const melavaPrice = (() => {
+    if (melavaEventsLoading) {
+      return { price: "Loading Melava fee…", detail: "" };
+    }
+    if (melavaEventsError) {
+      return { price: "Melava details unavailable", detail: "" };
+    }
+    if (melavaEvents.length === 0) {
+      return { price: "No active Melava", detail: "" };
+    }
+
+    const currencies = new Set(melavaEvents.map((campaign) => campaign.currency || "INR"));
+    if (currencies.size > 1) {
+      return { price: "Select a Melava for pricing", detail: `${melavaEvents.length} active events` };
+    }
+    const currency = melavaEvents[0].currency || "INR";
+    const fee = Math.min(...melavaEvents.map((campaign) => Number(campaign.registration_fee ?? campaign.fee ?? 0)));
+    try {
+      const formattedFee = new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(fee);
+      if (melavaEvents.length > 1) {
+        return { price: `From ${formattedFee}`, detail: `${melavaEvents.length} active events` };
+      }
+
+      const campaign = melavaEvents[0];
+      const bookletFee = Number(campaign.booklet_fee || 0);
+      const booklet = campaign.booklet_available && bookletFee > 0
+        ? `Booklet: ${new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 2,
+          }).format(bookletFee)}`
+        : "Booklet not available";
+      return { price: `Fee: ${formattedFee}`, detail: `${campaign.title} · ${booklet}` };
+    } catch {
+      return {
+        price: melavaEvents.length > 1 ? `From ${fee}` : `Fee: ${fee}`,
+        detail: melavaEvents.length === 1 ? melavaEvents[0].title : `${melavaEvents.length} active events`,
+      };
+    }
+  })();
 
   return (
     <section id="home" className="hero">
@@ -93,8 +209,8 @@ export default function Hero() {
               <div className="hero-registration-option">
                 <a href={REGISTER_URL} className="btn-melava">Melava Registration</a>
                 <span className="fee">
-                  Fee: ₹1500
-                  <small>(₹1200 + ₹300)</small>
+                  {melavaPrice.price}
+                  {melavaPrice.detail ? <small>{melavaPrice.detail}</small> : null}
                 </span>
               </div>
               {SHOW_WORKSHOP_REGISTRATION && (
@@ -103,8 +219,16 @@ export default function Hero() {
                     Workshop Registration
                   </a>
                   <span className="fee">
-                    Fee: ₹1000
-                    <small>Workshop Registration</small>
+                    {workshopFee}
+                    {workshopEvents.length > 0 && !workshopEventsError && !workshopEventsLoading ? (
+                      <small>
+                        {workshopEvents.length === 1
+                        ? workshopEvents[0].title
+                          : workshopEvents.length > 1
+                          ? "Select an active workshop"
+                          : ""}
+                      </small>
+                    ) : null}
                   </span>
                 </div>
               )}

@@ -1825,21 +1825,35 @@ export default function MelavaRegistration() {
     );
   }
 
-  if (campaignsLoading && !adminEditId) {
+  if ((campaignsLoading || campaignsError || !campaigns.length) && !adminEditId) {
     return (
-      <main className="melava-page">
-        <div className="wrap"><section className="card">Loading open Melava events...</section></div>
-      </main>
-    );
-  }
-
-  if ((campaignsError || !campaigns.length) && !adminEditId) {
-    return (
-      <main className="melava-page">
+      <main className="melava-page melava-closed-page">
         <div className="wrap">
-          <section className="card">
-            <h2>{campaignsError ? "Unable to load events" : "No open Melava events"}</h2>
-            <p className="sub">{campaignsError || "Registration will appear here when the admin opens a Melava event."}</p>
+          <section className="card melava-closed-card">
+            <header className="melava-closed-brand">
+              <a href="/" aria-label="Aaryans Manomilan home">
+                <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
+              </a>
+              <p className="melava-closed-tagline">येथे मनं मिळतात... नाती जुळतात</p>
+              <div className="melava-closed-heading">
+                <span>Aaryans Manomilan <i /> Melava</span>
+                <h1>Melava Registration</h1>
+                <p>Join our community and take the next step toward meaningful connections.</p>
+              </div>
+            </header>
+
+            <div className="melava-availability" role={campaignsError ? "alert" : "status"}>
+              {campaignsLoading ? <p>Loading active Melava events…</p> : null}
+            {campaignsError ? (
+              <>
+                <h2>Unable to load Melava events</h2>
+                <p className="sub">{campaignsError}</p>
+                <button type="button" className="btn g" onClick={() => window.location.reload()}>Try again</button>
+              </>
+            ) : (
+              !campaignsLoading ? <h2>No active Melava</h2> : null
+            )}
+            </div>
           </section>
         </div>
       </main>

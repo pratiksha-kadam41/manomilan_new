@@ -63,8 +63,8 @@ class ApplicationModuleSeeder extends Seeder
             'key' => 'website_registration',
             'description' => 'Website Registration module for Aaryans Manomilan',
             'route' => '/admin/workshop',
-            'frontend_routes' => ['/admin/workshop'],
-            'api_prefixes' => ['/enquiries', '/workshop-registrations'],
+            'frontend_routes' => ['/admin/workshop', '/admin/workshop-events'],
+            'api_prefixes' => ['/enquiries', '/workshop-registrations', '/workshop-events'],
             'icon' => 'graduation-cap',
         ],
         'Success Stories' => [
@@ -183,6 +183,12 @@ class ApplicationModuleSeeder extends Seeder
 
             if (! $module->module_key) {
                 $module->module_key = $configuration['key'];
+                $module->save();
+            }
+
+            if ($moduleName === 'Website Registration') {
+                $module->frontend_routes = $configuration['frontend_routes'];
+                $module->api_prefixes = $configuration['api_prefixes'];
                 $module->save();
             }
         }

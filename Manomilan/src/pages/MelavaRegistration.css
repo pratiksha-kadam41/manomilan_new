@@ -284,6 +284,20 @@
   margin-bottom: 18px;
 }
 
+.melava-page .melava-availability {
+  display: grid;
+  min-height: 180px;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.melava-page .melava-availability h2,
+.melava-page .melava-availability p {
+  margin: 0;
+}
+
 .melava-page .card > h2 {
   margin: 0 0 4px;
   font-size: 1.3rem;
@@ -1180,5 +1194,218 @@
   .melava-page .legal {
     padding: 14px;
     font-size: 0.86rem;
+  }
+}
+
+.melava-page.melava-closed-page {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 100vh;
+  padding: clamp(24px, 5vw, 64px) 16px;
+  background:
+    radial-gradient(ellipse at 9% 9%, rgba(255, 255, 255, .76), transparent 28rem),
+    radial-gradient(ellipse at 94% 82%, rgba(255, 222, 230, .9), transparent 26rem),
+    linear-gradient(135deg, #f8d7d2 0%, #f6c5cc 48%, #f9e4dc 100%);
+  color: #333;
+}
+
+.melava-closed-page::before,
+.melava-closed-page::after {
+  position: absolute;
+  z-index: -1;
+  width: 290px;
+  height: 290px;
+  border: 1px solid rgba(183, 6, 80, .1);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.melava-closed-page::before {
+  top: 5%;
+  left: -180px;
+  box-shadow: 0 0 0 28px rgba(183, 6, 80, .025), 0 0 0 58px rgba(183, 6, 80, .02);
+}
+
+.melava-closed-page::after {
+  right: -180px;
+  bottom: 4%;
+  box-shadow: 0 0 0 28px rgba(183, 6, 80, .025), 0 0 0 58px rgba(183, 6, 80, .02);
+}
+
+.melava-closed-page .wrap {
+  width: min(100%, 1180px);
+  max-width: none;
+  padding: 0;
+}
+
+.melava-closed-page .melava-closed-card {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  margin: 0 auto;
+  padding: 22px clamp(22px, 4vw, 48px) 34px;
+  border: 1px solid #f3e5da;
+  border-radius: 26px;
+  background:
+    radial-gradient(ellipse at 0 0, rgba(246, 232, 221, .35), transparent 22rem),
+    #fffdfb;
+  box-shadow: 0 24px 70px rgba(117, 65, 41, .15), 0 4px 14px rgba(117, 65, 41, .05);
+  animation: melava-closed-enter .5s ease both;
+}
+
+.melava-closed-page .melava-closed-card::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #a60042 0%, #c71a52 45%, #e1a27a 100%);
+  content: "";
+}
+
+.melava-closed-brand {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.melava-closed-brand > a {
+  display: grid;
+  width: 92px;
+  height: 58px;
+  place-items: center;
+  margin: 0 auto 2px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fff5f7, #fff);
+}
+
+.melava-closed-brand > a img {
+  display: block;
+  width: 92px;
+  height: 54px;
+  margin: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 3px 4px rgba(122, 12, 57, .08));
+}
+
+.melava-closed-tagline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
+  margin: 0 auto 19px;
+  color: #a20a4a;
+  font-size: .85rem;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.melava-closed-tagline::before,
+.melava-closed-tagline::after {
+  width: 18px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #e59b82);
+  content: "";
+}
+
+.melava-closed-tagline::after {
+  transform: rotate(180deg);
+}
+
+.melava-closed-heading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 8px;
+  color: #9c3156;
+  font-size: .7rem;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.melava-closed-heading > span i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #d94d78;
+}
+
+.melava-closed-heading h1 {
+  margin: 0 0 8px;
+  background: linear-gradient(105deg, #7d073a, #c21359 68%, #d76365);
+  background-clip: text;
+  color: transparent;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.8rem, 5vw, 2.45rem);
+  font-weight: 800;
+  letter-spacing: -.045em;
+  line-height: 1.15;
+  -webkit-background-clip: text;
+}
+
+.melava-closed-heading p {
+  max-width: 470px;
+  margin: 0 auto;
+  color: #77707a;
+  font-size: .96rem;
+  line-height: 1.65;
+}
+
+.melava-closed-page .melava-availability {
+  display: grid;
+  min-height: 92px;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid #f1c0d0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff8fa, #fff);
+  text-align: center;
+}
+
+.melava-closed-page .melava-availability h2,
+.melava-closed-page .melava-availability p {
+  margin: 0;
+}
+
+.melava-closed-page .melava-availability h2 {
+  color: #a20a4a;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.melava-closed-page .melava-availability p {
+  color: #6f6670;
+  font-size: .9rem;
+}
+
+.melava-closed-page .melava-availability .btn {
+  margin-top: 6px;
+}
+
+@keyframes melava-closed-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 560px) {
+  .melava-page.melava-closed-page {
+    padding: 18px 12px 28px;
+  }
+
+  .melava-closed-page .melava-closed-card {
+    padding: 22px 18px 24px;
+    border-radius: 20px;
+  }
+
+  .melava-closed-page .melava-availability {
+    min-height: 78px;
+    padding: 16px 12px;
   }
 }
