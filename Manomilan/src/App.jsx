@@ -6,7 +6,7 @@ import ComingSoon from "./pages/ComingSoon.jsx";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
 import { request } from "./api.js";
-import { AdminPermissionContext } from "./permission-context.jsx";
+import { AdminPermissionContext, hasModulePermission } from "./permission-context.jsx";
 import { invalidateCandidateProfileCache } from "./candidate/api.js";
 import { ProfileCompletionContext } from "./candidate/profile-completion-context.jsx";
 import { getPublicWebsiteSettings } from "./website/api.js";
@@ -148,7 +148,11 @@ export default function App() {
   const [adminPermissionState, setAdminPermissionState] = useState({
     token: null,
     data: null,
+    status: "idle",
+    error: "",
+    retry: -1,
   });
+  const [adminPermissionRetry, setAdminPermissionRetry] = useState(0);
   const [candidateProfileState, setCandidateProfileState] = useState({
     token: null,
     status: "idle",
@@ -245,21 +249,50 @@ export default function App() {
     if (!sessionToken || sessionRole !== "admin" || isSuperAdmin) return undefined;
 
     let active = true;
-    request("/system/my-permissions")
-      .then((response) => {
-        if (active) setAdminPermissionState({ token: sessionToken, data: response.data });
-      })
-      .catch((error) => {
-        if (active) {
-          console.error("Unable to load admin module permissions.", error);
-          setAdminPermissionState({ token: sessionToken, data: null });
-        }
-      });
+    const refreshPermissions = () => {
+      request("/system/my-permissions")
+        .then((response) => {
+          if (active && Array.isArray(response.data?.modules)) {
+            setAdminPermissionState({
+              token: sessionToken,
+              data: response.data,
+              status: "loaded",
+              error: "",
+              retry: adminPermissionRetry,
+            });
+          } else if (active) {
+            setAdminPermissionState({
+              token: sessionToken,
+              data: null,
+              status: "error",
+              error: "The server returned an invalid permissions response.",
+              retry: adminPermissionRetry,
+            });
+          }
+        })
+        .catch((error) => {
+          if (active) {
+            console.error("Unable to load admin module permissions.", error);
+            setAdminPermissionState({
+              token: sessionToken,
+              data: null,
+              status: "error",
+              error: error.message || "Unable to load your role permissions.",
+              retry: adminPermissionRetry,
+            });
+          }
+        });
+    };
+    refreshPermissions();
+    window.addEventListener("admin:permissions-updated", refreshPermissions);
+    window.addEventListener("focus", refreshPermissions);
 
     return () => {
       active = false;
+      window.removeEventListener("admin:permissions-updated", refreshPermissions);
+      window.removeEventListener("focus", refreshPermissions);
     };
-  }, [sessionToken, sessionRole, isSuperAdmin]);
+  }, [sessionToken, sessionRole, isSuperAdmin, adminPermissionRetry]);
 
   const adminPermissions = isSuperAdmin
     ? SUPER_ADMIN_PERMISSIONS
@@ -296,24 +329,15 @@ export default function App() {
     (isAdminPath && session && !isAdminRole(session.role))
     || (isCandidatePath && session && isAdminRole(session.role));
   const isChangePasswordPath = path === "/admin/change-password";
-  const permittedAdminRoute = Boolean(adminPermissions?.is_super_admin) || Boolean(
-    adminPermissions?.modules?.some((module) =>
-      module.permissions.includes("view") &&
-      (!module.requires_super_admin || adminPermissions.is_super_admin) &&
-      (module.routes || [module.route]).some((route) =>
-        route && (path === route || (route !== "/admin" && path.startsWith(`${route}/`))),
-      ),
-    ),
+  const permittedAdminRoute = Boolean(
+    hasModulePermission(adminPermissions, "view", path),
   );
   const canOpenAdminDashboard = Boolean(
-    adminPermissions?.is_super_admin ||
-    adminPermissions?.modules?.some((module) =>
-      module.permissions.includes("view") && (module.routes || [module.route]).includes("/admin"),
-    ),
+    hasModulePermission(adminPermissions, "view", "/admin"),
   );
   const firstPermittedAdminRoute = adminPermissions?.modules
     ?.filter((module) =>
-      module.permissions.includes("view") &&
+      (module.permissions.includes("view") || module.permissions.includes("manage")) &&
       !module.requires_super_admin &&
       (module.routes || [module.route]).some((route) => route?.startsWith("/admin") && route !== "/admin"),
     )
@@ -326,6 +350,21 @@ export default function App() {
     !isChangePasswordPath &&
     adminPermissions !== null &&
     !permittedAdminRoute;
+  const adminPermissionsPending = isAdminPath
+    && loggedIn
+    && session.role === "admin"
+    && !isChangePasswordPath
+    && !isSuperAdmin
+    && (adminPermissionState.token !== sessionToken
+      || adminPermissionState.retry !== adminPermissionRetry
+      || adminPermissionState.status === "loading");
+  const adminPermissionsFailed = isAdminPath
+    && loggedIn
+    && session.role === "admin"
+    && !isSuperAdmin
+    && adminPermissionState.token === sessionToken
+    && adminPermissionState.retry === adminPermissionRetry
+    && adminPermissionState.status === "error";
   const mustChangePassword =
     loggedIn &&
     session.user?.is_password_changed === false &&
@@ -359,6 +398,20 @@ export default function App() {
   }, [mustChangePassword, session?.role]);
   if (wrongRole) return null;
   if (mustChangePassword) return null;
+  if (adminPermissionsPending) {
+    return <main className="app-access-error" role="status">Loading your role permissions…</main>;
+  }
+  if (adminPermissionsFailed && !isChangePasswordPath) {
+    return (
+      <main className="app-access-error" role="alert">
+        <h1>Unable to verify access</h1>
+        <p>{adminPermissionState.error}</p>
+        <button type="button" onClick={() => setAdminPermissionRetry((attempt) => attempt + 1)}>
+          Retry
+        </button>
+      </main>
+    );
+  }
   if (isAdminPath && loggedIn && session.role === "admin" && !isChangePasswordPath) {
     if (adminRouteDenied) {
       return (
@@ -370,7 +423,6 @@ export default function App() {
       );
     }
   }
-
   // CHANGED: find the page (and the id from the URL, if any)
   const { Page: Matched, params } = matchRoute(path);
   const Page = needsLogin ? Login : Matched;

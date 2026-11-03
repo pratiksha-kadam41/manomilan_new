@@ -3,18 +3,23 @@ import { createContext, useContext } from "react";
 
 export const AdminPermissionContext = createContext(null);
 
-export function useAdminPermission(permission, currentPath) {
-  const access = useContext(AdminPermissionContext);
+export function hasModulePermission(access, permission, currentPath) {
   if (!access) return false;
   if (access.is_super_admin) return true;
 
   const path = currentPath || access.path;
-  const module = access.modules?.find((item) =>
-    (item.routes || [item.route]).some((route) =>
+  return Boolean(access.modules?.some((module) =>
+    (!module.requires_super_admin || access.is_super_admin)
+    && (module.permissions?.includes(permission) || module.permissions?.includes("manage"))
+    && (module.routes || [module.route]).some((route) =>
       route && (path === route || (route !== "/admin" && path.startsWith(`${route}/`))),
-    ),
-  );
-  return Boolean(module?.permissions?.includes(permission) || module?.permissions?.includes("manage"));
+    )
+  ));
+}
+
+export function useAdminPermission(permission, currentPath) {
+  const access = useContext(AdminPermissionContext);
+  return hasModulePermission(access, permission, currentPath);
 }
 
 export function PermissionGate({ permission, currentPath, children }) {
