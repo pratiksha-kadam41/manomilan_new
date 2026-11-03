@@ -483,7 +483,6 @@ class SystemManagementController extends Controller
 
     private function isCandidateRole(Role $role): bool
     {
-        return (string) $role->user_type === '21'
-            || strtolower(trim((string) $role->name)) === 'candidate';
+        return strtolower(trim((string) $role->name)) === 'candidate';
     }
 }

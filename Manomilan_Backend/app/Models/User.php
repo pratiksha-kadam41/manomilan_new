@@ -96,7 +96,13 @@ class User extends Authenticatable
 
     public function portal(): string
     {
-        return (string) ($this->role?->user_type ?? $this->user_type) === '21'
+        if ($this->role) {
+            return strtolower(trim((string) $this->role->name)) === 'candidate'
+                ? 'candidate'
+                : 'admin';
+        }
+
+        return (string) $this->user_type === '21'
             ? 'candidate'
             : 'admin';
     }
