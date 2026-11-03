@@ -62,8 +62,13 @@ class ProfileController extends CandidateController
     {
         $user = $this->candidate($request);
         $profile = $user->profile_id
-            ? Profile::query()->find($user->profile_id, ['id', 'profile_completion', 'groomorbride'])
+            ? Profile::query()->with(['user', 'familyDetails', 'educations', 'employments', 'religionDetails', 'profileDocuments', 'partnerPreferences'])
+                ->find($user->profile_id)
             : null;
+        if ($profile) {
+            $profile->calculateCompletionPercentage();
+            $profile->refresh();
+        }
         $completion = (int) ($profile?->profile_completion ?? 0);
 
         return response()->json([

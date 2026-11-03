@@ -906,8 +906,6 @@ class Profile extends Model
 
         $percentage = ($totalCount > 0) ? (int) round(($filledCount / $totalCount) * 100) : 0;
 
-        // The candidate dashboard should show 100% once every field required
-        // by the registration form is filled, regardless of optional details.
         if ($this->hasCompletedMandatoryFields()) {
             $percentage = 100;
         }
@@ -923,15 +921,13 @@ class Profile extends Model
     /**
      * Check if the profile has all mandatory fields completed.
      *
-     * The mandatory set mirrors the fields marked with a red asterisk (*) in
-     * the Melava registration form (public_create.blade.php).
+     * The required set mirrors the candidate profile form. Conditional and
+     * optional fields are not required for completion.
      */
     public function hasCompletedMandatoryFields()
     {
-        foreach ($this->missingMandatoryFields() as $field) {
-            return false;
-        }
-        return true;
+        return $this->missingMandatoryFields() === []
+            && $this->has_medical_history !== null;
     }
 
     public function missingMandatoryFields(): array
@@ -1083,7 +1079,6 @@ class Profile extends Model
             'noOfSisters',
             'referenceName',
             'referenceRelation',
-            'referenceContactNumber',
         ];
 
         $missing = [];
@@ -1106,25 +1101,6 @@ class Profile extends Model
         }
         if (!$this->isFieldFilled($get('birthDateProof'))) {
             $missing[] = 'birthDateProof';
-        }
-
-        if (in_array($religion?->caste ?: $this->caste, ['Shwetambar', 'Digambar'], true) && !$this->isFieldFilled($get('subCaste'))) {
-            $missing[] = 'subCaste';
-        }
-
-        if (in_array($family?->father_status ?: $this->fatherAlive, ['Yes', 'Alive'], true)) {
-            if (!$this->isFieldFilled($get('fathersOccupation'))) $missing[] = 'fathersOccupation';
-            if (!$this->isFieldFilled($get('fatherContactNumber'))) $missing[] = 'fatherContactNumber';
-        }
-        if (in_array($family?->mother_status ?: $this->motherAlive, ['Yes', 'Alive'], true)) {
-            if (!$this->isFieldFilled($get('mothersOccupation'))) $missing[] = 'mothersOccupation';
-            if (!$this->isFieldFilled($get('motherContactNumber'))) $missing[] = 'motherContactNumber';
-        }
-        if ((int) ($family?->brothers_count ?? 0) > 0 && !$this->isFieldFilled($get('brothersMarried'))) {
-            $missing[] = 'brothersMarried';
-        }
-        if ((int) ($family?->sisters_count ?? 0) > 0 && !$this->isFieldFilled($get('sistersMarried'))) {
-            $missing[] = 'sistersMarried';
         }
 
         return $missing;
