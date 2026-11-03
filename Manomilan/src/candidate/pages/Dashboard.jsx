@@ -208,14 +208,14 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (!loading && completion < 100) {
+    if (!loading && completion <= 50) {
       setSuggestedLoading(false);
       setRecentLoading(false);
     }
   }, [loading, completion]);
 
   const loadSuggested = useCallback(async () => {
-    if (!profile?.id || completion < 100 || suggestedRequestProfile.current === profile.id) return;
+    if (!profile?.id || completion <= 50 || suggestedRequestProfile.current === profile.id) return;
     suggestedRequestProfile.current = profile.id;
     setSuggestedLoading(true);
     setSuggestedError("");
@@ -231,7 +231,7 @@ export default function Dashboard() {
   }, [profile?.id, completion]);
 
   const loadRecent = useCallback(async () => {
-    if (!profile?.id || completion < 100 || recentRequestProfile.current === profile.id) return;
+    if (!profile?.id || completion <= 50 || recentRequestProfile.current === profile.id) return;
     recentRequestProfile.current = profile.id;
     setRecentLoading(true);
     setRecentError("");
@@ -248,7 +248,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const section = recentSection.current;
-    if (!section || !profile?.id || completion < 100 || recentRequestProfile.current === profile.id) return undefined;
+    if (!section || !profile?.id || completion <= 50 || recentRequestProfile.current === profile.id) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
@@ -260,7 +260,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const section = suggestedSection.current;
-    if (!section || !profile?.id || completion < 100 || suggestedRequestProfile.current === profile.id) return undefined;
+    if (!section || !profile?.id || completion <= 50 || suggestedRequestProfile.current === profile.id) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
@@ -410,8 +410,8 @@ export default function Dashboard() {
               <ErrorState message={recentError} onRetry={loadRecent} />
             ) : recentLoading ? (
               <CardGridSkeleton count={3} />
-            ) : completion < 100 ? (
-              <div className="mm-recent-loading">Complete your profile to unlock new candidate recommendations.</div>
+            ) : completion <= 50 ? (
+              <div className="mm-recent-loading">Complete your profile to more than 50% to unlock new candidate recommendations.</div>
             ) : (
               <div className="mm-recent-loading">No candidates available right now.</div>
             )}
@@ -442,8 +442,8 @@ export default function Dashboard() {
               <ErrorState message={suggestedError} onRetry={loadSuggested} />
             ) : suggestedLoading ? (
               <CardGridSkeleton count={3} />
-            ) : completion < 100 ? (
-              <div className="mm-recent-loading">Complete your profile to unlock personalized recommendations.</div>
+            ) : completion <= 50 ? (
+              <div className="mm-recent-loading">Complete your profile to more than 50% to unlock personalized recommendations.</div>
             ) : (
               <div className="mm-recent-loading">No candidates available right now.</div>
             )}

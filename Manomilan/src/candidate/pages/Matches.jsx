@@ -139,23 +139,25 @@ export default function Matches() {
     }
   }, [applied, page]);
 
+  const hasMore = Boolean(pagination?.has_more);
+  const canBrowseMatches = profileCompletion.status === "complete"
+    || (profileCompletion.status === "required" && profileCompletion.completion > 50);
   useEffect(() => {
     const restoredFeedIsCurrent = initialFeed
       && page === (initialFeed.pagination?.current_page || 1)
       && JSON.stringify(applied) === JSON.stringify(initialFilters);
     if (restoredFeedIsCurrent) return undefined;
-    if (profileCompletion.status !== "complete") return;
+    if (!canBrowseMatches) return;
     Promise.resolve().then(load);
     return () => {
       loadAbortController.current?.abort();
       loadRequestId.current += 1;
     };
-  }, [applied, initialFeed, initialFilters, load, page, profileCompletion.status]);
+  }, [applied, canBrowseMatches, initialFeed, initialFilters, load, page]);
 
-  const hasMore = Boolean(pagination?.has_more);
   useEffect(() => {
     const sentinel = feedSentinel.current;
-    if (!sentinel || !hasMore || loading || loadingMore || profileCompletion.status !== "complete") return undefined;
+    if (!sentinel || !hasMore || loading || loadingMore || !canBrowseMatches) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting || loadingMoreRef.current) return;
       loadingMoreRef.current = true;
@@ -164,7 +166,7 @@ export default function Matches() {
     }, { rootMargin: "500px 0px" });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [hasMore, loading, loadingMore, profileCompletion.status]);
+  }, [canBrowseMatches, hasMore, loading, loadingMore]);
 
   useEffect(() => {
     if (!showMoreFilters) return undefined;
@@ -290,11 +292,11 @@ export default function Matches() {
             message="Your candidate page is still available. Try again shortly, or open your profile to continue."
             action={<Link to="/candidate/profile" className="cnd-btn cnd-btn-primary">Open profile</Link>}
           />
-        ) : profileCompletion.status !== "complete" ? (
+        ) : !canBrowseMatches ? (
           <EmptyState
             icon={Users}
             title={profileCompletion.hasProfile ? "Complete your profile first" : "Create your profile first"}
-            message="Complete your profile to unlock compatible matches and recommendations."
+            message="Complete more than 50% of your profile to unlock compatible matches and recommendations."
             action={(
               <Link to="/candidate/profile" className="cnd-btn cnd-btn-primary">
                 {profileCompletion.hasProfile ? "Complete profile" : "Create profile"}

@@ -218,12 +218,17 @@ Route::prefix('admin/success-stories')->group(function () {
         Route::post('/preferences', [CandidatePreferenceController::class, 'update']);
 
         Route::get('/dashboard', [CandidateDashboardController::class, 'index']);
-        Route::middleware('candidate.profile.complete')->group(function () {
+        Route::middleware('candidate.profile.complete:51')->group(function () {
             Route::get('/matches', [CandidateMatchController::class, 'index']);
             Route::get('/matches/{id}', [CandidateMatchController::class, 'show'])->whereNumber('id');
+        });
 
+        Route::middleware('candidate.profile.complete:51')->group(function () {
             Route::get('/interests/sent', [CandidateInterestController::class, 'sent']);
             Route::get('/interests/received', [CandidateInterestController::class, 'received']);
+        });
+
+        Route::middleware('candidate.profile.complete')->group(function () {
             Route::post('/interests', [CandidateInterestController::class, 'store']);
             Route::post('/interests/{id}/respond', [CandidateInterestController::class, 'respond'])->whereNumber('id');
 
