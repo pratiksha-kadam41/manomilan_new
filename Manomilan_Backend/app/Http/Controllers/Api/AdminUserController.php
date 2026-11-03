@@ -23,6 +23,7 @@ class AdminUserController extends Controller
         $filters = $request->validate([
             'q' => ['nullable', 'string', 'max:255'],
             'gender' => ['nullable', 'in:groom,bride'],
+            'status' => ['nullable', 'in:active,inactive'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -70,6 +71,8 @@ class AdminUserController extends Controller
         )));
 
         $users = (clone $baseQuery)
+            ->when($filters['status'] ?? null, fn ($query, $status) => $query
+                ->whereRaw('LOWER(COALESCE(users.status, ?)) = ?', ['active', $status]))
             ->with(['profile:' . implode(',', $profileSelect)])
             ->latest('users.created_at')
             ->paginate((int) ($filters['per_page'] ?? 20))

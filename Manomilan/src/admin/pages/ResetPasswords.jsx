@@ -8,10 +8,11 @@ import { request } from "../../api";
 import "../components/admin-ui.css";
 import "./resetPasswords.css";
 
-const loadUsers = ({ query, gender, page }) => {
+const loadUsers = ({ query, gender, status, page }) => {
   const params = new URLSearchParams({ per_page: "20", page: String(page) });
   if (query) params.set("q", query);
   if (gender !== "all") params.set("gender", gender);
+  if (status !== "all") params.set("status", status);
   return request(`/admin/users?${params}`);
 };
 
@@ -21,6 +22,7 @@ const resetPassword = (id) =>
 export default function ResetPasswords() {
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState("all");
+  const [status, setStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
@@ -42,7 +44,7 @@ export default function ResetPasswords() {
     setLoading(true);
     setError("");
     try {
-      const response = await loadUsers({ query: activeQuery, gender, page });
+      const response = await loadUsers({ query: activeQuery, gender, status, page });
       if (id !== requestId.current) return;
       setUsers(Array.isArray(response?.data?.data) ? response.data.data : []);
       setPagination(response?.data || null);
@@ -52,7 +54,7 @@ export default function ResetPasswords() {
     } finally {
       if (id === requestId.current) setLoading(false);
     }
-  }, [activeQuery, gender, page]);
+  }, [activeQuery, gender, page, status]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -146,6 +148,16 @@ export default function ResetPasswords() {
             <option value="all">All Profiles</option>
             <option value="groom">Groom</option>
             <option value="bride">Bride</option>
+          </select>
+          <select
+            className="ui-select"
+            value={status}
+            onChange={(event) => { setStatus(event.target.value); setPage(1); }}
+            aria-label="Filter by account status"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
           </select>
         </div>
 
