@@ -176,6 +176,7 @@ export default function App() {
   const candidateProfileCheckEnabled =
     sessionRole === "candidate" &&
     path !== "/candidate/change-password" &&
+    path !== "/candidate/profile" &&
     session?.user?.is_password_changed !== false;
   const isSuperAdmin = isSuperAdminSession(session?.user);
 
@@ -417,7 +418,7 @@ export default function App() {
       {!hideChrome && <Header />}
       {Page ? (
         <AdminPermissionContext.Provider value={permissionContext}>
-          <Suspense fallback={(
+          <Suspense fallback={path === "/candidate/profile" ? null : (
             <main className="app-loading" role="status" aria-live="polite">
               <span className="app-loading-mark" aria-hidden="true" />
               <span className="app-loading-label">Loading…</span>
