@@ -15,11 +15,14 @@ class ProfileMelavaRegistration extends Model
         'is_booklet_req',
         'payment_screenshot',
         'payment_verified',
+        'booklet_payment_screenshot',
+        'booklet_payment_verified',
     ];
 
     protected $casts = [
         'is_booklet_req' => 'boolean',
         'payment_verified' => 'boolean',
+        'booklet_payment_verified' => 'boolean',
     ];
 
     public function profile(): BelongsTo

@@ -52,83 +52,21 @@ class ProfileController extends Controller
     ];
 
     private const ADMIN_FIELD_MAP = [
-        'full_name' => 'fullName',
-        'gender' => 'groomOrBride',
-        'birth_date' => 'birthDate',
-        'religion' => 'religion',
-        'caste' => 'caste',
-        'sub_caste' => 'subCaste',
-        'marital_status' => 'maritalStatus',
-        'height' => 'height',
-        'weight' => 'weight',
-        'blood_group' => 'bloodGroup',
-        'mother_tongue' => 'motherTongue',
-        'languages_known' => 'language',
-        'special_cases' => 'specialCases',
-        'about' => 'knowAboutMyself',
-        'address' => 'address',
-        'permanent_address' => 'permanent_address',
-        'country' => 'country',
-        'state' => 'state',
-        'district' => 'district',
-        'city' => 'professionalCity',
-        'taluka' => 'taluka',
-        'village' => 'village',
-        'pincode' => 'pincode',
-        'spectacles' => 'havingSpecsLenses',
-        'has_medical_history' => 'hasMedicalHistory',
-        'personal_medical_history' => 'personalMedicalHistory',
-        'current_medical_problems' => 'currentMedicalProblems',
+        'full_name' => 'full_name',
+        'birth_date' => 'birth_date',
+        'marital_status' => 'marital_status',
+        'weight' => 'weight_kg',
+        'blood_group' => 'blood_group',
+        'mother_tongue' => 'mother_tongue',
+        'special_cases' => 'special_cases',
+        'about' => 'about_me',
+        'has_medical_history' => 'has_medical_history',
+        'personal_medical_history' => 'personal_medical_history',
+        'current_medical_problems' => 'current_medical_problems',
         'medications' => 'medications',
-        'education' => 'education',
-        'university' => 'universityBoardCollege',
-        'degree_diploma_name_1' => 'degreeDiplomaName1',
-        'degree_diploma_name_2' => 'degreeDiplomaName2',
-        'specialisation_1' => 'specialisation1',
-        'specialisation_2' => 'specialisation2',
-        'additional_education_1' => 'additionalEducation1',
-        'additional_education_2' => 'additionalEducation2',
-        'city_of_education' => 'cityOfEducation',
-        'profession' => 'profession',
-        'designation' => 'designation',
-        'organisation' => 'organisationWorkingIn',
-        'field_of_working' => 'fieldOfWorking',
-        'length_of_employment' => 'lengthOfEmployment',
-        'monthly_income' => 'monthlyIncome',
-        'annual_income' => 'annualIncome',
-        'income_currency' => 'income_currency',
-        'father_name' => 'fathersName',
-        'father_living' => 'fatherAlive',
-        'father_occupation' => 'fathersOccupation',
-        'father_native_place' => 'fathersNativePlace',
-        'father_phone' => 'fatherContactNumber',
-        'mother_name' => 'mothersName',
-        'mother_living' => 'motherAlive',
-        'mother_occupation' => 'mothersOccupation',
-        'mother_native_place' => 'mothersNativePlace',
-        'mother_phone' => 'motherContactNumber',
-        'brothers' => 'noOfBrothers',
-        'brothers_married' => 'brothersMarried',
-        'sisters' => 'noOfSisters',
-        'sisters_married' => 'sistersMarried',
-        'parents_intercaste' => 'parentsIntercasteMarriage',
-        'parents_different_caste' => 'parentsDifferentCaste',
-        'family_financial_status' => 'familyFinancialStatus',
-        'family_income' => 'familyAnnualIncome',
-        'family_values' => 'familyValues',
-        'reference_name' => 'referenceName',
-        'reference_relation' => 'referenceRelation',
-        'reference_address' => 'referenceAddress',
-        'reference_phone' => 'referenceContactNumber',
-        'reference_email' => 'referenceEmail',
-        'profile_creator_name' => 'profileCreatorName',
-        'profile_creator_relation' => 'profileCreatorRelation',
-        'horoscope_dob' => 'horoscopeDob',
-        'birth_time' => 'timeOfBirth',
-        'birth_time_ampm' => 'birthTime_ampm',
-        'birth_place' => 'placeOfBirth',
-        'horoscope_caste' => 'horoscopeCaste',
-        'horoscope_sub_caste' => 'horoscopeSubCaste',
+        'profile_creator_name' => 'profile_creator_name',
+        'birth_time' => 'birth_time',
+        'birth_place' => 'birth_place',
     ];
 
     private const ADMIN_PREFERENCE_MAP = [
@@ -897,13 +835,41 @@ class ProfileController extends Controller
                 'religion_details' => $religion?->toArray(),
                 'family_details' => $family?->toArray(),
                 'partner_preferences' => $partnerPreference?->toArray(),
+                'payment_screenshots' => $profile->paymentScreenshots
+                    ->sortByDesc('created_at')
+                    ->map(function ($payment) use ($profile) {
+                        $melavaRegistration = $profile->profileMelavaRegistrations->first(
+                            fn ($registration) => $registration->payment_screenshot === $payment->screenshot_path
+                                || $registration->booklet_payment_screenshot === $payment->screenshot_path
+                        );
+
+                        return [
+                            'id' => $payment->id,
+                            'type' => $melavaRegistration ? 'combined' : 'payment',
+                            'melava_id' => $melavaRegistration?->id,
+                            'category' => data_get($payment->payment_details, 'category'),
+                            'amount' => data_get($payment->payment_details, 'amount'),
+                            'payment_date' => data_get($payment->payment_details, 'payment_date'),
+                            'payment_method' => data_get($payment->payment_details, 'payment_method'),
+                            'reference_number' => data_get($payment->payment_details, 'reference_number'),
+                            'remarks' => data_get($payment->payment_details, 'remarks'),
+                            'payment_verified' => (bool) $payment->payment_verified,
+                            'payment_screenshot' => $payment->screenshot_path,
+                            'payment_screenshot_url' => $this->fileUrl($payment->screenshot_path),
+                            'created_at' => $payment->created_at?->toIso8601String(),
+                        ];
+                    })->values(),
                 'melava_registrations' => $profile->profileMelavaRegistrations->map(fn ($registration) => [
                     'id' => $registration->id,
                     'campaign_title' => $registration->campaign?->title,
+                    'melava_number' => $registration->campaign?->melava_code,
                     'melava_campaign_id' => $registration->melava_campaign_id,
+                    'registered_at' => $registration->created_at?->toIso8601String(),
                     'is_booklet_req' => (bool) $registration->is_booklet_req,
                     'payment_screenshot' => $registration->payment_screenshot,
                     'payment_verified' => (bool) $registration->payment_verified,
+                    'booklet_payment_screenshot' => $registration->booklet_payment_screenshot,
+                    'booklet_payment_verified' => (bool) $registration->booklet_payment_verified,
                 ])->values(),
             ];
 
@@ -1035,6 +1001,14 @@ class ProfileController extends Controller
             'other_expectations' => ['sometimes', 'nullable', 'string', 'max:5000'],
             'documents' => ['sometimes', 'array'],
             'documents.*' => ['file', 'mimes:pdf,jpg,jpeg,png', 'max:51200'],
+            'profilePhoto' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'full_body_photo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'half_body_photo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'selfie_photo' => ['sometimes', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'candidate_photos' => ['sometimes', 'array', 'max:10'],
+            'candidate_photos.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'remove_photos' => ['sometimes', 'array'],
+            'remove_photos.*' => ['required', 'string', 'max:2000'],
         ];
 
         $data = $request->validate($rules);
@@ -1056,10 +1030,29 @@ class ProfileController extends Controller
             }
         }
 
+        $storedPhotos = [];
+        foreach ([
+            'profilePhoto' => 'profile_photo',
+            'full_body_photo' => 'full_body_photo',
+            'half_body_photo' => 'half_body_photo',
+            'selfie_photo' => 'selfie_photo',
+        ] as $input => $key) {
+            if ($request->hasFile($input)) {
+                $storedPhotos[$key] = $request->file($input)->store('profile_photos/candidate', 'public');
+            }
+        }
+        if ($request->hasFile('candidate_photos')) {
+            $storedPhotos['candidate_photos'] = collect($request->file('candidate_photos'))
+                ->map(fn ($file) => $file->store('profile_photos/candidate', 'public'))
+                ->values()
+                ->all();
+        }
+
         $oldDocuments = [];
+        $oldPhotoPaths = [];
 
         try {
-            DB::transaction(function () use ($profile, $data, $storedDocuments, &$oldDocuments) {
+            DB::transaction(function () use ($profile, $data, $storedDocuments, $storedPhotos, &$oldDocuments, &$oldPhotoPaths) {
                 $locked = Profile::lockForUpdate()->findOrFail($profile->id);
                 $columns = Schema::getColumnListing((new Profile)->getTable());
                 $payload = [];
@@ -1078,7 +1071,24 @@ class ProfileController extends Controller
                 }
 
                 if (array_key_exists('gender', $data)) {
-                    $payload['groomOrBride'] = strtolower((string) $data['gender']);
+                    $payload['groomorbride'] = ucfirst(strtolower((string) $data['gender']));
+                }
+                if (array_key_exists('height', $data) && in_array('height_cm', $columns, true)) {
+                    $payload['height_cm'] = $this->heightToCentimeters($data['height']);
+                }
+                if (array_key_exists('languages_known', $data) && in_array('languages', $columns, true)) {
+                    $payload['languages'] = array_values(array_filter(array_map(
+                        'trim',
+                        explode(',', (string) $data['languages_known'])
+                    )));
+                }
+                if (array_key_exists('spectacles', $data) && in_array('has_spectacles', $columns, true)) {
+                    $payload['has_spectacles'] = $data['spectacles'] === '' ? null : $data['spectacles'] === 'Yes';
+                }
+                if (array_key_exists('has_medical_history', $data)) {
+                    $payload['has_medical_history'] = $data['has_medical_history'] === ''
+                        ? null
+                        : $data['has_medical_history'] === 'Yes';
                 }
 
                 foreach ($storedDocuments as $key => $path) {
@@ -1089,6 +1099,107 @@ class ProfileController extends Controller
                 }
 
                 $locked->fill($payload);
+
+                $addresses = is_array($locked->addresses) ? $locked->addresses : [];
+                $currentAddress = is_array($addresses['current'] ?? null) ? $addresses['current'] : [];
+                foreach ([
+                    'address' => 'address',
+                    'country' => 'country',
+                    'state' => 'state',
+                    'district' => 'district',
+                    'city' => 'city',
+                    'taluka' => 'taluka',
+                    'village' => 'village',
+                    'pincode' => 'pincode',
+                ] as $input => $key) {
+                    if (array_key_exists($input, $data)) {
+                        $currentAddress[$key] = $data[$input];
+                    }
+                }
+                $addresses['current'] = $currentAddress;
+                if (array_key_exists('permanent_address', $data)) {
+                    $permanent = is_array($addresses['permanent'] ?? null) ? $addresses['permanent'] : [];
+                    $permanent['address'] = $data['permanent_address'];
+                    $addresses['permanent'] = $permanent;
+                }
+                $referenceMap = [
+                    'reference_name' => 'name',
+                    'reference_relation' => 'relation',
+                    'reference_address' => 'address',
+                    'reference_phone' => 'contact',
+                    'reference_email' => 'email',
+                ];
+                $reference = is_array($addresses['reference'] ?? null) ? $addresses['reference'] : [];
+                foreach ($referenceMap as $input => $key) {
+                    if (array_key_exists($input, $data)) {
+                        $reference[$key] = $data[$input];
+                    }
+                }
+                $addresses['reference'] = $reference;
+                $locked->addresses = $addresses;
+
+                $photoPaths = is_array($locked->photos) ? $locked->photos : [];
+                $knownPhotoPaths = $this->profilePhotoPaths($locked, $photoPaths);
+                $removePhotoPaths = array_values(array_intersect(
+                    $knownPhotoPaths,
+                    array_map(fn ($path) => $this->normalizePhotoPath($path), $data['remove_photos'] ?? [])
+                ));
+                if ($removePhotoPaths) {
+                    foreach ($photoPaths as $key => $value) {
+                        if (is_array($value)) {
+                            $photoPaths[$key] = array_values(array_filter(
+                                $value,
+                                fn ($path) => ! in_array($this->normalizePhotoPath($path), $removePhotoPaths, true)
+                            ));
+                        } elseif (in_array($this->normalizePhotoPath($value), $removePhotoPaths, true)) {
+                            unset($photoPaths[$key]);
+                        }
+                    }
+                    if (in_array('additional_photos', $columns, true)) {
+                        $locked->additional_photos = array_values(array_filter(
+                            $locked->additional_photos ?? [],
+                            fn ($path) => ! in_array($this->normalizePhotoPath($path), $removePhotoPaths, true)
+                        ));
+                    }
+                    foreach (['profilePhoto', 'full_body_photo', 'half_body_photo', 'selfie_photo'] as $column) {
+                        if (in_array($column, $columns, true)
+                            && in_array($this->normalizePhotoPath($locked->getAttribute($column)), $removePhotoPaths, true)) {
+                            $locked->setAttribute($column, null);
+                        }
+                    }
+                    if (Schema::hasTable('profile_melava_registrations')
+                        && Schema::hasColumn('profile_melava_registrations', 'candidate_photos')) {
+                        $registrations = ProfileMelavaRegistration::where('profile_id', $locked->id)->get();
+                        foreach ($registrations as $registration) {
+                            $paths = $registration->candidate_photos;
+                            if (is_string($paths)) {
+                                $paths = json_decode($paths, true) ?: [];
+                            }
+                            $registration->candidate_photos = array_values(array_filter(
+                                is_array($paths) ? $paths : [],
+                                fn ($path) => ! in_array($this->normalizePhotoPath($path), $removePhotoPaths, true)
+                            ));
+                            $registration->save();
+                        }
+                    }
+                    $oldPhotoPaths = array_merge($oldPhotoPaths, $removePhotoPaths);
+                }
+
+                foreach ($storedPhotos as $key => $path) {
+                    if ($key === 'candidate_photos') {
+                        $photoPaths[$key] = array_values(array_merge(
+                            is_array($photoPaths[$key] ?? null) ? $photoPaths[$key] : [],
+                            $path
+                        ));
+                    } else {
+                        $oldPath = $photoPaths[$key] ?? null;
+                        if (is_string($oldPath) && $oldPath !== $path) {
+                            $oldPhotoPaths[] = $oldPath;
+                        }
+                        $photoPaths[$key] = $path;
+                    }
+                }
+                $locked->photos = $photoPaths;
                 $locked->save();
 
                 if ($storedDocuments) {
@@ -1214,16 +1325,29 @@ class ProfileController extends Controller
             foreach ($oldDocuments as $path) {
                 $this->deleteStoredFile($path);
             }
+            foreach (array_unique($oldPhotoPaths) as $path) {
+                $this->deleteStoredFile($path);
+            }
 
             return $this->show($request, $id);
         } catch (ValidationException $e) {
             foreach ($storedDocuments as $path) {
                 Storage::disk('public')->delete($path);
             }
+            foreach ($storedPhotos as $value) {
+                foreach (is_array($value) ? $value : [$value] as $path) {
+                    Storage::disk('public')->delete($path);
+                }
+            }
             throw $e;
         } catch (Throwable $e) {
             foreach ($storedDocuments as $path) {
                 Storage::disk('public')->delete($path);
+            }
+            foreach ($storedPhotos as $value) {
+                foreach (is_array($value) ? $value : [$value] as $path) {
+                    Storage::disk('public')->delete($path);
+                }
             }
             report($e);
 
@@ -1923,6 +2047,90 @@ class ProfileController extends Controller
         }
 
         Storage::disk('public')->delete(ltrim(str_replace('\\', '/', $path), '/'));
+    }
+
+    private function profilePhotoPaths(Profile $profile, array $photos): array
+    {
+        $paths = [];
+        foreach ($photos as $value) {
+            foreach (is_array($value) ? $value : [$value] as $path) {
+                if (is_string($path) && trim($path) !== '') {
+                    $paths[] = $this->normalizePhotoPath($path);
+                }
+            }
+        }
+
+        foreach (['profilePhoto', 'full_body_photo', 'half_body_photo', 'selfie_photo'] as $column) {
+            $path = $profile->getAttribute($column);
+            if (is_string($path) && trim($path) !== '') {
+                $paths[] = $this->normalizePhotoPath($path);
+            }
+        }
+
+        if (Schema::hasColumn($profile->getTable(), 'additional_photos')) {
+            $additional = $profile->getAttribute('additional_photos');
+            if (is_string($additional)) {
+                $additional = json_decode($additional, true) ?: [];
+            }
+            foreach (is_array($additional) ? $additional : [] as $path) {
+                if (is_string($path) && trim($path) !== '') {
+                    $paths[] = $this->normalizePhotoPath($path);
+                }
+            }
+        }
+
+        if (Schema::hasTable('profile_melava_registrations')
+            && Schema::hasColumn('profile_melava_registrations', 'candidate_photos')) {
+            foreach (ProfileMelavaRegistration::where('profile_id', $profile->id)->get(['candidate_photos']) as $registration) {
+                $candidatePhotos = $registration->candidate_photos;
+                if (is_string($candidatePhotos)) {
+                    $candidatePhotos = json_decode($candidatePhotos, true) ?: [];
+                }
+                foreach (is_array($candidatePhotos) ? $candidatePhotos : [] as $path) {
+                    if (is_string($path) && trim($path) !== '') {
+                        $paths[] = $this->normalizePhotoPath($path);
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($paths)));
+    }
+
+    private function normalizePhotoPath($path): string
+    {
+        if (! is_string($path) || trim($path) === '') {
+            return '';
+        }
+
+        $path = trim($path);
+        if (preg_match('#^https?://#i', $path)) {
+            $path = (string) parse_url($path, PHP_URL_PATH);
+        }
+
+        $path = ltrim(str_replace('\\', '/', rawurldecode($path)), '/');
+        return preg_replace('#^storage/#i', '', $path);
+    }
+
+    private function heightToCentimeters(?string $height): ?float
+    {
+        $height = trim((string) $height);
+        if ($height === '') {
+            return null;
+        }
+
+        if (preg_match('/^(\d+(?:\.\d+)?)\s*cm$/i', $height, $matches)) {
+            return round((float) $matches[1], 2);
+        }
+        if (preg_match("/^(\\d+)\\s*(?:ft|')\\s*(\\d+)?\\s*(?:in|\")?$/i", $height, $matches)) {
+            return round((((int) $matches[1] * 12) + (int) ($matches[2] ?? 0)) * 2.54, 2);
+        }
+        if (is_numeric($height)) {
+            $value = (float) $height;
+            return round($value <= 10 ? $value * 30.48 : $value, 2);
+        }
+
+        return null;
     }
 
     private function fileUrl($path): string

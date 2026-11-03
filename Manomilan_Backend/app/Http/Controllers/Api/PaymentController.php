@@ -33,22 +33,30 @@ class PaymentController extends Controller
             $payments = PaymentScreenshot::where('profile_id', $profile->id)
                 ->latest()
                 ->get();
-            $payments = $payments->unique('screenshot_path')->values();
 
             $melavaRegistrations = ProfileMelavaRegistration::where('profile_id', $profile->id)
-                ->whereNotNull('payment_screenshot')
-                ->where('payment_screenshot', '<>', '')
+                ->where(function ($query) {
+                    $query->where(function ($paymentQuery) {
+                        $paymentQuery->whereNotNull('payment_screenshot')
+                            ->where('payment_screenshot', '<>', '');
+                    })->orWhere(function ($bookletQuery) {
+                        $bookletQuery->whereNotNull('booklet_payment_screenshot')
+                            ->where('booklet_payment_screenshot', '<>', '');
+                    });
+                })
                 ->latest()
                 ->get();
 
-            $matchedMelavaIds = [];
+            $matchedMelavaPaths = [];
             $screenshots = $payments->map(function (PaymentScreenshot $payment) use (
                 $request,
                 $melavaRegistrations,
-                &$matchedMelavaIds
+                &$matchedMelavaPaths
             ) {
+                $details = $payment->payment_details ?? [];
                 $melavaRegistration = $melavaRegistrations->first(
                     fn (ProfileMelavaRegistration $registration) => $registration->payment_screenshot === $payment->screenshot_path
+                        || $registration->booklet_payment_screenshot === $payment->screenshot_path
                 );
 
                 if (! $melavaRegistration) {
@@ -57,40 +65,84 @@ class PaymentController extends Controller
                         'type' => 'payment',
                         'status' => $payment->payment_verified ? 'verified' : 'pending',
                         'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                        'payment_details' => $details,
+                        'created_at' => optional($payment->created_at)->toIso8601String(),
                     ];
                 }
 
-                $matchedMelavaIds[] = $melavaRegistration->id;
+                $matchedMelavaPaths[] = $payment->screenshot_path;
                 $paymentStatus = $payment->payment_verified ? 'verified' : 'pending';
-                $melavaStatus = $melavaRegistration->payment_verified ? 'verified' : 'pending';
+                $matchesBooklet = $melavaRegistration->booklet_payment_screenshot === $payment->screenshot_path;
+                $melavaVerified = $matchesBooklet
+                    ? $melavaRegistration->booklet_payment_verified
+                    : $melavaRegistration->payment_verified;
+                if ($matchesBooklet && $melavaRegistration->payment_screenshot === $payment->screenshot_path) {
+                    $melavaVerified = $melavaVerified && $melavaRegistration->payment_verified;
+                }
+                $melavaStatus = $melavaVerified ? 'verified' : 'pending';
+                $combinedVerified = $paymentStatus === 'verified' && $melavaStatus === 'verified';
+                $details['verification_status'] = $combinedVerified ? 'verified' : 'pending';
 
                 return [
                     'id' => $payment->id,
                     'type' => 'combined',
                     'melava_id' => $melavaRegistration->id,
-                    'status' => $paymentStatus === 'verified' && $melavaStatus === 'verified'
-                        ? 'verified'
-                        : 'pending',
+                    'status' => $combinedVerified ? 'verified' : 'pending',
                     'payment_status' => $paymentStatus,
                     'melava_status' => $melavaStatus,
+                    'category' => $matchesBooklet ? 'booklet' : 'melava',
                     'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                    'payment_details' => $details,
+                    'created_at' => optional($payment->created_at)->toIso8601String(),
                 ];
             });
 
             $melavaScreenshots = $melavaRegistrations
-                ->reject(                fn (ProfileMelavaRegistration $registration) => in_array($registration->id, $matchedMelavaIds, true))
+                ->filter(fn (ProfileMelavaRegistration $registration) => $registration->payment_screenshot
+                    && ! in_array($registration->payment_screenshot, $matchedMelavaPaths, true))
                 ->map(fn (ProfileMelavaRegistration $registration) => [
                     'id' => $registration->id,
                     'type' => 'melava',
                     'status' => $registration->payment_verified ? 'verified' : 'pending',
                     'image_url' => $this->screenshotUrl($request, $registration->payment_screenshot),
+                    'payment_details' => [
+                        'category' => 'melava',
+                        'amount' => null,
+                        'payment_date' => optional($registration->created_at)->toDateString(),
+                        'payment_method' => null,
+                        'reference_number' => null,
+                        'remarks' => null,
+                        'verification_status' => $registration->payment_verified ? 'verified' : 'pending',
+                        'proof_file' => $registration->payment_screenshot,
+                    ],
+                    'created_at' => optional($registration->created_at)->toIso8601String(),
+                ]);
+
+            $bookletScreenshots = $melavaRegistrations
+                ->filter(fn (ProfileMelavaRegistration $registration) => $registration->booklet_payment_screenshot
+                    && ! in_array($registration->booklet_payment_screenshot, $matchedMelavaPaths, true))
+                ->map(fn (ProfileMelavaRegistration $registration) => [
+                    'id' => $registration->id,
+                    'type' => 'booklet',
+                    'status' => $registration->booklet_payment_verified ? 'verified' : 'pending',
+                    'image_url' => $this->screenshotUrl($request, $registration->booklet_payment_screenshot),
+                    'payment_details' => [
+                        'category' => 'booklet',
+                        'amount' => null,
+                        'payment_date' => optional($registration->created_at)->toDateString(),
+                        'payment_method' => null,
+                        'reference_number' => null,
+                        'remarks' => null,
+                        'verification_status' => $registration->booklet_payment_verified ? 'verified' : 'pending',
+                        'proof_file' => $registration->booklet_payment_screenshot,
+                    ],
+                    'created_at' => optional($registration->created_at)->toIso8601String(),
                 ]);
 
             $screenshots = $screenshots
                 ->concat($melavaScreenshots)
-                ->unique('image_url')
-                ->sortByDesc('id')
-                ->take(1)
+                ->concat($bookletScreenshots)
+                ->sortByDesc('created_at')
                 ->values();
 
             return response()->json([
@@ -123,7 +175,7 @@ class PaymentController extends Controller
         }
 
         $data = $request->validate([
-            'type' => ['required', Rule::in(['payment', 'melava', 'combined'])],
+            'type' => ['required', Rule::in(['payment', 'melava', 'booklet', 'combined'])],
             'melava_id' => ['required_if:type,combined', 'integer', 'min:1'],
         ]);
 
@@ -135,7 +187,7 @@ class PaymentController extends Controller
                 ], 404);
             }
 
-            $payment = $data['type'] === 'melava'
+            $payment = in_array($data['type'], ['melava', 'booklet'], true)
                 ? ProfileMelavaRegistration::where('profile_id', $profileId)->find($paymentId)
                 : PaymentScreenshot::where('profile_id', $profileId)->find($paymentId);
 
@@ -149,7 +201,10 @@ class PaymentController extends Controller
             $combinedRegistration = null;
             if ($data['type'] === 'combined') {
                 $combinedRegistration = ProfileMelavaRegistration::where('profile_id', $profileId)
-                    ->where('payment_screenshot', $payment->screenshot_path)
+                    ->where(function ($query) use ($payment) {
+                        $query->where('payment_screenshot', $payment->screenshot_path)
+                            ->orWhere('booklet_payment_screenshot', $payment->screenshot_path);
+                    })
                     ->find($data['melava_id']);
 
                 if (! $combinedRegistration) {
@@ -161,16 +216,39 @@ class PaymentController extends Controller
             }
 
             DB::transaction(function () use ($data, $payment, $profileId, $combinedRegistration) {
-                $payment->payment_verified = true;
-                $payment->save();
+                if ($payment instanceof PaymentScreenshot) {
+                    $payment->payment_verified = true;
+                    $details = $payment->payment_details ?? [];
+                    $details['verification_status'] = 'verified';
+                    $payment->payment_details = $details;
+                    $payment->save();
+                }
 
                 if ($data['type'] === 'combined') {
-                    $combinedRegistration->payment_verified = true;
+                    if ($combinedRegistration->payment_screenshot === $payment->screenshot_path) {
+                        $combinedRegistration->payment_verified = true;
+                    }
+                    if ($combinedRegistration->booklet_payment_screenshot === $payment->screenshot_path) {
+                        $combinedRegistration->booklet_payment_verified = true;
+                    }
                     $combinedRegistration->save();
-                } elseif ($data['type'] === 'melava') {
+                } elseif (in_array($data['type'], ['melava', 'booklet'], true)) {
+                    $column = $data['type'] === 'booklet' ? 'booklet_payment_verified' : 'payment_verified';
+                    $path = $data['type'] === 'booklet'
+                        ? $payment->booklet_payment_screenshot
+                        : $payment->payment_screenshot;
+                    $payment->{$column} = true;
+                    $payment->save();
                     PaymentScreenshot::where('profile_id', $profileId)
-                        ->where('screenshot_path', $payment->payment_screenshot)
-                        ->update(['payment_verified' => true]);
+                        ->where('screenshot_path', $path)
+                        ->get()
+                        ->each(function (PaymentScreenshot $screenshot): void {
+                            $screenshot->payment_verified = true;
+                            $details = $screenshot->payment_details ?? [];
+                            $details['verification_status'] = 'verified';
+                            $screenshot->payment_details = $details;
+                            $screenshot->save();
+                        });
                 }
             });
 
@@ -197,7 +275,14 @@ class PaymentController extends Controller
         }
 
         $data = $request->validate([
-            'payment_screenshot' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'payment_screenshot' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:5120'],
+            'payment_details' => ['nullable', 'array'],
+            'payment_details.category' => ['nullable', 'string', 'max:80'],
+            'payment_details.amount' => ['nullable', 'numeric', 'min:0'],
+            'payment_details.payment_date' => ['nullable', 'date'],
+            'payment_details.payment_method' => ['nullable', 'string', 'max:80'],
+            'payment_details.reference_number' => ['nullable', 'string', 'max:120'],
+            'payment_details.remarks' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $profile = Profile::find($profileId);
@@ -218,11 +303,28 @@ class PaymentController extends Controller
                 throw new \RuntimeException('The payment screenshot could not be stored.');
             }
 
-            $payment = DB::transaction(fn () => PaymentScreenshot::create([
-                'profile_id' => $profile->id,
-                'screenshot_path' => $path,
-                'payment_verified' => false,
-            ]));
+            $payment = DB::transaction(function () use ($data, $profile, $path) {
+                $details = $data['payment_details'] ?? [];
+                $details = [
+                    'category' => $details['category'] ?? 'profile',
+                    'amount' => isset($details['amount']) && $details['amount'] !== ''
+                        ? (float) $details['amount']
+                        : null,
+                    'payment_date' => $details['payment_date'] ?? null,
+                    'payment_method' => $details['payment_method'] ?? null,
+                    'reference_number' => $details['reference_number'] ?? null,
+                    'remarks' => $details['remarks'] ?? null,
+                    'verification_status' => 'pending',
+                    'proof_file' => $path,
+                ];
+
+                return PaymentScreenshot::create([
+                    'profile_id' => $profile->id,
+                    'screenshot_path' => $path,
+                    'payment_verified' => false,
+                    'payment_details' => $details,
+                ]);
+            });
 
             return response()->json([
                 'success' => true,
@@ -232,6 +334,8 @@ class PaymentController extends Controller
                     'type' => 'payment',
                     'status' => 'pending',
                     'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
+                    'payment_details' => $payment->payment_details,
+                    'created_at' => optional($payment->created_at)->toIso8601String(),
                 ],
             ], 201);
         } catch (Throwable $e) {
@@ -288,6 +392,16 @@ class PaymentController extends Controller
                     'profile_id' => $user->profile_id,
                     'screenshot_path' => $path,
                     'payment_verified' => false,
+                    'payment_details' => [
+                        'category' => 'profile',
+                        'amount' => null,
+                        'payment_date' => now()->toDateString(),
+                        'payment_method' => null,
+                        'reference_number' => null,
+                        'remarks' => null,
+                        'verification_status' => 'pending',
+                        'proof_file' => $path,
+                    ],
                 ]);
             });
 
@@ -353,6 +467,9 @@ class PaymentController extends Controller
         try {
             DB::transaction(function () use ($payment, $data) {
                 $payment->payment_verified = $data['status'] === 'approved';
+                $details = $payment->payment_details ?? [];
+                $details['verification_status'] = $payment->payment_verified ? 'verified' : $data['status'];
+                $payment->payment_details = $details;
                 $payment->save();
             });
 
@@ -378,9 +495,10 @@ class PaymentController extends Controller
         return [
             'id' => $payment->id,
             'profile_id' => $payment->profile_id,
-            'amount' => null,
+            'amount' => $payment->payment_details['amount'] ?? null,
             'status' => $payment->payment_verified ? 'approved' : 'pending',
             'payment_verified' => (bool) $payment->payment_verified,
+            'payment_details' => $payment->payment_details ?? [],
             'screenshot_url' => $payment->screenshot_path
                 ? Storage::disk('public')->url($payment->screenshot_path)
                 : '',

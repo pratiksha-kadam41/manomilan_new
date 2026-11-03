@@ -36,6 +36,7 @@ Route::middleware('website.availability')->group(function () {
     Route::post('/register', [RegisterController::class, 'register'])->middleware('throttle:5,1');
     Route::post('/enquiries', [EnquiryController::class, 'store'])->middleware('throttle:10,1');
     Route::get('/melava-registrations/settings', [MelavaRegistrationController::class, 'settings']);
+    Route::get('/melava-registrations/photo-preview', [MelavaRegistrationController::class, 'photoPreview']);
     Route::get('/melava-campaigns/active', [MelavaCampaignController::class, 'active']);
     Route::get('/workshop-events/active', [WorkshopEventController::class, 'active']);
     Route::get('/melava-registrations/check', [MelavaRegistrationController::class, 'check'])->middleware('throttle:20,1');
@@ -123,7 +124,7 @@ Route::prefix('admin/success-stories')->group(function () {
     });
 
     Route::get('/dashboard', [HomeController::class, 'dashboard']);
-    Route::get('/reports', [HomeController::class, 'dashboard']);
+    Route::get('/reports', [HomeController::class, 'reports']);
     Route::get('/home-data', [HomeController::class, 'homeData']);
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users/{id}/reset-password', [AdminUserController::class, 'resetPassword'])->whereNumber('id');

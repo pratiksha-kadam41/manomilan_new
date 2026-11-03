@@ -27,6 +27,32 @@ use Throwable;
 
 class MelavaRegistrationController extends Controller
 {
+    public function photoPreview(Request $request)
+    {
+        $data = $request->validate([
+            'path' => ['required', 'string', 'max:500'],
+        ]);
+        $path = ltrim(preg_replace('#^/?storage/#i', '', $data['path']), '/');
+
+        if (! preg_match(
+            '#\A(?:profile_photos(?:/candidate)?|additional_photos|full_body_photos|half_body_photos|selfie_photos|payment_screenshots|candidate_images|candidate/profile_photos|candidate/body_photos|melava_candidate_photos)/[A-Za-z0-9._-]+\.(?:jpe?g|png|webp|gif|bmp)\z#i',
+            $path
+        ) || ! Storage::disk('public')->exists($path)) {
+            abort(404);
+        }
+
+        $mimeType = Storage::disk('public')->mimeType($path);
+        if (! is_string($mimeType) || ! str_starts_with($mimeType, 'image/')) {
+            abort(404);
+        }
+
+        return response()->file(Storage::disk('public')->path($path), [
+            'Content-Type' => $mimeType,
+            'Cache-Control' => 'public, max-age=3600',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function settings(Request $request)
     {
         $campaigns = DB::table('melava_campaigns')->where('status', 'active')->latest('id')->get()
@@ -60,7 +86,7 @@ class MelavaRegistrationController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = ProfileMelavaRegistration::with(['profile', 'campaign'])
+        $query = ProfileMelavaRegistration::with(['profile.educations', 'profile.employments', 'campaign'])
             ->when($filters['q'] ?? null, function ($query, $term) {
                 $term = trim($term);
                 $query->whereHas('profile', fn ($profile) => $profile
@@ -87,6 +113,15 @@ class MelavaRegistrationController extends Controller
         return response()->json([
             'success' => true,
             'data' => $registrations,
+            'melava_numbers' => DB::table('melava_campaigns')
+                ->whereNotNull('melava_code')
+                ->where('melava_code', '<>', '')
+                ->orderByDesc('id')
+                ->pluck('melava_code')
+                ->map(fn ($number) => strtoupper(trim((string) $number)))
+                ->filter()
+                ->unique()
+                ->values(),
             'stats' => [
                 'total' => $registrations->total(),
                 'groom' => (clone $query)->whereHas('profile', fn ($p) => $p->where('groomorbride', 'Groom'))->count(),
@@ -106,20 +141,35 @@ class MelavaRegistrationController extends Controller
         ]);
 
         $campaign = $this->campaign($data['melava_campaign_id']);
-        $profile = Profile::where('phone', $data['mobile'])->first();
-        $registration = $profile && $campaign
-            ? ProfileMelavaRegistration::where('profile_id', $profile->id)
-                ->where('melava_campaign_id', $campaign->id)->first()
-            : null;
+        $user = User::where('username', $data['mobile'])->first();
+        $profile = $user?->profile ?: Profile::where('phone', $data['mobile'])->first();
         $pending = MelavaPendingRegistration::where('mobile', $data['mobile'])
             ->where('melava_campaign_id', $campaign?->id)
             ->where('status', 'pending')
             ->latest('id')
             ->first();
+        $profile ??= $pending?->profile_id ? Profile::find($pending->profile_id) : null;
+        $registration = $profile && $campaign
+            ? ProfileMelavaRegistration::where('profile_id', $profile->id)
+                ->where('melava_campaign_id', $campaign->id)->first()
+            : null;
 
         if (! $registration && $pending) {
             $registrationData = json_decode($pending->registration_data, true) ?: [];
             $files = $registrationData['_pending_files'] ?? [];
+            $profile?->loadMissing('profileDocuments');
+            $photos = is_array($profile?->photos) ? $profile->photos : [];
+            $draftUrl = function (string $fileKey, string $dataKey, ?string $profilePath = null) use ($files, $registrationData): string {
+                $path = $files[$fileKey] ?? $registrationData[$dataKey] ?? $profilePath;
+                return $this->fileUrl(request(), is_string($path) ? $path : null);
+            };
+            $draftUrls = function (string $fileKey, string $dataKey, string $profileKey) use ($files, $registrationData, $profile, $photos): array {
+                return $this->fileUrls(request(), array_values(array_unique(array_merge(
+                    $profile ? $this->photoList($profile, $profileKey, $photos) : [],
+                    $this->photoPaths($registrationData[$dataKey] ?? []),
+                    $this->photoPaths($files[$fileKey] ?? [])
+                ))));
+            };
 
             return response()->json([
                 'success' => true,
@@ -131,22 +181,23 @@ class MelavaRegistrationController extends Controller
                     'user_id' => $pending->user_id,
                     'profile_id' => $pending->profile_id,
                     'registration_data' => $registrationData,
-                    'profile_photo_url' => $this->fileUrl(request(), $files['profilePhoto'] ?? null),
-                    'full_body_photo_url' => $this->fileUrl(request(), $files['full_body_photo'] ?? null),
-                    'half_body_photo_url' => $this->fileUrl(request(), $files['half_body_photo'] ?? null),
-                    'selfie_photo_url' => $this->fileUrl(request(), $files['selfie_photo'] ?? null),
-                    'identification_proof_url' => $this->fileUrl(request(), $files['identificationProof'] ?? null),
-                    'pan_card_url' => $this->fileUrl(request(), $files['pan_card'] ?? null),
-                    'passport_url' => $this->fileUrl(request(), $files['passport'] ?? null),
-                    'birth_date_proof_url' => $this->fileUrl(request(), $files['birthDateProof'] ?? null),
-                    'address_proof_url' => $this->fileUrl(request(), $files['address_proof'] ?? null),
-                    'education_proof_url' => $this->fileUrl(request(), $files['educationProof'] ?? null),
-                    'profession_proof_url' => $this->fileUrl(request(), $files['profession_proof'] ?? null),
-                    'income_proof_url' => $this->fileUrl(request(), $files['income_proof'] ?? null),
-                    'caste_certificate_url' => $this->fileUrl(request(), $files['caste_certificate'] ?? null),
-                    'medical_fitness_certificate_url' => $this->fileUrl(request(), $files['medical_fitness_certificate'] ?? null),
-                    'candidate_photos_urls' => $this->fileUrls(request(), $files['candidate_photos'] ?? []),
-                    'additional_photos_urls' => $this->fileUrls(request(), $files['additional_photos'] ?? []),
+                    'payment_screenshot_url' => $this->fileUrl(request(), $files['payment_screenshot'] ?? null),
+                    'profile_photo_url' => $draftUrl('profilePhoto', 'profilePhoto', $profile ? $this->profilePhotoPath($profile, 'profile_photo', $photos) : null),
+                    'full_body_photo_url' => $draftUrl('full_body_photo', 'full_body_photo', $profile ? $this->profilePhotoPath($profile, 'full_body_photo', $photos) : null),
+                    'half_body_photo_url' => $draftUrl('half_body_photo', 'half_body_photo', $profile ? $this->profilePhotoPath($profile, 'half_body_photo', $photos) : null),
+                    'selfie_photo_url' => $draftUrl('selfie_photo', 'selfie_photo', $profile ? $this->profilePhotoPath($profile, 'selfie_photo', $photos) : null),
+                    'identification_proof_url' => $draftUrl('identificationProof', 'identificationProof', $profile?->profileDocuments?->aadhaar_card ?: $profile?->getAttribute('identificationProof')),
+                    'pan_card_url' => $draftUrl('pan_card', 'pan_card', $profile?->profileDocuments?->pan_card),
+                    'passport_url' => $draftUrl('passport', 'passport', $profile?->profileDocuments?->passport),
+                    'birth_date_proof_url' => $draftUrl('birthDateProof', 'birthDateProof', $profile?->profileDocuments?->birth_certificate ?: $profile?->getAttribute('birthDateProof')),
+                    'address_proof_url' => $draftUrl('address_proof', 'address_proof', $profile?->profileDocuments?->address_proof ?: $profile?->getAttribute('addressProof')),
+                    'education_proof_url' => $draftUrl('educationProof', 'educationProof', $profile?->profileDocuments?->education_certificate ?: $profile?->getAttribute('educationProof')),
+                    'profession_proof_url' => $draftUrl('profession_proof', 'professionProof', $profile?->profileDocuments?->profession_proof ?: $profile?->getAttribute('professionProof')),
+                    'income_proof_url' => $draftUrl('income_proof', 'incomeProof', $profile?->profileDocuments?->income_proof ?: $profile?->getAttribute('incomeProof')),
+                    'caste_certificate_url' => $draftUrl('caste_certificate', 'caste_certificate', $profile?->profileDocuments?->caste_certificate ?: $profile?->getAttribute('casteCertificate')),
+                    'medical_fitness_certificate_url' => $draftUrl('medical_fitness_certificate', 'medical_fitness_certificate', $profile?->profileDocuments?->medical_fitness_certificate ?: $profile?->getAttribute('medicalFitnessCertificate')),
+                    'candidate_photos_urls' => $draftUrls('candidate_photos', 'candidate_photos', 'candidate_photos'),
+                    'additional_photos_urls' => $draftUrls('additional_photos', 'additionalPhotos', 'additional_photos'),
                 ],
             ]);
         }
@@ -252,7 +303,17 @@ class MelavaRegistrationController extends Controller
                     'employments' => $profile->employments->toArray(),
                 ],
                 'preference' => ($profile->partnerPreferences ?: $profile->preference)?->toArray(),
-                'registration' => $registration,
+                'registration' => $registration ? [
+                    'id' => $registration->id,
+                    'payment_verified' => (bool) $registration->payment_verified,
+                    'payment_screenshot_url' => $this->fileUrl(request(), $registration->payment_screenshot),
+                    'is_booklet_req' => (bool) $registration->is_booklet_req,
+                    'registration_fee' => (float) $campaign->registration_fee,
+                    'booklet_fee' => (float) $campaign->booklet_fee,
+                    'currency' => $campaign->currency,
+                    'total_amount' => (float) $campaign->registration_fee
+                        + ($registration->is_booklet_req ? (float) $campaign->booklet_fee : 0),
+                ] : null,
                 'has_registration' => (bool) $registration,
                 'profile_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'profile_photo', $photos)),
                 'full_body_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'full_body_photo', $photos)),
@@ -260,16 +321,16 @@ class MelavaRegistrationController extends Controller
                 'selfie_photo_url' => $this->fileUrl(request(), $this->profilePhotoPath($profile, 'selfie_photo', $photos)),
                 'candidate_photos_urls' => $this->fileUrls(request(), $this->photoList($profile, 'candidate_photos', $photos)),
                 'additional_photos_urls' => $this->fileUrls(request(), $this->photoList($profile, 'additional_photos', $photos)),
-                'identification_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->aadhaar_card),
+                'identification_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->aadhaar_card ?: $profile->getAttribute('identificationProof')),
                 'pan_card_url' => $this->fileUrl(request(), $profile->profileDocuments?->pan_card),
                 'passport_url' => $this->fileUrl(request(), $profile->profileDocuments?->passport),
-                'birth_date_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->birth_certificate),
-                'address_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->address_proof),
-                'education_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->education_certificate),
-                'profession_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->profession_proof),
-                'income_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->income_proof),
-                'caste_certificate_url' => $this->fileUrl(request(), $profile->profileDocuments?->caste_certificate),
-                'medical_fitness_certificate_url' => $this->fileUrl(request(), $profile->profileDocuments?->medical_fitness_certificate),
+                'birth_date_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->birth_certificate ?: $profile->getAttribute('birthDateProof')),
+                'address_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->address_proof ?: $profile->getAttribute('addressProof')),
+                'education_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->education_certificate ?: $profile->getAttribute('educationProof')),
+                'profession_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->profession_proof ?: $profile->getAttribute('professionProof')),
+                'income_proof_url' => $this->fileUrl(request(), $profile->profileDocuments?->income_proof ?: $profile->getAttribute('incomeProof')),
+                'caste_certificate_url' => $this->fileUrl(request(), $profile->profileDocuments?->caste_certificate ?: $profile->getAttribute('casteCertificate')),
+                'medical_fitness_certificate_url' => $this->fileUrl(request(), $profile->profileDocuments?->medical_fitness_certificate ?: $profile->getAttribute('medicalFitnessCertificate')),
             ]);
         }
 
@@ -406,6 +467,12 @@ class MelavaRegistrationController extends Controller
 
         $profile = DB::transaction(function () use ($request, $data, $campaign) {
             $user = User::where('username', $data['username'])->first();
+            $profile = Profile::where('phone', $data['username'])->first();
+
+            if (! $user && $profile) {
+                $user = $profile->user;
+            }
+
             if (! $user) {
                 $roleId = DB::table('roles')->where('user_type', '21')->value('id');
                 if (! $roleId) {
@@ -423,29 +490,32 @@ class MelavaRegistrationController extends Controller
                 ]);
             }
 
-            $profile = $user->profile_id ? Profile::find($user->profile_id) : null;
+            $profile ??= $user->profile_id ? Profile::find($user->profile_id) : null;
             $profile = $this->saveProfile($profile, $request, $data, $user);
             $user->profile_id = $profile->id;
             $user->save();
 
             $pendingFiles = $this->pendingFiles($request);
+            $existingRegistration = ProfileMelavaRegistration::where('profile_id', $profile->id)
+                ->where('melava_campaign_id', $campaign->id)
+                ->first();
             $paymentPath = $request->hasFile('payment_screenshot')
                 ? $request->file('payment_screenshot')->store('payment_screenshots', 'public')
                 : (! empty($pendingFiles['payment_screenshot'])
                     ? $this->promotePendingFile($pendingFiles['payment_screenshot'], 'payment_screenshots')
-                    : null);
+                    : $existingRegistration?->payment_screenshot);
             $registration = ProfileMelavaRegistration::updateOrCreate(
                 ['profile_id' => $profile->id, 'melava_campaign_id' => $campaign->id],
                 [
                     'is_booklet_req' => $request->boolean('booklet_required'),
                     'payment_screenshot' => $paymentPath,
-                    'payment_verified' => false,
+                    'payment_verified' => (bool) $existingRegistration?->payment_verified,
                 ]
             );
             if ($paymentPath) {
                 PaymentScreenshot::updateOrCreate(
                     ['profile_id' => $profile->id, 'screenshot_path' => $paymentPath],
-                    ['payment_verified' => false]
+                    ['payment_verified' => (bool) $registration->payment_verified]
                 );
             }
 
@@ -482,23 +552,78 @@ class MelavaRegistrationController extends Controller
         $data = $request->validate([
             'payment_screenshot' => ['nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
             'payment_verified' => ['nullable', 'boolean'],
+            'payment_type' => ['nullable', Rule::in(['registration', 'booklet', 'both'])],
             'booklet_required' => ['nullable', 'boolean'],
         ]);
-        if ($request->hasFile('payment_screenshot')) {
-            $registration->payment_screenshot = $request->file('payment_screenshot')->store('payment_screenshots', 'public');
+        $paymentType = $data['payment_type'] ?? 'registration';
+        if (in_array($paymentType, ['booklet', 'both'], true) && ! $registration->is_booklet_req) {
+            return response()->json([
+                'success' => false,
+                'message' => 'This registration does not include a booklet payment.',
+            ], 422);
         }
-        if (array_key_exists('payment_verified', $data)) {
-            $registration->payment_verified = (bool) $data['payment_verified'];
+
+        $paymentPath = $request->hasFile('payment_screenshot')
+            ? $request->file('payment_screenshot')->store('payment_screenshots', 'public')
+            : null;
+        if (in_array($paymentType, ['registration', 'both'], true)) {
+            if ($paymentPath) {
+                $registration->payment_screenshot = $paymentPath;
+            }
+            if (array_key_exists('payment_verified', $data)) {
+                $registration->payment_verified = (bool) $data['payment_verified'];
+            }
+        }
+        if (in_array($paymentType, ['booklet', 'both'], true)) {
+            if ($paymentPath) {
+                $registration->booklet_payment_screenshot = $paymentPath;
+            }
+            if (array_key_exists('payment_verified', $data)) {
+                $registration->booklet_payment_verified = (bool) $data['payment_verified'];
+            }
         }
         if (array_key_exists('booklet_required', $data)) {
             $registration->is_booklet_req = (bool) $data['booklet_required'];
         }
         $registration->save();
-        if ($registration->payment_screenshot) {
-            PaymentScreenshot::updateOrCreate(
-                ['profile_id' => $registration->profile_id, 'screenshot_path' => $registration->payment_screenshot],
-                ['payment_verified' => (bool) $registration->payment_verified]
-            );
+        $registration->loadMissing('campaign');
+        $pathsToSync = [];
+        if (in_array($paymentType, ['registration', 'both'], true) && $registration->payment_screenshot) {
+            $pathsToSync[$registration->payment_screenshot] = (bool) $registration->payment_verified;
+        }
+        if (in_array($paymentType, ['booklet', 'both'], true) && $registration->booklet_payment_screenshot) {
+            $pathsToSync[$registration->booklet_payment_screenshot] = (bool) $registration->booklet_payment_verified;
+        }
+        foreach ($pathsToSync as $path => $verified) {
+            $isRegistrationPath = $registration->payment_screenshot === $path;
+            $isBookletPath = $registration->booklet_payment_screenshot === $path;
+            $category = $isRegistrationPath && $isBookletPath
+                ? 'combined'
+                : ($isBookletPath ? 'booklet' : 'melava');
+            $amount = ($isRegistrationPath ? (float) ($registration->campaign?->registration_fee ?? 0) : 0)
+                + ($isBookletPath ? (float) ($registration->campaign?->booklet_fee ?? 0) : 0);
+            $payment = PaymentScreenshot::firstOrNew([
+                'profile_id' => $registration->profile_id,
+                'screenshot_path' => $path,
+            ]);
+            $details = $payment->payment_details ?? [];
+            $details = array_merge([
+                'category' => $category,
+                'amount' => $amount,
+                'payment_date' => optional($registration->created_at)->toDateString(),
+                'payment_method' => null,
+                'reference_number' => null,
+                'remarks' => null,
+                'verification_status' => $verified ? 'verified' : 'pending',
+                'proof_file' => $path,
+            ], $details, [
+                'category' => $category,
+                'verification_status' => $verified ? 'verified' : 'pending',
+                'proof_file' => $path,
+            ]);
+            $payment->payment_verified = $verified;
+            $payment->payment_details = $details;
+            $payment->save();
         }
         return response()->json(['success' => true, 'data' => $this->present($registration->fresh(['profile', 'campaign']))]);
     }
@@ -608,20 +733,22 @@ class MelavaRegistrationController extends Controller
             'creator_relation' => $data['profileCreatorRelation'] ?? $profile->creator_relation,
             'addresses' => [
                 'current' => [
-                    'address' => $data['address'] ?? null,
-                    'pincode' => $data['current_address_pincode'] ?? null,
-                    'city' => $data['current_address_city'] ?? null,
-                    'district' => $data['current_address_district'] ?? null,
-                    'state' => $data['current_address_state'] ?? null,
-                    'country' => $data['current_address_country'] ?? null,
+                    'address' => $data['address'] ?? data_get($profile->addresses, 'current.address'),
+                    'pincode' => $data['current_address_pincode'] ?? data_get($profile->addresses, 'current.pincode'),
+                    'city' => $data['current_address_city'] ?? data_get($profile->addresses, 'current.city'),
+                    'district' => $data['current_address_district'] ?? data_get($profile->addresses, 'current.district'),
+                    'state' => $data['current_address_state'] ?? data_get($profile->addresses, 'current.state'),
+                    'country' => $data['current_address_country'] ?? data_get($profile->addresses, 'current.country'),
                 ],
-                'permanent' => ['address' => $data['permanent_address'] ?? null],
+                'permanent' => [
+                    'address' => $data['permanent_address'] ?? data_get($profile->addresses, 'permanent.address'),
+                ],
                 'reference' => [
-                    'name' => $data['referenceName'] ?? null,
-                    'relation' => $data['referenceRelation'] ?? null,
-                    'address' => $data['referenceAddress'] ?? null,
-                    'contact' => $data['referenceContactNumber'] ?? null,
-                    'email' => $data['referenceEmail'] ?? null,
+                    'name' => $data['referenceName'] ?? data_get($profile->addresses, 'reference.name'),
+                    'relation' => $data['referenceRelation'] ?? data_get($profile->addresses, 'reference.relation'),
+                    'address' => $data['referenceAddress'] ?? data_get($profile->addresses, 'reference.address'),
+                    'contact' => $data['referenceContactNumber'] ?? data_get($profile->addresses, 'reference.contact'),
+                    'email' => $data['referenceEmail'] ?? data_get($profile->addresses, 'reference.email'),
                 ],
                 'metadata' => [
                     'marital_status' => $data['maritalStatus'] ?? null,
@@ -790,7 +917,12 @@ class MelavaRegistrationController extends Controller
             'education' => ['nullable', 'string', 'max:255'],
             'profession' => ['nullable', 'string', 'max:5000'],
             'professionalCity' => ['nullable', 'string', 'max:5000'],
-            'payment_screenshot' => [$required ? 'required' : 'nullable', 'file', 'mimes:jpg,jpeg,png,pdf', 'max:5120'],
+            'payment_screenshot' => [
+                $required && ! $this->hasReusablePaymentScreenshot($request) ? 'required' : 'nullable',
+                'file',
+                'mimes:jpg,jpeg,png,pdf',
+                'max:5120',
+            ],
             'booklet_required' => ['nullable', 'boolean'],
         ];
         foreach ([
@@ -829,6 +961,40 @@ class MelavaRegistrationController extends Controller
         $rules['employments'] = ['nullable', 'array', 'max:20'];
         $rules['employments.*'] = ['array'];
         return $request->validate($rules);
+    }
+
+    private function hasReusablePaymentScreenshot(Request $request): bool
+    {
+        $mobile = (string) $request->input('username', '');
+        $campaignId = $request->input('melava_campaign_id');
+        if (! preg_match('/^\d{10}$/', $mobile) || ! is_scalar($campaignId) || ! ctype_digit((string) $campaignId)) {
+            return false;
+        }
+
+        $pendingToken = $request->input('pending_registration_token');
+        if (is_string($pendingToken) && $pendingToken !== '') {
+            $pending = MelavaPendingRegistration::where('token', $pendingToken)
+                ->where('mobile', $mobile)
+                ->where('melava_campaign_id', (int) $campaignId)
+                ->where('status', 'pending')
+                ->first();
+            $pendingData = $pending ? json_decode((string) $pending->registration_data, true) : null;
+            $pendingScreenshot = is_array($pendingData)
+                ? ($pendingData['_pending_files']['payment_screenshot'] ?? null)
+                : null;
+            if (is_string($pendingScreenshot) && Storage::disk('public')->exists($pendingScreenshot)) {
+                return true;
+            }
+        }
+
+        $profile = Profile::where('phone', $mobile)->first();
+        $screenshot = $profile
+            ? ProfileMelavaRegistration::where('profile_id', $profile->id)
+                ->where('melava_campaign_id', (int) $campaignId)
+                ->value('payment_screenshot')
+            : null;
+
+        return is_string($screenshot) && Storage::disk('public')->exists($screenshot);
     }
 
     private function familyStatus($value): ?string
@@ -970,6 +1136,8 @@ class MelavaRegistrationController extends Controller
     {
         $registration->loadMissing(['profile', 'campaign']);
         $profile = $registration->profile;
+        $employment = $profile?->employments?->sortByDesc('id')->first();
+        $education = $profile?->educations?->sortByDesc('id')->first();
         $data = [
             'id' => $registration->id,
             'profile_id' => $profile?->id,
@@ -977,13 +1145,26 @@ class MelavaRegistrationController extends Controller
             'groomOrBride' => $profile?->groomorbride,
             'birthDate' => $profile?->birth_date,
             'username' => $profile?->phone,
+            'city' => data_get($profile?->addresses, 'current.city')
+                ?: $employment?->employment_city
+                ?: $education?->education_city,
+            'created_at' => $registration->created_at?->format(DATE_ATOM),
+            'registration_type' => $profile?->registration_type,
             'payment_verified' => (bool) $registration->payment_verified,
             'payment_screenshot' => $registration->payment_screenshot,
             'payment_screenshot_url' => $this->fileUrl(request(), $registration->payment_screenshot),
+            'booklet_payment_screenshot' => $registration->booklet_payment_screenshot,
+            'booklet_payment_screenshot_url' => $this->fileUrl(request(), $registration->booklet_payment_screenshot),
+            'booklet_payment_verified' => (bool) $registration->booklet_payment_verified,
             'is_booklet_req' => (bool) $registration->is_booklet_req,
             'melava_number' => $registration->campaign?->melava_code,
             'melava_title' => $registration->campaign?->title,
             'melava_campaign_id' => $registration->melava_campaign_id,
+            'registration_fee' => (float) ($registration->campaign?->registration_fee ?? 0),
+            'booklet_fee' => (float) ($registration->campaign?->booklet_fee ?? 0),
+            'currency' => $registration->campaign?->currency,
+            'total_amount' => (float) ($registration->campaign?->registration_fee ?? 0)
+                + ($registration->is_booklet_req ? (float) ($registration->campaign?->booklet_fee ?? 0) : 0),
             'profile_photo_url' => $this->fileUrl(request(), $profile?->photos['profile_photo'] ?? null),
         ];
         if ($includeForm) {
@@ -1060,19 +1241,24 @@ class MelavaRegistrationController extends Controller
         };
 
         return $photos[$key]
+            ?? ($key === 'profile_photo' ? ($photos['profilePicture'] ?? $photos[0] ?? null) : null)
             ?? $profile->getAttribute($legacyKey)
+            ?? ($key === 'profile_photo' ? $profile->getAttribute('profilePicture') : null)
             ?? $profile->getAttribute($key);
     }
 
     private function photoList(Profile $profile, string $key, array $photos): array
     {
-        $value = $photos[$key] ?? $profile->getAttribute($key) ?? [];
+        $legacyKey = $key === 'additional_photos' ? 'additionalPhotos' : 'candidatePhotos';
+        $value = $photos[$key] ?? $photos[$legacyKey] ?? $profile->getAttribute($key) ?? $profile->getAttribute($legacyKey) ?? [];
         if (is_string($value)) {
             $decoded = json_decode($value, true);
             $value = is_array($decoded) ? $decoded : [$value];
         }
 
-        return is_array($value) ? array_values(array_filter($value)) : [];
+        return is_array($value)
+            ? array_values(array_filter($value, fn ($path) => is_string($path) && $path !== ''))
+            : [];
     }
 
     private function isAdmin($user): bool

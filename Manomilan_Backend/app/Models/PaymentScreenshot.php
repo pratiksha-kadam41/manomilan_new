@@ -10,10 +10,12 @@ class PaymentScreenshot extends Model
         'profile_id',
         'screenshot_path',
         'payment_verified',
+        'payment_details',
     ];
 
     protected $casts = [
         'payment_verified' => 'boolean',
+        'payment_details' => 'array',
     ];
 
     public function profile()

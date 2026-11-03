@@ -231,10 +231,7 @@ class MelavaCampaignController extends Controller
                 $updates['qr_image_path'] = $this->storeQr($request);
             }
 
-            DB::transaction(function () use ($id, $campaign, $updates, $request) {
-                DB::table('profile_melava_registrations')
-                    ->where('melava_campaign_id', $id)
-                    ->update(['melava_number' => $updates['melava_code']]);
+            DB::transaction(function () use ($id, $campaign, $updates) {
                 DB::table('melava_campaigns')->where('id', $id)->update($updates);
 
                 if (isset($updates['qr_image_path']) && $campaign->qr_image_path) {
