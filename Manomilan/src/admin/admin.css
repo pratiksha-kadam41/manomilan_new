@@ -296,9 +296,7 @@ body {
   .adm-sidebar-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(2px);
-    z-index: 1150;
+    z-index: 35;
     display: block;
     border: 0;
     background: rgba(16, 24, 40, 0.4);
