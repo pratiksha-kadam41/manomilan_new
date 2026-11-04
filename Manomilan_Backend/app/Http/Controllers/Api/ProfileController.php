@@ -288,6 +288,7 @@ class ProfileController extends Controller
                 'profiles.phone',
                 'profiles.email',
                 'profiles.created_at',
+                'profiles.updated_by_user_id',
             ])
             ->with([
                 'user:profile_id,username,email',
@@ -319,7 +320,7 @@ class ProfileController extends Controller
         $total = (int) ($stats->total ?? 0);
 
         return response()->json([
-            'data' => $profiles->getCollection()->map(fn (Profile $profile) => $this->presentProfile($profile, true))->values(),
+            'data' => $profiles->getCollection()->map(fn (Profile $profile) => $this->presentProfile($profile, true, true))->values(),
             'current_page' => $profiles->currentPage(),
             'last_page' => $profiles->lastPage(),
             'per_page' => $profiles->perPage(),
@@ -692,6 +693,7 @@ class ProfileController extends Controller
                 'active' => $profile->status,
                 'melava_batch' => $latestMelava?->melava_batch,
                 'created_at' => $profile->created_at,
+                'updated_by_user_id' => $profile->updated_by_user_id,
                 'profile_completion' => null,
 
                 'marital_status' => $profile->marital_status,
@@ -809,6 +811,7 @@ class ProfileController extends Controller
                 'other_expectations' => $partnerPreference?->other_expectations ?? $preference?->other_expectations,
                 'documents' => $documents,
                 'education_records' => $educationRows->map(fn ($record) => [
+                    'updated_by_user_id' => $record->updated_by_user_id,
                     'education_level' => $record->education_level,
                     'degree_name' => $record->degree_name,
                     'specialization' => $record->specialization,
@@ -821,6 +824,7 @@ class ProfileController extends Controller
                     'additional_qualification' => $record->additional_qualification,
                 ])->values(),
                 'employment_records' => $profile->employments->map(fn ($record) => [
+                    'updated_by_user_id' => $record->updated_by_user_id,
                     'employment_type' => $record->employment_type,
                     'profession' => $record->profession,
                     'working_field' => $record->working_field,
@@ -845,6 +849,7 @@ class ProfileController extends Controller
 
                         return [
                             'id' => $payment->id,
+                            'updated_by_user_id' => $payment->updated_by_user_id,
                             'type' => $melavaRegistration ? 'combined' : 'payment',
                             'melava_id' => $melavaRegistration?->id,
                             'category' => data_get($payment->payment_details, 'category'),
@@ -861,6 +866,7 @@ class ProfileController extends Controller
                     })->values(),
                 'melava_registrations' => $profile->profileMelavaRegistrations->map(fn ($registration) => [
                     'id' => $registration->id,
+                    'updated_by_user_id' => $registration->updated_by_user_id,
                     'campaign_title' => $registration->campaign?->title,
                     'melava_number' => $registration->campaign?->melava_code,
                     'melava_campaign_id' => $registration->melava_campaign_id,
@@ -1824,7 +1830,7 @@ class ProfileController extends Controller
         ], 403);
     }
 
-    private function presentProfile(Profile $profile, bool $detailed = false): array
+    private function presentProfile(Profile $profile, bool $detailed = false, bool $includeEditor = false): array
     {
         $user = $profile->user;
         $verificationSummary = $profile->verificationSummary();
@@ -1946,6 +1952,10 @@ class ProfileController extends Controller
                     'is_booklet_req' => (bool) $registration->is_booklet_req,
                     'payment_verified' => (bool) $registration->payment_verified,
                 ])->values();
+        }
+
+        if ($includeEditor) {
+            $data['updated_by_user_id'] = $profile->updated_by_user_id;
         }
 
         return $data;

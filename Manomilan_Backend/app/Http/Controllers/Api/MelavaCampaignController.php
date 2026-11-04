@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\MelavaCampaign;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -133,8 +134,7 @@ class MelavaCampaignController extends Controller
         ]);
 
         $qrPath = $this->storeQr($request);
-        $now = now();
-        $id = DB::table('melava_campaigns')->insertGetId([
+        $campaign = MelavaCampaign::create([
             'melava_code' => strtoupper(trim($data['melava_code'])),
             'title' => trim($data['title']),
             'description' => $data['description'] ?? null,
@@ -146,11 +146,7 @@ class MelavaCampaignController extends Controller
             'booklet_fee' => $data['booklet_available'] ? ($data['booklet_fee'] ?? 0) : 0,
             'qr_image_path' => $qrPath,
             'status' => 'active',
-            'created_at' => $now,
-            'updated_at' => $now,
         ]);
-
-        $campaign = DB::table('melava_campaigns')->where('id', $id)->first();
 
         return response()->json([
             'success' => true,
@@ -169,18 +165,17 @@ class MelavaCampaignController extends Controller
             'status' => ['required', Rule::in(['active', 'inactive'])],
         ]);
 
-        $exists = DB::table('melava_campaigns')->where('id', $id)->exists();
-        if (! $exists) {
+        $campaign = MelavaCampaign::query()->find($id);
+        if (! $campaign) {
             return response()->json(['success' => false, 'message' => 'Melava event not found.'], 404);
         }
 
-        DB::table('melava_campaigns')
-            ->where('id', $id)
-            ->update(['status' => $data['status'], 'updated_at' => now()]);
+        $campaign->status = $data['status'];
+        $campaign->save();
 
         return response()->json([
             'success' => true,
-            'data' => $this->present(DB::table('melava_campaigns')->where('id', $id)->first(), $request),
+            'data' => $this->present($campaign, $request),
         ]);
     }
 
@@ -190,60 +185,60 @@ class MelavaCampaignController extends Controller
             return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
         }
 
-            $campaign = DB::table('melava_campaigns')->where('id', $id)->first();
-            if (! $campaign) {
-                return response()->json(['success' => false, 'message' => 'Melava event not found.'], 404);
+        $campaign = MelavaCampaign::query()->find($id);
+        if (! $campaign) {
+            return response()->json(['success' => false, 'message' => 'Melava event not found.'], 404);
+        }
+
+        $data = $request->validate([
+            'melava_code' => ['required', 'string', 'max:20', 'regex:/^MM-\d{2}$/i', Rule::unique('melava_campaigns', 'melava_code')->ignore($id)],
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'currency' => ['required', 'string', 'size:3', 'alpha'],
+            'registration_fee' => ['required', 'numeric', 'min:0', 'max:10000000'],
+            'booklet_available' => ['required', 'boolean'],
+            'booklet_fee' => [
+                Rule::requiredIf($request->boolean('booklet_available')),
+                'nullable',
+                'numeric',
+                'min:0',
+                'max:10000000',
+            ],
+            'qr_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $updates = [
+            'melava_code' => strtoupper(trim($data['melava_code'])),
+            'title' => trim($data['title']),
+            'description' => $data['description'] ?? null,
+            'start_date' => $data['start_date'] ?? null,
+            'end_date' => $data['end_date'] ?? null,
+            'currency' => strtoupper($data['currency']),
+            'registration_fee' => $data['registration_fee'],
+            'booklet_available' => (bool) $data['booklet_available'],
+            'booklet_fee' => $data['booklet_available'] ? ($data['booklet_fee'] ?? 0) : 0,
+        ];
+
+        if ($request->hasFile('qr_image')) {
+            $updates['qr_image_path'] = $this->storeQr($request);
+        }
+
+        $oldQrPath = $campaign->qr_image_path;
+        DB::transaction(function () use ($campaign, $updates, $oldQrPath) {
+            $campaign->fill($updates)->save();
+
+            if (isset($updates['qr_image_path']) && $oldQrPath) {
+                $this->deleteQr($oldQrPath);
             }
+        });
 
-            $data = $request->validate([
-                'melava_code' => ['required', 'string', 'max:20', 'regex:/^MM-\d{2}$/i', Rule::unique('melava_campaigns', 'melava_code')->ignore($id)],
-                'title' => ['required', 'string', 'max:255'],
-                'description' => ['nullable', 'string', 'max:5000'],
-                'start_date' => ['nullable', 'date'],
-                'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-                'currency' => ['required', 'string', 'size:3', 'alpha'],
-                'registration_fee' => ['required', 'numeric', 'min:0', 'max:10000000'],
-                'booklet_available' => ['required', 'boolean'],
-                'booklet_fee' => [
-                    Rule::requiredIf($request->boolean('booklet_available')),
-                    'nullable',
-                    'numeric',
-                    'min:0',
-                    'max:10000000',
-                ],
-                'qr_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
-            ]);
-
-            $updates = [
-                'melava_code' => strtoupper(trim($data['melava_code'])),
-                'title' => trim($data['title']),
-                'description' => $data['description'] ?? null,
-                'start_date' => $data['start_date'] ?? null,
-                'end_date' => $data['end_date'] ?? null,
-                'currency' => strtoupper($data['currency']),
-                'registration_fee' => $data['registration_fee'],
-                'booklet_available' => (bool) $data['booklet_available'],
-                'booklet_fee' => $data['booklet_available'] ? ($data['booklet_fee'] ?? 0) : 0,
-                'updated_at' => now(),
-            ];
-
-            if ($request->hasFile('qr_image')) {
-                $updates['qr_image_path'] = $this->storeQr($request);
-            }
-
-            DB::transaction(function () use ($id, $campaign, $updates) {
-                DB::table('melava_campaigns')->where('id', $id)->update($updates);
-
-                if (isset($updates['qr_image_path']) && $campaign->qr_image_path) {
-                    $this->deleteQr($campaign->qr_image_path);
-                }
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Melava event updated.',
-                'data' => $this->present(DB::table('melava_campaigns')->where('id', $id)->first(), $request),
-            ]);
+        return response()->json([
+            'success' => true,
+            'message' => 'Melava event updated.',
+            'data' => $this->present($campaign->refresh(), $request),
+        ]);
     }
 
     public function destroy(Request $request, int $id)
@@ -252,7 +247,7 @@ class MelavaCampaignController extends Controller
             return response()->json(['success' => false, 'message' => 'Forbidden.'], 403);
         }
 
-        $campaign = DB::table('melava_campaigns')->where('id', $id)->first();
+        $campaign = MelavaCampaign::query()->find($id);
         if (! $campaign) {
             return response()->json(['success' => false, 'message' => 'Melava event not found.'], 404);
         }
@@ -265,7 +260,7 @@ class MelavaCampaignController extends Controller
             ], 409);
         }
 
-        DB::table('melava_campaigns')->where('id', $id)->delete();
+        $campaign->delete();
         if ($campaign->qr_image_path) {
             $this->deleteQr($campaign->qr_image_path);
         }
@@ -288,7 +283,7 @@ class MelavaCampaignController extends Controller
                 : ($endDate < $today ? 'Completed' : 'Ongoing');
         }
 
-        return [
+        $data = [
             'id' => (int) $campaign->id,
             'melava_code' => $campaign->melava_code,
             'title' => $campaign->title,
@@ -304,6 +299,12 @@ class MelavaCampaignController extends Controller
             'status' => $campaign->status,
             'schedule_status' => $scheduleStatus,
         ];
+
+        if ($request->user()?->portal() === 'admin') {
+            $data['updated_by_user_id'] = $campaign->updated_by_user_id ?? null;
+        }
+
+        return $data;
     }
 
     private function storeQr(Request $request): string

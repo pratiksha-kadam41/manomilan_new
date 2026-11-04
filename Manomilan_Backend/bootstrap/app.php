@@ -7,6 +7,7 @@ use App\Http\Middleware\AuditApiActivity;
 use App\Http\Middleware\EnforceApiModulePermissions;
 use App\Http\Middleware\EnsureWebsiteAvailable;
 use App\Http\Middleware\AuthorizeModulePermission;
+use App\Http\Middleware\ExposeRecordEditorNames;
 use App\Http\Middleware\RequireSuperAdmin;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -28,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'audit.api' => AuditApiActivity::class,
             'module.permission' => AuthorizeModulePermission::class,
             'rbac.api' => EnforceApiModulePermissions::class,
+            'record.editor-names' => ExposeRecordEditorNames::class,
             'superadmin' => RequireSuperAdmin::class,
             'website.availability' => EnsureWebsiteAvailable::class,
             'candidate.profile.complete' => \App\Http\Middleware\EnsureCandidateProfileComplete::class,

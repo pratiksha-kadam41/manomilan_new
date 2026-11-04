@@ -23,26 +23,39 @@ class Profile extends Model
             $profileId = $profile->getKey();
 
             foreach ([
-                'profile_family_details',
-                'profile_education',
-                'profile_employment',
-                'profile_religion_details',
-                'profile_documents',
-                'profile_partner_preferences',
-                'profile_melava_registrations',
-                'payment_screenshots',
-                'user_interests',
-                'profile_visitors',
-                'document_verifications',
-                'melava_pending_registrations',
-            ] as $table) {
+                'profile_family_details' => \App\ProfileFamilyDetail::class,
+                'profile_education' => \App\ProfileEducation::class,
+                'profile_employment' => \App\ProfileEmployment::class,
+                'profile_religion_details' => \App\ProfileReligionDetail::class,
+                'profile_documents' => \App\ProfileDocument::class,
+                'profile_partner_preferences' => \App\ProfilePartnerPreference::class,
+                'profile_melava_registrations' => \App\ProfileMelavaRegistration::class,
+                'payment_screenshots' => \App\PaymentScreenshot::class,
+                'user_interests' => \App\UserInterest::class,
+                'profile_visitors' => \App\ProfileVisitor::class,
+                'document_verifications' => \App\DocumentVerification::class,
+                'melava_pending_registrations' => \App\MelavaPendingRegistration::class,
+            ] as $table => $modelClass) {
                 if (Schema::hasTable($table) && Schema::hasColumn($table, 'profile_id')) {
-                    DB::table($table)->where('profile_id', $profileId)->delete();
+                    $modelClass::query()
+                        ->where('profile_id', $profileId)
+                        ->chunkById(100, function ($records): void {
+                            foreach ($records as $record) {
+                                $record->delete();
+                            }
+                        });
                 }
             }
 
             if (Schema::hasTable('users') && Schema::hasColumn('users', 'profile_id')) {
-                DB::table('users')->where('profile_id', $profileId)->update(['profile_id' => null]);
+                \App\Models\User::query()
+                    ->where('profile_id', $profileId)
+                    ->chunkById(100, function ($users): void {
+                        foreach ($users as $user) {
+                            $user->profile_id = null;
+                            $user->save();
+                        }
+                    });
             }
         });
 

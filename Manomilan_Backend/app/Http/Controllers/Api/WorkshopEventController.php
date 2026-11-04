@@ -13,7 +13,7 @@ use Throwable;
 
 class WorkshopEventController extends Controller
 {
-    public function active()
+    public function active(Request $request)
     {
         try {
             $events = WorkshopEvent::query()
@@ -53,7 +53,7 @@ class WorkshopEventController extends Controller
 
             $events = $query->orderByDesc('created_at')
                 ->paginate(min(max((int) $request->input('per_page', 10), 1), 50));
-            $events->getCollection()->transform(fn (WorkshopEvent $event): array => $this->present($event));
+            $events->getCollection()->transform(fn (WorkshopEvent $event): array => $this->present($event, true));
 
             return response()->json([
                 'success' => true,
@@ -107,7 +107,7 @@ class WorkshopEventController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Workshop event created successfully.',
-                'data' => $this->present($event),
+                'data' => $this->present($event, true),
             ], 201);
         } catch (Throwable $exception) {
             if ($newImagePath && ! $saved) {
@@ -172,7 +172,7 @@ class WorkshopEventController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Workshop event updated successfully.',
-                'data' => $this->present($event),
+                'data' => $this->present($event, true),
             ]);
         } catch (Throwable $exception) {
             if ($newImagePath && ! $saved) {
@@ -207,7 +207,7 @@ class WorkshopEventController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Workshop event status updated successfully.',
-                'data' => $this->present($event),
+                'data' => $this->present($event, true),
             ]);
         } catch (Throwable $exception) {
             report($exception);
@@ -273,9 +273,9 @@ class WorkshopEventController extends Controller
         ];
     }
 
-    private function present(WorkshopEvent $event): array
+    private function present(WorkshopEvent $event, bool $includeEditor = false): array
     {
-        return [
+        $data = [
             'id' => $event->id,
             'workshop_code' => $event->workshop_code,
             'title' => $event->title,
@@ -290,5 +290,11 @@ class WorkshopEventController extends Controller
             'registrations_count' => $event->registrations_count ?? null,
             'created_at' => $event->created_at?->toISOString(),
         ];
+
+        if ($includeEditor) {
+            $data['updated_by_user_id'] = $event->updated_by_user_id;
+        }
+
+        return $data;
     }
 }

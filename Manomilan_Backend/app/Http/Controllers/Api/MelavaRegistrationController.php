@@ -1140,6 +1140,7 @@ class MelavaRegistrationController extends Controller
         $education = $profile?->educations?->sortByDesc('id')->first();
         $data = [
             'id' => $registration->id,
+            'updated_by_user_id' => $registration->updated_by_user_id,
             'profile_id' => $profile?->id,
             'fullName' => $profile?->full_name,
             'groomOrBride' => $profile?->groomorbride,

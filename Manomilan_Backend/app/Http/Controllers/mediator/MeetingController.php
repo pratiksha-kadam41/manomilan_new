@@ -8,6 +8,7 @@ use App\Profile;
 use App\User;
 use App\Preference;
 use App\Meeting;
+use App\UserInterest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\MeetingScheduled;
@@ -376,9 +377,13 @@ return view(
 
                 // Guard the interest update; avoid failing if mapping is unavailable
                 try {
-                    DB::table('user_interests')
+                    UserInterest::query()
                         ->where('profile_id', $matchedProfile->id)
-                        ->update(['meeting_scheduled' => 'Yes']);
+                        ->get()
+                        ->each(function (UserInterest $interest): void {
+                            $interest->meeting_scheduled = 'Yes';
+                            $interest->save();
+                        });
                 } catch (\Throwable $e) {
                     \Log::warning('Meeting scheduled flag update skipped: ' . $e->getMessage());
                 }

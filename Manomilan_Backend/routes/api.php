@@ -55,7 +55,7 @@ Route::get('/success-stories/{id}', [
     'publicShow'
 ])->whereNumber('id');
 
-Route::middleware(['auth.api-token', 'rbac.api', 'audit.api'])->group(function () {
+Route::middleware(['auth.api-token', 'rbac.api', 'audit.api', 'record.editor-names'])->group(function () {
     // Admin Success Stories APIs
 Route::prefix('admin/success-stories')->group(function () {
 

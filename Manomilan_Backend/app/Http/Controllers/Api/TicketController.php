@@ -95,6 +95,7 @@ class TicketController extends Controller
             'ticket_status' => $ticket->ticket_status,
             'status' => $ticket->status,
             'created_at' => $ticket->created_at,
+            'updated_by_user_id' => $ticket->updated_by_user_id,
             'module' => $ticket->module
                 ? ['id' => $ticket->module->id, 'module_name' => $ticket->module->module_name]
                 : null,

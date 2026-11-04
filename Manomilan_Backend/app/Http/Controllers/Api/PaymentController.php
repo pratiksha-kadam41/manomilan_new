@@ -62,6 +62,7 @@ class PaymentController extends Controller
                 if (! $melavaRegistration) {
                     return [
                         'id' => $payment->id,
+                        'updated_by_user_id' => $payment->updated_by_user_id,
                         'type' => 'payment',
                         'status' => $payment->payment_verified ? 'verified' : 'pending',
                         'image_url' => $this->screenshotUrl($request, $payment->screenshot_path),
@@ -85,6 +86,8 @@ class PaymentController extends Controller
 
                 return [
                     'id' => $payment->id,
+                    'updated_by_user_id' => $payment->updated_by_user_id
+                        ?: $melavaRegistration->updated_by_user_id,
                     'type' => 'combined',
                     'melava_id' => $melavaRegistration->id,
                     'status' => $combinedVerified ? 'verified' : 'pending',
@@ -102,6 +105,7 @@ class PaymentController extends Controller
                     && ! in_array($registration->payment_screenshot, $matchedMelavaPaths, true))
                 ->map(fn (ProfileMelavaRegistration $registration) => [
                     'id' => $registration->id,
+                    'updated_by_user_id' => $registration->updated_by_user_id,
                     'type' => 'melava',
                     'status' => $registration->payment_verified ? 'verified' : 'pending',
                     'image_url' => $this->screenshotUrl($request, $registration->payment_screenshot),
@@ -123,6 +127,7 @@ class PaymentController extends Controller
                     && ! in_array($registration->booklet_payment_screenshot, $matchedMelavaPaths, true))
                 ->map(fn (ProfileMelavaRegistration $registration) => [
                     'id' => $registration->id,
+                    'updated_by_user_id' => $registration->updated_by_user_id,
                     'type' => 'booklet',
                     'status' => $registration->booklet_payment_verified ? 'verified' : 'pending',
                     'image_url' => $this->screenshotUrl($request, $registration->booklet_payment_screenshot),

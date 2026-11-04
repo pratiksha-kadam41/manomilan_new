@@ -47,7 +47,7 @@ class EnforceApiModulePermissions
             ->where('status', true)
             ->whereNotNull('api_prefixes')
             ->get(['id', 'module_key', 'api_prefixes', 'frontend_routes']);
-        $matched = null;
+        $matchingModules = [];
         $matchedLength = -1;
 
         foreach ($modules as $module) {
@@ -67,16 +67,28 @@ class EnforceApiModulePermissions
 
             foreach ($prefixes as $prefix) {
                 $pattern = trim(preg_replace('/\{[^}]+\}/', '*', trim((string) $prefix, '/')), '/');
-                if ($pattern !== '' && Str::is($pattern, $path) && strlen($pattern) > $matchedLength) {
-                    $matched = $module->module_key;
-                    $matchedLength = strlen($pattern);
+                $matches = $pattern !== ''
+                    && (Str::is($pattern, $path)
+                        || (! Str::contains($pattern, '*') && Str::startsWith($path, $pattern . '/')));
+
+                if ($matches && strlen($pattern) >= $matchedLength) {
+                    if (strlen($pattern) > $matchedLength) {
+                        $matchingModules = [];
+                        $matchedLength = strlen($pattern);
+                    }
+                    $matchingModules[] = $module->module_key;
                 }
             }
         }
 
-        if (! $matched) {
+        if ($matchingModules === []) {
             return $this->deny($request, 'Forbidden. No access rule is configured for this endpoint.');
         }
+
+        $permission = $this->permissionFor($method, $path);
+        $matched = collect($matchingModules)
+            ->first(fn (string $moduleKey) => $user->hasModulePermission($moduleKey, $permission))
+            ?? $matchingModules[0];
 
         if ($user->portal() === 'candidate' && ! in_array($matched, [
             'user_side_profile',
@@ -85,7 +97,6 @@ class EnforceApiModulePermissions
             return $this->deny($request, 'Forbidden.', $matched);
         }
 
-        $permission = $this->permissionFor($method, $path);
         if (! $user->hasModulePermission($matched, $permission)) {
             return $this->deny($request, 'Forbidden.', $matched);
         }

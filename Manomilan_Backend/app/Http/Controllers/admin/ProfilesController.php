@@ -1807,12 +1807,10 @@ class ProfilesController extends Controller
 
         try {
             // Log the interest in the database (requires a 'user_interests' table)
-            DB::table('user_interests')->insert([
+            UserInterest::create([
                 'user_id' => $userId,
                 'profile_id' => $profileId,
                 'status' => 'Pending',
-                'created_at' => now(),
-                'updated_at' => now()
             ]);
 
             return redirect()->back()->with('success', 'Interest successfully marked.');
