@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
+import RecordEditorName from "../../components/RecordEditorName";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { useAdminPermission } from "../../../permission-context";
 import {
@@ -243,7 +244,10 @@ export default function Tickets({ inactive = false }) {
                   return (
                     <tr key={ticket.id}>
                       <td className="tk-row-number">{((currentPage - 1) * 10) + index + 1}</td>
-                      <td className="tk-ticket-number">{ticket.ticket_no}</td>
+                      <td className="tk-ticket-number">
+                        {ticket.ticket_no}
+                        <RecordEditorName record={ticket} />
+                      </td>
                       <td><span className="tk-module-badge">{ticket.module?.module_name || "—"}</span></td>
                       <td className="tk-subject">{ticket.subject}</td>
                       <td><span className="tk-category-badge">{ticket.category}</span></td>

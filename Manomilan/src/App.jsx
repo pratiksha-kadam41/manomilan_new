@@ -54,6 +54,7 @@ const Maintenance = lazy(() => import("./website/Maintenance.jsx"));
 const SuccessStoriesAdmin = lazy(
   () => import("./admin/pages/SuccessStoriesAdmin.jsx")
 );
+
 // Add a page here: "/url-name": Component
 const ROUTES = {
   "/": Home,

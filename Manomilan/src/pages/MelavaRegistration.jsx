@@ -5,6 +5,8 @@ import { getSession, isAdminRole } from "../auth";
 import { SUBCASTES } from "../data/casteOptions";
 import "./MelavaRegistration.css";
 
+// NOTE: the PDF download uses jsPDF. Install once:  npm i jspdf
+
 const ICONS = {
   user: "\uD83D\uDC64",
   education: "\uD83C\uDF93",
@@ -20,6 +22,7 @@ const ICONS = {
   back: "\u2190",
   next: "\u2192",
   check: "\u2714",
+  pdf: "\uD83D\uDCC4",
 };
 
 const EMPTY_META = {
@@ -217,7 +220,7 @@ const STEPS = [
       F("noOfSisters", "Number of Sisters", "number", 3, 1, { min: 0 }),
       F("sistersMarried", "Sisters Married", "number", 3, 1, { min: 0, ...S("noOfSisters", greaterThanZero) }),
       F("parentsIntercasteMarriage", "Parents Intercaste?", "select", 3, 0, { o: YES_NO }),
-      F("parentsDifferentCaste", "If yes, which caste", "text", 3),
+      F("parentsDifferentCaste", "If yes, which caste", "text", 3, 0, S("parentsIntercasteMarriage", isYes)),
       F("familyValues", "Family Values", "select", 3, 0, { o: ["Traditional", "Modern", "Liberal"] }),
       F("familyFinancialStatus", "Family Financial Status", "select", 3, 0, { o: ["Lower", "Middle", "Upper"] }),
       F("familyAnnualIncome", "Family Annual Income", "text", 3),
@@ -553,6 +556,391 @@ const removeFieldError = (errors, name) => {
   return next;
 };
 
+/* ------------------------------------------------------------------ */
+/*  PDF download (jsPDF is loaded only when needed)                    */
+/*  jsPDF's built-in fonts are Latin-only: Hindi/Marathi text will not */
+/*  render unless a Unicode font is embedded.                          */
+/* ------------------------------------------------------------------ */
+const pdfSafe = (value) =>
+  String(value ?? "")
+    .replace(/\u20B9/g, "Rs. ")
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
+
+// Fetches an image (uploaded File/Blob or a saved URL) and returns a compact JPEG data URL.
+// Saved images live on your server, so the browser may block reading them for the PDF
+// unless that server sends CORS headers. We try fetch() first, then an <img> with CORS.
+const loadImageElement = (src, useCors) =>
+  new Promise((resolve, reject) => {
+    const el = new Image();
+    if (useCors) el.crossOrigin = "anonymous";
+    el.onload = () => resolve(el);
+    el.onerror = reject;
+    el.src = src;
+  });
+
+const imageToDataUrl = async (source, maxSize = 900) => {
+  if (!source) return null;
+  const temporaryUrls = [];
+  try {
+    let img = null;
+    if (source instanceof Blob) {
+      const url = URL.createObjectURL(source);
+      temporaryUrls.push(url);
+      img = await loadImageElement(url, false);
+    } else {
+      try {
+        const response = await fetch(source, { mode: "cors", credentials: "omit", cache: "no-store" });
+        if (response.ok && response.headers.get("content-type")?.startsWith("image/")) {
+          const url = URL.createObjectURL(await response.blob());
+          temporaryUrls.push(url);
+          img = await loadImageElement(url, false);
+        }
+      } catch {
+        img = null;
+      }
+      if (!img) {
+        const imageUrl = new URL(source, window.location.href);
+        const storageMatch = imageUrl.pathname.match(/^\/storage\/(.+)$/i);
+        if (storageMatch) {
+          const storagePath = decodeURIComponent(storageMatch[1]);
+          const response = await request(
+            `/melava-registrations/photo-preview?path=${encodeURIComponent(storagePath)}`,
+            { auth: false, raw: true },
+          );
+          const blob = await response.blob();
+          if (!blob.type.startsWith("image/")) {
+            throw new Error("The uploaded photo could not be loaded.");
+          }
+          const url = URL.createObjectURL(blob);
+          temporaryUrls.push(url);
+          img = await loadImageElement(url, false);
+        } else {
+          const separator = String(source).includes("?") ? "&" : "?";
+          img = await loadImageElement(`${source}${separator}_pdf=${Date.now()}`, true);
+        }
+      }
+    }
+    const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.85);
+  } catch {
+    return null;
+  } finally {
+    temporaryUrls.forEach((url) => URL.revokeObjectURL(url));
+  }
+};
+
+const PDF_BLUE = [25, 80, 170];
+const PDF_GREEN = [22, 128, 61];
+const PDF_BLACK = [20, 20, 20];
+const PDF_MUTED = [120, 126, 138];
+const PDF_LINE = [221, 226, 235];
+const PDF_SLOT = [244, 246, 250];
+
+// data = {
+//   title, name, subtitle, registrationNumber, chips, paymentStatus,
+//   photos:    [{ label, kind: "image" | "none", data }],
+//   documents: [{ label, kind: "image" | "file" | "none", data, name }],
+//   sections:  [{ title, fees?, rows: [[label, value, { money?, green?, wide? }]] }],
+//   fileName
+// }
+const downloadRegistrationPdf = async (data) => {
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF({ unit: "pt", format: "a4" });
+  const W = doc.internal.pageSize.getWidth();
+  const H = doc.internal.pageSize.getHeight();
+  const M = 40;
+  const CW = W - M * 2;
+  let y = M;
+
+  const ensure = (needed) => {
+    if (y + needed > H - 50) {
+      doc.addPage();
+      y = M;
+    }
+  };
+
+  const drawImageFit = (image, x, top, w, h) => {
+    try {
+      const properties = doc.getImageProperties(image);
+      const aspect = properties.width / properties.height;
+      const drawW = Math.min(w, h * aspect);
+      const drawH = Math.min(h, w / aspect);
+      doc.addImage(image, "JPEG", x + (w - drawW) / 2, top + (h - drawH) / 2, drawW, drawH);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // A framed slot that shows the picture, or a clear message when there is none.
+  const drawFrame = (x, top, w, h, tile) => {
+    doc.setFillColor(...(tile?.verified ? [239, 250, 242] : PDF_SLOT));
+    doc.setDrawColor(...(tile?.verified ? PDF_GREEN : PDF_LINE));
+    doc.setLineWidth(tile?.verified ? 1.2 : 0.8);
+    doc.roundedRect(x, top, w, h, 6, 6, "FD");
+    if (tile?.data && drawImageFit(tile.data, x + 4, top + 4, w - 8, h - 8)) return;
+
+    const cx = x + w / 2;
+    const cy = top + h / 2;
+    if (!tile || tile.kind === "none") {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...PDF_MUTED);
+      doc.text("Not uploaded", cx, cy, { align: "center" });
+    } else if (tile.kind === "file") {
+      const isPdf = /\.pdf$/i.test(tile.name || "");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(...PDF_BLUE);
+      doc.text(isPdf ? "PDF" : "FILE", cx, cy - 4, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...PDF_BLACK);
+      doc.text(doc.splitTextToSize(pdfSafe(tile.name || "Uploaded"), w - 12).slice(0, 2), cx, cy + 10, { align: "center" });
+    } else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...PDF_BLACK);
+      doc.text("Uploaded", cx, cy - 2, { align: "center" });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(...PDF_MUTED);
+      doc.text("Preview unavailable", cx, cy + 10, { align: "center" });
+    }
+  };
+
+  const drawTile = (x, top, w, h, tile) => {
+    drawFrame(x, top, w, h, tile);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...(tile?.verified ? PDF_GREEN : PDF_BLACK));
+    doc.text(doc.splitTextToSize(pdfSafe(tile.label), w).slice(0, 2), x, top + h + 12);
+  };
+
+  const heading = (title) => {
+    ensure(70);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(...PDF_BLUE);
+    doc.text(pdfSafe(title), M, y + 12);
+    doc.setDrawColor(...PDF_BLUE);
+    doc.setLineWidth(1.2);
+    doc.line(M, y + 19, M + CW, y + 19);
+    y += 32;
+  };
+
+  const drawTileGrid = (tiles, columns, ratio) => {
+    const gap = 12;
+    const cardW = (CW - gap * (columns - 1)) / columns;
+    const cardH = cardW * ratio;
+    for (let i = 0; i < tiles.length; i += columns) {
+      ensure(cardH + 34);
+      tiles.slice(i, i + columns).forEach((tile, column) => {
+        drawTile(M + column * (cardW + gap), y, cardW, cardH, tile);
+      });
+      y += cardH + 34;
+    }
+  };
+
+  // ---------- Header: profile photo + name ----------
+  const profile = data.photos?.[0];
+  const photoW = 88;
+  const photoH = 104;
+  drawFrame(M, y, photoW, photoH, profile);
+  const tx = M + photoW + 20;
+  const tw = CW - photoW - 20;
+  let ty = y + 22;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(...PDF_BLUE);
+  doc.text(pdfSafe(data.name || data.title || "Registration"), tx, ty, { maxWidth: tw });
+  ty += 20;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...PDF_BLACK);
+  const subtitle = [data.title, data.subtitle].filter(Boolean).join(" - ");
+  const subtitleLines = doc.splitTextToSize(pdfSafe(subtitle), tw);
+  doc.text(subtitleLines, tx, ty);
+  ty += subtitleLines.length * 13;
+  if (data.registrationNumber) {
+    doc.text(`Registration No: ${pdfSafe(data.registrationNumber)}`, tx, ty);
+    ty += 15;
+  }
+  if (data.chips) {
+    doc.setFont("helvetica", "bold");
+    const chipLines = doc.splitTextToSize(pdfSafe(data.chips), tw);
+    doc.text(chipLines, tx, ty);
+    ty += chipLines.length * 13;
+  }
+  if (data.paymentStatus) {
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...(data.paymentVerified ? PDF_GREEN : PDF_BLACK));
+    doc.text(`Payment: ${pdfSafe(data.paymentStatus)}`, tx, ty);
+  }
+  y += photoH + 12;
+  doc.setDrawColor(...PDF_BLUE);
+  doc.setLineWidth(2);
+  doc.line(M, y, M + CW, y);
+  y += 24;
+
+  // ---------- Photos ----------
+  if (data.photos?.length) {
+    heading("Photos");
+    drawTileGrid(data.photos, 5, 0.82);
+  }
+
+  // ---------- Detail rows (two columns, long values span the full width) ----------
+  const colGap = 24;
+  const colW = (CW - colGap) / 2;
+
+  const measure = (row, width) => {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10.5);
+    const lines = doc.splitTextToSize(pdfSafe(row[1]) || "-", width);
+    return { lines, height: 24 + lines.length * 12.5 };
+  };
+
+  const drawRow = (items) => {
+    const measured = items.map((row) => {
+      const width = row.wide ? CW : colW;
+      return { row, width, ...measure(row, width) };
+    });
+    const rowH = Math.max(...measured.map((item) => item.height));
+    ensure(rowH);
+    measured.forEach((item, column) => {
+      const x = M + column * (colW + colGap);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(...PDF_BLACK);
+      doc.text(doc.splitTextToSize(pdfSafe(item.row[0]), item.width)[0], x, y + 9);
+      const isGreen = Boolean(item.row[2]?.money || item.row[2]?.green);
+      doc.setFont("helvetica", isGreen ? "bold" : "normal");
+      doc.setFontSize(10.5);
+      doc.setTextColor(...(isGreen ? PDF_GREEN : PDF_BLACK));
+      doc.text(item.lines, x, y + 23);
+      doc.setDrawColor(...PDF_LINE);
+      doc.setLineWidth(0.5);
+      doc.line(x, y + rowH - 4, x + item.width, y + rowH - 4);
+    });
+    y += rowH;
+  };
+
+  const drawSection = (section) => {
+    heading(section.title);
+    let pending = null;
+    section.rows.forEach((raw) => {
+      const row = Object.assign([raw[0], raw[1]], { wide: Boolean(raw[2]?.wide) || String(raw[1] ?? "").length > 42, 2: raw[2] });
+      if (row.wide) {
+        if (pending) {
+          drawRow([pending]);
+          pending = null;
+        }
+        drawRow([row]);
+      } else if (pending) {
+        drawRow([pending, row]);
+        pending = null;
+      } else {
+        pending = row;
+      }
+    });
+    if (pending) drawRow([pending]);
+    y += 10;
+  };
+
+  let documentsDrawn = false;
+  const drawDocuments = () => {
+    documentsDrawn = true;
+    if (!data.documents?.length) return;
+    heading("Documents");
+    const rowHeight = 21;
+    const statusW = 145;
+    const labelW = CW - statusW;
+    const drawTableHeader = () => {
+      doc.setFillColor(...PDF_SLOT);
+      doc.setDrawColor(...PDF_LINE);
+      doc.rect(M, y, CW, rowHeight, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...PDF_BLACK);
+      doc.text("Document", M + 8, y + 14);
+      doc.text("Status", M + labelW + 8, y + 14);
+      y += rowHeight;
+    };
+
+    drawTableHeader();
+    data.documents.forEach((item, index) => {
+      if (y + rowHeight > H - 50) {
+        doc.addPage();
+        y = M;
+        heading("Documents (continued)");
+        drawTableHeader();
+      }
+
+      if (index % 2 === 1) {
+        doc.setFillColor(250, 251, 253);
+        doc.rect(M, y, CW, rowHeight, "F");
+      }
+      doc.setDrawColor(...PDF_LINE);
+      doc.setLineWidth(0.5);
+      doc.rect(M, y, CW, rowHeight, "S");
+      doc.line(M + labelW, y, M + labelW, y + rowHeight);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(...PDF_BLACK);
+      doc.text(doc.splitTextToSize(pdfSafe(item.label), labelW - 16)[0], M + 8, y + 14);
+      const statusX = M + labelW + 8;
+      const iconX = statusX + 4;
+      const iconY = y + rowHeight / 2;
+      doc.setLineWidth(1.5);
+      if (item.verified || item.uploaded) {
+        doc.setDrawColor(...PDF_GREEN);
+        doc.line(iconX, iconY, iconX + 3, iconY + 3);
+        doc.line(iconX + 3, iconY + 3, iconX + 8, iconY - 4);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(...PDF_GREEN);
+        doc.text(item.verified ? "Verified" : "Uploaded", statusX + 14, y + 14);
+      } else {
+        doc.setDrawColor(190, 45, 45);
+        doc.line(iconX, iconY - 4, iconX + 7, iconY + 3);
+        doc.line(iconX + 7, iconY - 4, iconX, iconY + 3);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(190, 45, 45);
+        doc.text("Not uploaded", statusX + 14, y + 14);
+      }
+      y += rowHeight;
+    });
+    y += 10;
+  };
+
+  (data.sections || []).forEach((section) => {
+    if (section.fees && !documentsDrawn) drawDocuments();
+    drawSection(section);
+  });
+  if (!documentsDrawn) drawDocuments();
+
+  const pages = doc.getNumberOfPages();
+  for (let i = 1; i <= pages; i += 1) {
+    doc.setPage(i);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...PDF_MUTED);
+    doc.text(`Generated on ${new Date().toLocaleDateString("en-IN")}`, M, H - 24);
+    doc.text(`Page ${i} of ${pages}`, W - M, H - 24, { align: "right" });
+  }
+
+  doc.save(data.fileName || "melava-registration.pdf");
+};
+
 function FieldError({ message }) {
   return message ? <small className="err">{message}</small> : null;
 }
@@ -579,15 +967,20 @@ export default function MelavaRegistration() {
   const [stage, setStage] = useState("form");
   const [lookup, setLookup] = useState({ status: "", message: "", tone: "" });
   const [paidRegistration, setPaidRegistration] = useState(false);
+  const [currentRegistration, setCurrentRegistration] = useState(null);
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const [paymentFile, setPaymentFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [pdfData, setPdfData] = useState(null);
+  const [pdfError, setPdfError] = useState("");
+  const [pdfDownloading, setPdfDownloading] = useState(false);
   const [adminEditLoading, setAdminEditLoading] = useState(Boolean(adminEditId));
   const [adminEditLoadError, setAdminEditLoadError] = useState("");
   const objectUrls = useRef([]);
+  const lookupSequence = useRef(0);
   const postalAutofill = useRef({});
   const [postalLookup, setPostalLookup] = useState({
     current: { loading: false, message: "" },
@@ -825,10 +1218,14 @@ export default function MelavaRegistration() {
     if (name === "username") nextValue = cleanMobile(value);
     else if (CONTACT_FIELDS.includes(name)) nextValue = digitsOnly(value);
 
-    const nextForm = { ...form, [name]: nextValue };
-    if (name === "username" && nextValue !== form.username) {
+    const mobileChanged = name === "username" && nextValue !== form.username;
+    const nextForm = mobileChanged
+      ? { ...INITIAL_FORM, username: nextValue }
+      : { ...form, [name]: nextValue };
+    if (mobileChanged) {
       nextForm.is_existing_website_user = "";
       setPaidRegistration(false);
+      setCurrentRegistration(null);
     }
     if (name === "monthlyIncome") {
       const monthlyAmount = Number(String(nextValue).replace(/,/g, ""));
@@ -838,6 +1235,7 @@ export default function MelavaRegistration() {
     }
     if (name === "caste") nextForm.subCaste = "";
     if (name === "preferred_caste") nextForm.preferred_sub_caste = "";
+    if (name === "parentsIntercasteMarriage" && !isYes(nextValue)) nextForm.parentsDifferentCaste = "";
     if (name === "noOfBrothers" && Number(nextValue) === 0) nextForm.brothersMarried = "0";
     if (name === "noOfSisters" && Number(nextValue) === 0) nextForm.sistersMarried = "0";
     setForm(nextForm);
@@ -868,6 +1266,9 @@ export default function MelavaRegistration() {
 
     const validationErrors = getFormValidationErrors(nextForm);
     setErrors((previous) => {
+      if (mobileChanged) {
+        return validationErrors.username ? { username: validationErrors.username } : {};
+      }
       const next = { ...previous };
       affectedFields.forEach((field) => {
         delete next[field];
@@ -879,8 +1280,23 @@ export default function MelavaRegistration() {
     });
 
     if (name === "username") {
+      if (mobileChanged) {
+        lookupSequence.current += 1;
+        objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
+        objectUrls.current = [];
+        setFiles({ ...EMPTY_FILES });
+        setDocuments({ ...EMPTY_DOCUMENTS });
+        setEducations([{ ...EMPTY_EDUCATION }]);
+        setEmployments([{ ...EMPTY_EMPLOYMENT }]);
+        setMeta({ ...EMPTY_META });
+        setRemovedFiles([]);
+        postalAutofill.current = {};
+        setPostalLookup({
+          current: { loading: false, message: "" },
+          permanent: { loading: false, message: "" },
+        });
+      }
       setLookup({ status: "", message: "", tone: "" });
-      setMeta({ ...EMPTY_META });
     }
   };
 
@@ -890,7 +1306,22 @@ export default function MelavaRegistration() {
 
       RESTORE_KEYS.forEach((key) => {
         if (source[key] !== null && source[key] !== undefined && typeof source[key] !== "object") {
-          next[key] = String(source[key]);
+          const value = source[key];
+          const field = STEPS.flatMap((item) => item.f).find((item) => item.n === key);
+          if (field?.t === "select") {
+            const options = optionList(field, next).map(([optionValue]) => String(optionValue));
+            const textValue = String(value).toLowerCase();
+            const isBooleanValue = ["1", "0", "true", "false"].includes(textValue);
+            if (isBooleanValue && options.includes("Yes") && options.includes("No")) {
+              next[key] = ["1", "true"].includes(textValue) ? "Yes" : "No";
+            } else if (isBooleanValue && options.includes("1") && options.includes("0")) {
+              next[key] = ["1", "true"].includes(textValue) ? "1" : "0";
+            } else {
+              next[key] = String(value);
+            }
+          } else {
+            next[key] = String(value);
+          }
         }
       });
 
@@ -1039,6 +1470,7 @@ export default function MelavaRegistration() {
       return;
     }
 
+    const sequence = ++lookupSequence.current;
     setLookup({ status: "loading", message: "Checking your registration...", tone: "" });
     setErrors((previous) => removeFieldError(previous, "username"));
 
@@ -1047,9 +1479,11 @@ export default function MelavaRegistration() {
         `/melava-registrations/check?mobile=${mobile}&melava_campaign_id=${selectedCampaignId}`,
         { auth: false },
       );
+      if (sequence !== lookupSequence.current) return;
 
       if (data.type === "website_user") {
         setPaidRegistration(Boolean(data.registration?.payment_verified));
+        setCurrentRegistration(data.registration || null);
         hydrate(
           {
             ...(data.profile || {}),
@@ -1060,39 +1494,28 @@ export default function MelavaRegistration() {
         );
         setEducations(data.profile?.educations?.length ? data.profile.educations : [{ ...EMPTY_EDUCATION }]);
         setEmployments(data.profile?.employments?.length ? data.profile.employments : [{ ...EMPTY_EMPLOYMENT }]);
-        setFiles((previous) => ({
-          ...previous,
-          profilePhoto: data.profile_photo_url
-            ? { preview: data.profile_photo_url, existing: true }
-            : previous.profilePhoto,
-          full_body_photo: data.full_body_photo_url
-            ? { preview: data.full_body_photo_url, existing: true }
-            : previous.full_body_photo,
-          half_body_photo: data.half_body_photo_url
-            ? { preview: data.half_body_photo_url, existing: true }
-            : previous.half_body_photo,
-          selfie_photo: data.selfie_photo_url
-            ? { preview: data.selfie_photo_url, existing: true }
-            : previous.selfie_photo,
-        }));
-        setDocuments((previous) => ({
-          ...previous,
-          identificationProof: data.identification_proof_url ? { preview: data.identification_proof_url, existing: true } : previous.identificationProof,
-          pan_card: data.pan_card_url ? { preview: data.pan_card_url, existing: true } : previous.pan_card,
-          passport: data.passport_url ? { preview: data.passport_url, existing: true } : previous.passport,
-          birthDateProof: data.birth_date_proof_url ? { preview: data.birth_date_proof_url, existing: true } : previous.birthDateProof,
-          address_proof: data.address_proof_url ? { preview: data.address_proof_url, existing: true } : previous.address_proof,
-          educationProof: data.education_proof_url ? { preview: data.education_proof_url, existing: true } : previous.educationProof,
-          profession_proof: data.profession_proof_url ? { preview: data.profession_proof_url, existing: true } : previous.profession_proof,
-          income_proof: data.income_proof_url ? { preview: data.income_proof_url, existing: true } : previous.income_proof,
-          caste_certificate: data.caste_certificate_url ? { preview: data.caste_certificate_url, existing: true } : previous.caste_certificate,
-          medical_fitness_certificate: data.medical_fitness_certificate_url ? { preview: data.medical_fitness_certificate_url, existing: true } : previous.medical_fitness_certificate,
-        }));
-        setFiles((previous) => ({
-          ...previous,
+        setFiles({
+          ...EMPTY_FILES,
+          profilePhoto: data.profile_photo_url ? { preview: data.profile_photo_url, existing: true } : null,
+          full_body_photo: data.full_body_photo_url ? { preview: data.full_body_photo_url, existing: true } : null,
+          half_body_photo: data.half_body_photo_url ? { preview: data.half_body_photo_url, existing: true } : null,
+          selfie_photo: data.selfie_photo_url ? { preview: data.selfie_photo_url, existing: true } : null,
           candidatePhotos: (data.candidate_photos_urls || []).map((preview) => ({ preview, existing: true })),
           additionalPhotos: (data.additional_photos_urls || []).map((preview) => ({ preview, existing: true })),
-        }));
+        });
+        setDocuments({
+          ...EMPTY_DOCUMENTS,
+          identificationProof: data.identification_proof_url ? { preview: data.identification_proof_url, existing: true } : null,
+          pan_card: data.pan_card_url ? { preview: data.pan_card_url, existing: true } : null,
+          passport: data.passport_url ? { preview: data.passport_url, existing: true } : null,
+          birthDateProof: data.birth_date_proof_url ? { preview: data.birth_date_proof_url, existing: true } : null,
+          address_proof: data.address_proof_url ? { preview: data.address_proof_url, existing: true } : null,
+          educationProof: data.education_proof_url ? { preview: data.education_proof_url, existing: true } : null,
+          profession_proof: data.profession_proof_url ? { preview: data.profession_proof_url, existing: true } : null,
+          income_proof: data.income_proof_url ? { preview: data.income_proof_url, existing: true } : null,
+          caste_certificate: data.caste_certificate_url ? { preview: data.caste_certificate_url, existing: true } : null,
+          medical_fitness_certificate: data.medical_fitness_certificate_url ? { preview: data.medical_fitness_certificate_url, existing: true } : null,
+        });
         setMeta({
           is_existing_website_user: "1",
           user_id: String(data.user.id || ""),
@@ -1111,6 +1534,16 @@ export default function MelavaRegistration() {
       } else if (data.type === "pending_registration" && data.pending_registration) {
         const pending = data.pending_registration;
         const pendingData = pending.registration_data || {};
+        setPaidRegistration(false);
+        setCurrentRegistration(pending.payment_screenshot_url ? {
+          payment_verified: false,
+          payment_screenshot_url: pending.payment_screenshot_url,
+          is_booklet_req: Boolean(pendingData.booklet_required),
+          registration_fee: settings.fee,
+          booklet_fee: settings.booklet_fee,
+          currency: settings.currency,
+          total_amount: Number(settings.fee) + (pendingData.booklet_required ? Number(settings.booklet_fee) : 0),
+        } : null);
         hydrate(pendingData, {
           existing: Boolean(pending.is_existing_website_user),
           username: pendingData.username || mobile,
@@ -1121,62 +1554,30 @@ export default function MelavaRegistration() {
         if (Array.isArray(pendingData.employments)) {
           setEmployments(pendingData.employments.length ? pendingData.employments : [{ ...EMPTY_EMPLOYMENT }]);
         }
-        if (pending.profile_photo_url) {
-          setFiles((previous) => ({
-            ...previous,
-            profilePhoto: { preview: pending.profile_photo_url, existing: true },
-          }));
-        }
-        setFiles((previous) => ({
-          ...previous,
-          full_body_photo: pending.full_body_photo_url
-            ? { preview: pending.full_body_photo_url, existing: true }
-            : previous.full_body_photo,
-          half_body_photo: pending.half_body_photo_url
-            ? { preview: pending.half_body_photo_url, existing: true }
-            : previous.half_body_photo,
-          selfie_photo: pending.selfie_photo_url
-            ? { preview: pending.selfie_photo_url, existing: true }
-            : previous.selfie_photo,
-        }));
-        setDocuments((previous) => ({
-          ...previous,
-          pan_card: pending.pan_card_url
-            ? { preview: pending.pan_card_url, existing: true }
-            : previous.pan_card,
-          passport: pending.passport_url
-            ? { preview: pending.passport_url, existing: true }
-            : previous.passport,
-          identificationProof: pending.identification_proof_url
-            ? { preview: pending.identification_proof_url, existing: true }
-            : previous.identificationProof,
-          birthDateProof: pending.birth_date_proof_url
-            ? { preview: pending.birth_date_proof_url, existing: true }
-            : previous.birthDateProof,
-          address_proof: pending.address_proof_url
-            ? { preview: pending.address_proof_url, existing: true }
-            : previous.address_proof,
-          educationProof: pending.education_proof_url
-            ? { preview: pending.education_proof_url, existing: true }
-            : previous.educationProof,
-          profession_proof: pending.profession_proof_url
-            ? { preview: pending.profession_proof_url, existing: true }
-            : previous.profession_proof,
-          income_proof: pending.income_proof_url
-            ? { preview: pending.income_proof_url, existing: true }
-            : previous.income_proof,
-          caste_certificate: pending.caste_certificate_url
-            ? { preview: pending.caste_certificate_url, existing: true }
-            : previous.caste_certificate,
-          medical_fitness_certificate: pending.medical_fitness_certificate_url
-            ? { preview: pending.medical_fitness_certificate_url, existing: true }
-            : previous.medical_fitness_certificate,
-        }));
-        setFiles((previous) => ({
-          ...previous,
+        setFiles({
+          ...EMPTY_FILES,
+          profilePhoto: pending.profile_photo_url ? { preview: pending.profile_photo_url, existing: true } : null,
+          full_body_photo: pending.full_body_photo_url ? { preview: pending.full_body_photo_url, existing: true } : null,
+          half_body_photo: pending.half_body_photo_url ? { preview: pending.half_body_photo_url, existing: true } : null,
+          selfie_photo: pending.selfie_photo_url ? { preview: pending.selfie_photo_url, existing: true } : null,
           candidatePhotos: (pending.candidate_photos_urls || []).map((preview) => ({ preview, existing: true })),
           additionalPhotos: (pending.additional_photos_urls || []).map((preview) => ({ preview, existing: true })),
-        }));
+        });
+        setDocuments({
+          ...EMPTY_DOCUMENTS,
+          pan_card: pending.pan_card_url ? { preview: pending.pan_card_url, existing: true } : null,
+          passport: pending.passport_url ? { preview: pending.passport_url, existing: true } : null,
+          identificationProof: pending.identification_proof_url ? { preview: pending.identification_proof_url, existing: true } : null,
+          birthDateProof: pending.birth_date_proof_url ? { preview: pending.birth_date_proof_url, existing: true } : null,
+          address_proof: pending.address_proof_url ? { preview: pending.address_proof_url, existing: true } : null,
+          educationProof: pending.education_proof_url ? { preview: pending.education_proof_url, existing: true } : null,
+          profession_proof: pending.profession_proof_url ? { preview: pending.profession_proof_url, existing: true } : null,
+          income_proof: pending.income_proof_url ? { preview: pending.income_proof_url, existing: true } : null,
+          caste_certificate: pending.caste_certificate_url ? { preview: pending.caste_certificate_url, existing: true } : null,
+          medical_fitness_certificate: pending.medical_fitness_certificate_url
+            ? { preview: pending.medical_fitness_certificate_url, existing: true }
+            : null,
+        });
         setMeta({
           is_existing_website_user: pending.is_existing_website_user ? "1" : "0",
           user_id: String(pending.user_id || ""),
@@ -1189,6 +1590,8 @@ export default function MelavaRegistration() {
           tone: "ok",
         });
       } else {
+        setPaidRegistration(false);
+        setCurrentRegistration(null);
         setForm((previous) => ({ ...previous, username: mobile, is_existing_website_user: "0" }));
         setMeta({ ...EMPTY_META });
         setLookup({
@@ -1198,6 +1601,7 @@ export default function MelavaRegistration() {
         });
       }
     } catch (error) {
+      if (sequence !== lookupSequence.current) return;
       setLookup({
         status: "error",
         message: error.message || "Unable to fetch registration details.",
@@ -1269,6 +1673,150 @@ export default function MelavaRegistration() {
 
   const fileItems = (field) => {
     return itemsForField(field, files, documents);
+  };
+
+  const fieldHasValue = (field) => {
+    if (field.t === "file") return fileItems(field).length > 0;
+    if (field.t === "height") return Boolean(heightText);
+    if (field.t === "tob") return Boolean(timeText);
+    return String(form[field.n] ?? "").trim() !== "";
+  };
+
+  const pdfValue = (field) => {
+    if (field.t === "height") return heightText;
+    if (field.t === "tob") return `${form.birth_hour}:${form.birth_minute} ${form.birthTime_ampm}`;
+    if (field.t === "select") return optionLabel(field, form, form[field.n]);
+    if (field.t === "file") return fileItems(field).map((item) => item.file?.name || "Uploaded").join(", ");
+    return String(form[field.n] ?? "").trim();
+  };
+
+  // Collects everything the user filled in (required + optional) for the PDF.
+  const buildPdfData = async (responseData = {}) => {
+    const MONEY_FIELDS = ["monthlyIncome", "annualIncome", "familyAnnualIncome"];
+    const GREEN_FIELDS = [...MONEY_FIELDS, "expected_income"];
+
+    const isImageItem = (item) => {
+      if (!item) return false;
+      const type = String(item.file?.type || "").toLowerCase();
+      if (type) return type.startsWith("image/");
+      const name = String(item.file?.name || item.preview || "").split("?")[0].toLowerCase();
+      return /\.(?:jpe?g|png|webp|gif|bmp)$/.test(name);
+    };
+    const itemSource = (item) => item.file || item.preview;
+    const formatIncome = (value) => {
+      const text = String(value ?? "").trim();
+      const amount = Number(text.replace(/,/g, ""));
+      return text && Number.isFinite(amount) ? money(amount, settings.currency || "INR") : text;
+    };
+
+    const paymentVerified = Object.prototype.hasOwnProperty.call(responseData, "payment_verified")
+      ? responseData.payment_verified === true || responseData.payment_verified === 1
+      : Boolean(currentRegistration?.payment_verified);
+    const paymentScreenshot = paymentFile || (
+      responseData.payment_screenshot_url || currentRegistration?.payment_screenshot_url
+        ? {
+          preview: responseData.payment_screenshot_url || currentRegistration.payment_screenshot_url,
+          file: null,
+        }
+        : null
+    );
+    const paymentStatus = paymentVerified
+      ? "Verified"
+      : paymentScreenshot
+      ? "Submitted, pending admin verification"
+      : "Pending payment";
+
+    const sections = STEPS.map((item) => ({
+      title: item.h,
+      rows: item.f
+        .filter((field) => !field.sec && field.t !== "file" && fieldVisible(field, form) && fieldHasValue(field))
+        .map((field) => {
+          const raw = pdfValue(field);
+          return [
+            field.l.replace(/\s*\(.*?\)/g, ""),
+            MONEY_FIELDS.includes(field.n) ? formatIncome(raw) : raw,
+            { money: GREEN_FIELDS.includes(field.n), wide: field.t === "textarea" },
+          ];
+        }),
+    })).filter((section) => section.rows.length);
+
+    sections.push({
+      title: "Fees & Payment",
+      fees: true,
+      rows: [
+        ["Registration fee", money(settings.fee, settings.currency), { money: true }],
+        ["Booklet", form.booklet_required ? money(settings.booklet_fee, settings.currency) : "Not requested", { money: Boolean(form.booklet_required), green: paymentVerified }],
+        ["Total payable", money(total, settings.currency), { money: true }],
+        ["Payment status", paymentStatus, { green: paymentVerified }],
+      ],
+    });
+
+    // Every photo slot is listed so each picture sits in its own position.
+    const photoSources = [
+      ["Profile Photo", files.profilePhoto],
+      ["Full Body Photo", files.full_body_photo],
+      ["Half Body Photo", files.half_body_photo],
+      ["Selfie Photo", files.selfie_photo],
+      ...files.candidatePhotos.map((item, index) => [`Your Photo ${index + 1}`, item]),
+      ...files.additionalPhotos.map((item, index) => [`Additional Photo ${index + 1}`, item]),
+    ];
+    const photos = await Promise.all(photoSources.map(async ([label, item]) => {
+      if (!item) return { label, kind: "none", data: null };
+      return { label, kind: "image", data: isImageItem(item) ? await imageToDataUrl(itemSource(item)) : null };
+    }));
+
+    // Uploaded document images are embedded too; PDFs are shown as a labelled tile.
+    const documentFields = STEPS.flatMap((item) => item.f).filter(
+      (field) => field.t === "file" && Object.prototype.hasOwnProperty.call(EMPTY_DOCUMENTS, field.n),
+    );
+    const documentTiles = documentFields.map((field) => {
+      const label = field.l.replace(/\s*\(.*?\)/g, "");
+      const item = documents[field.n];
+      return { label, uploaded: Boolean(item) };
+    });
+    documentTiles.push({
+      label: "Payment Screenshot",
+      uploaded: Boolean(paymentScreenshot),
+      verified: paymentVerified,
+    });
+
+    const age = calculateAge(form.birthDate);
+    const chips = [
+      form.groomOrBride === "bride" ? "Bride" : form.groomOrBride === "groom" ? "Groom" : "",
+      form.religion,
+      form.caste && form.caste !== "N/A" ? form.caste : "",
+      form.subCaste,
+      age !== null ? `Age ${age}` : "",
+      form.professionalCity,
+    ].filter(Boolean).join(" | ");
+
+    return {
+      title: "Melava Registration",
+      name: form.fullName,
+      subtitle: settings.batch_label,
+      registrationNumber: responseData.registration_number || "",
+      chips,
+      paymentStatus,
+      paymentVerified,
+      photos,
+      documents: documentTiles,
+      sections,
+      fileName: `melava-registration-${cleanMobile(form.username) || "form"}.pdf`,
+    };
+  };
+
+  const downloadCurrentPdf = async (data = null) => {
+    setPdfError("");
+    setPdfDownloading(true);
+    try {
+      const pdf = data || await buildPdfData(currentRegistration || {});
+      setPdfData(pdf);
+      await downloadRegistrationPdf(pdf);
+    } catch (error) {
+      setPdfError(error?.message || "Unable to download the PDF. Please try again.");
+    } finally {
+      setPdfDownloading(false);
+    }
   };
 
   const validateStep = (index) => {
@@ -1500,7 +2048,7 @@ export default function MelavaRegistration() {
       setPaymentError("Please select an active Melava event.");
       return;
     }
-    if (!paymentFile?.file) {
+    if (!paymentFile?.file && !currentRegistration?.payment_screenshot_url) {
       setPaymentError("Please upload the payment screenshot.");
       return;
     }
@@ -1515,7 +2063,19 @@ export default function MelavaRegistration() {
         auth: false,
       });
       const response = await request("/melava-registrations", { method: "POST", body: buildPayload(), auth: false });
+
+      // Automatically download the PDF of everything the user filled in.
+      // A PDF problem must never block a successful registration.
+      try {
+        const pdf = await buildPdfData(response?.data);
+        setPdfData(pdf);
+        await downloadRegistrationPdf(pdf);
+      } catch (error) {
+        setPdfError(error?.message || "Registration submitted, but the PDF could not be downloaded.");
+      }
+
       setResult(response);
+      setCurrentRegistration(response?.data || null);
       setStage("success");
       scrollTop();
     } catch (error) {
@@ -1558,6 +2118,7 @@ export default function MelavaRegistration() {
   };
 
   const resetAll = () => {
+    lookupSequence.current += 1;
     objectUrls.current.forEach((url) => URL.revokeObjectURL(url));
     objectUrls.current = [];
     setForm({ ...INITIAL_FORM });
@@ -1568,12 +2129,17 @@ export default function MelavaRegistration() {
     setStep(0);
     setStage("form");
     setLookup({ status: "", message: "", tone: "" });
+    setCurrentRegistration(null);
+    setPaidRegistration(false);
     setErrors({});
     setSubmitError("");
     setPaymentError("");
     setPaymentFile(null);
     setSubmitting(false);
     setResult(null);
+    setPdfData(null);
+    setPdfError("");
+    setPdfDownloading(false);
     postalAutofill.current = {};
     setPostalLookup({
       current: { loading: false, message: "" },
@@ -1582,6 +2148,7 @@ export default function MelavaRegistration() {
   };
 
   const selectCampaign = (id) => {
+    lookupSequence.current += 1;
     const campaign = campaigns.find((item) => String(item.id) === String(id));
     if (!campaign) {
       setSelectedCampaignId("");
@@ -1591,6 +2158,9 @@ export default function MelavaRegistration() {
     setSelectedCampaignId(String(campaign.id));
     setSettings(settingsFromCampaign(campaign));
     setPaidRegistration(false);
+    setCurrentRegistration(null);
+    setMeta((previous) => ({ ...previous, pending_registration_token: "" }));
+    setPaymentFile(null);
     if (!campaign.booklet_available) update("booklet_required", false);
     setLookup({ status: "", message: "", tone: "" });
   };
@@ -1825,35 +2395,21 @@ export default function MelavaRegistration() {
     );
   }
 
-  if ((campaignsLoading || campaignsError || !campaigns.length) && !adminEditId) {
+  if (campaignsLoading && !adminEditId) {
     return (
-      <main className="melava-page melava-closed-page">
-        <div className="wrap">
-          <section className="card melava-closed-card">
-            <header className="melava-closed-brand">
-              <a href="/" aria-label="Aaryans Manomilan home">
-                <img src="/website/Mano_Milan_Final_Website.png" alt="Aaryans Manomilan" />
-              </a>
-              <p className="melava-closed-tagline">येथे मनं मिळतात... नाती जुळतात</p>
-              <div className="melava-closed-heading">
-                <span>Aaryans Manomilan <i /> Melava</span>
-                <h1>Melava Registration</h1>
-                <p>Join our community and take the next step toward meaningful connections.</p>
-              </div>
-            </header>
+      <main className="melava-page">
+        <div className="wrap"><section className="card">Loading open Melava events...</section></div>
+      </main>
+    );
+  }
 
-            <div className="melava-availability" role={campaignsError ? "alert" : "status"}>
-              {campaignsLoading ? <p>Loading active Melava events…</p> : null}
-            {campaignsError ? (
-              <>
-                <h2>Unable to load Melava events</h2>
-                <p className="sub">{campaignsError}</p>
-                <button type="button" className="btn g" onClick={() => window.location.reload()}>Try again</button>
-              </>
-            ) : (
-              !campaignsLoading ? <h2>No active Melava</h2> : null
-            )}
-            </div>
+  if ((campaignsError || !campaigns.length) && !adminEditId) {
+    return (
+      <main className="melava-page">
+        <div className="wrap">
+          <section className="card">
+            <h2>{campaignsError ? "Unable to load events" : "No open Melava events"}</h2>
+            <p className="sub">{campaignsError || "Registration will appear here when the admin opens a Melava event."}</p>
           </section>
         </div>
       </main>
@@ -1899,6 +2455,11 @@ export default function MelavaRegistration() {
               <div><span>Booklet</span><strong>{data.is_booklet_req ? "Requested" : "Not requested"}</strong></div>
               <div><span>Payment</span><strong>{data.payment_verified ? "Verified" : "Pending verification"}</strong></div>
             </div>
+            {pdfData ? (
+              <div className={`al ${pdfError ? "er" : "ok"}`}>
+                {pdfError || `${ICONS.pdf} Your filled form is ready to download as a PDF.`}
+              </div>
+            ) : null}
             {result.credentials ? (
               <div className="al ok">
                 <b>Your login is ready.</b>
@@ -1912,6 +2473,11 @@ export default function MelavaRegistration() {
             )}
             <div className="actions">
               <a href="/login" className="btn p">Go to login</a>
+              {pdfData ? (
+                <button type="button" className="btn g" disabled={pdfDownloading} onClick={() => downloadCurrentPdf(pdfData)}>
+                  {pdfDownloading ? "Preparing PDF..." : `${ICONS.pdf} Download PDF`}
+                </button>
+              ) : null}
               <button type="button" className="btn g" onClick={resetAll}>Register another candidate</button>
             </div>
           </section>
@@ -1951,8 +2517,17 @@ export default function MelavaRegistration() {
               </div>
             </div>
 
+            {currentRegistration?.payment_screenshot_url ? (
+              <div className="payment-record">
+                <strong>Previously submitted payment</strong>
+                <span>Status: {currentRegistration.payment_verified ? "Verified" : "Pending verification"}</span>
+                <a href={currentRegistration.payment_screenshot_url} target="_blank" rel="noreferrer">View payment screenshot</a>
+                {!paymentFile?.file ? <span>You can continue with this saved payment, or upload a replacement screenshot.</span> : null}
+              </div>
+            ) : null}
+
             <div className="f screenshot-field">
-              <label htmlFor="payment-screenshot">Payment screenshot <b>*</b></label>
+              <label htmlFor="payment-screenshot">{currentRegistration?.payment_screenshot_url ? "Replace payment screenshot (optional)" : "Payment screenshot"} {!currentRegistration?.payment_screenshot_url ? <b>*</b> : null}</label>
               <input id="payment-screenshot" type="file" accept="image/*,.pdf" onChange={handlePaymentFile} />
               <small>Upload a clear screenshot or PDF of your payment, max 5 MB.</small>
               {paymentFile ? (
@@ -1979,6 +2554,9 @@ export default function MelavaRegistration() {
       </main>
     );
   }
+
+  // The form stays hidden until the mobile number has been searched.
+  const locked = step === 0 && !adminEditId && !["existing", "new"].includes(lookup.status);
 
   return (
     <main className="melava-page">
@@ -2078,12 +2656,38 @@ export default function MelavaRegistration() {
             </div>
             {errors.username ? <div className="al er">{errors.username}</div> : null}
             {lookup.message ? <div className={`al ${lookup.tone || "ok"}`}>{lookup.message}</div> : null}
+            {currentRegistration ? (
+              <div className="payment-record">
+                <strong>Payment details for this Melava</strong>
+                <span>
+                  Status: {currentRegistration.payment_verified ? "Verified" : currentRegistration.payment_screenshot_url ? "Submitted, pending verification" : "Not submitted"}
+                </span>
+                <span>
+                  Amount: {money(
+                    currentRegistration.total_amount
+                      ?? Number(currentRegistration.registration_fee ?? settings.fee)
+                        + (currentRegistration.is_booklet_req ? Number(currentRegistration.booklet_fee ?? settings.booklet_fee) : 0),
+                    currentRegistration.currency || settings.currency,
+                  )}
+                </span>
+                <span>Booklet: {currentRegistration.is_booklet_req ? "Requested" : "Not requested"}</span>
+                {currentRegistration.payment_screenshot_url ? (
+                  <a href={currentRegistration.payment_screenshot_url} target="_blank" rel="noreferrer">View payment screenshot</a>
+                ) : null}
+              </div>
+            ) : null}
+            {locked && !lookup.message ? (
+              <div className="search-hint">
+                {ICONS.warning} Please search your mobile number first. The registration form will open after the search.
+              </div>
+            ) : null}
           </section>
         ) : null}
 
         {submitError ? <div className="al er">{submitError}</div> : null}
 
         <form
+          hidden={locked}
           onSubmit={(event) => {
             event.preventDefault();
             if (step === PREVIEW_STEP) {
@@ -2148,7 +2752,7 @@ export default function MelavaRegistration() {
               <div className="note">
                 {adminEditId
                   ? "Saving edits will keep the existing payment verification and payment record unchanged."
-                  : `${ICONS.warning} After you submit, you will not be able to change this form. Check names, mobile numbers and photos once more.`}
+                  : `${ICONS.warning} After you submit, you will not be able to change this form. Check names, mobile numbers and photos once more. A PDF copy of your form will download automatically after you submit.`}
               </div>
 
               {STEPS.map((item, index) => {
@@ -2221,6 +2825,23 @@ export default function MelavaRegistration() {
                 <span>Total payable</span>
                 <strong>{money(total, settings.currency)}</strong>
               </div>
+              {currentRegistration ? (
+                <div className={`payment-record ${currentRegistration.payment_verified ? "verified" : ""}`}>
+                  <strong>Existing payment for this Melava</strong>
+                  <span>Status: {currentRegistration.payment_verified ? "Verified" : currentRegistration.payment_screenshot_url ? "Submitted, pending verification" : "Not submitted"}</span>
+                  {currentRegistration.payment_screenshot_url ? (
+                    <a href={currentRegistration.payment_screenshot_url} target="_blank" rel="noreferrer">View payment screenshot</a>
+                  ) : null}
+                </div>
+              ) : null}
+              {!adminEditId ? (
+                <div className="pdf-download">
+                  <button type="button" className="btn g" onClick={() => downloadCurrentPdf()} disabled={pdfDownloading}>
+                    {pdfDownloading ? "Preparing PDF..." : `${ICONS.pdf} Download form as PDF`}
+                  </button>
+                  {pdfError ? <div className="al er">{pdfError}</div> : null}
+                </div>
+              ) : null}
             </section>
           )}
 
@@ -2236,9 +2857,9 @@ export default function MelavaRegistration() {
               <button
                 type="submit"
                 className="btn p"
-                disabled={submitting || (!adminEditId && (!form.privacyPolicyCheck || !form.termsCheck))}
+                disabled={submitting || (!adminEditId && paidRegistration)}
               >
-                {submitting ? "Saving..." : adminEditId ? "Save Changes" : "Continue to Payment"} {ICONS.next}
+                {submitting ? "Saving..." : adminEditId ? "Save Changes" : paidRegistration ? "Payment Already Verified" : "Continue to Payment"} {paidRegistration ? "" : ICONS.next}
               </button>
             )}
           </div>

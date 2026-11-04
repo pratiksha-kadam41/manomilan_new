@@ -19,6 +19,7 @@ import {
 import AdminLayout from "../components/AdminLayout";
 import AdminStats from "../components/AdminStats";
 import AdminPagination from "../components/AdminPagination";
+import RecordEditorName from "../components/RecordEditorName";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { request } from "../../api";
 import { useAdminPermission } from "../../permission-context";
@@ -547,6 +548,7 @@ export default function MelavaCampaigns() {
                         <div>
                           <strong>{campaign.melava_code} - {campaign.title}</strong>
                           {campaign.description ? <small>{campaign.description}</small> : null}
+                          <RecordEditorName record={campaign} />
                         </div>
                       </div>
                     </td>

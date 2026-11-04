@@ -35,10 +35,13 @@ export default function Committee() {
 
   return (
     <>
-      <section id="committee" className="committee">
+      <section id="committee" className="committee mmh-committee">
         <div className="site-container">
-          <h2 className="sec-title">Our Committee Members</h2>
-          <p className="sec-sub">The dedicated hearts steering Aaryans Manomilan</p>
+          <h2 className="sec-title mmh-sec-title">Our Committee Members</h2>
+          <div className="mmh-divider" aria-hidden="true">
+            <i className="bi bi-people-fill" />
+          </div>
+          <p className="sec-sub mmh-sec-sub">The dedicated hearts steering Aaryans Manomilan</p>
 
           {/* list is rendered twice so the loop has no gap */}
           <div className="marquee-container">

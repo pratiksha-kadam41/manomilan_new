@@ -7,6 +7,7 @@ Star, CheckCircle, ImagePlus, X, Loader2,
 MapPin, Filter
 } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
+import RecordEditorName from "../components/RecordEditorName";
 import SuccessStoryForm from "./SuccessStoryForm.jsx";
 import { request, apiMediaUrl } from "../../api.js";
 import { useAdminPermission } from "../../permission-context.jsx";
@@ -534,6 +535,7 @@ return (
                       {story.city || "Location not added"}{story.state ? `, ${story.state}` : ""}
                     </div>
                     <h3>{story.story_title}</h3>
+                    <RecordEditorName record={story} />
                     {story.short_description && (
                       <p className="ss-story-description">{story.short_description}</p>
                     )}

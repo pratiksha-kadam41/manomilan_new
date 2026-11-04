@@ -4,7 +4,6 @@ import { PRIVACY_INTRO, PRIVACY_SECTIONS } from "../data/privacy.js";
 const ADDRESS =
   "Aachal Prime' Building, Above Hotel 'Shree Kateel', Next to Navale Bridge, New Pune-Satara Bypass Highway, Near Amrit Bloomfield, Narhe, Pune - 411041.";
 
-// modal = opens that popup instead of a page
 const QUICK_LINKS = [
   { label: "About Manomilan", href: "/aboutus" },
   { label: "How It Works", href: "/how-it-works" },
@@ -35,7 +34,6 @@ const SHWETAMBAR = [
   "Soni (सोनी)", "Lunka (लुंका)",
 ];
 
-// Bootstrap modal shell
 function Popup({ title, onClose, wide, children }) {
   return (
     <div className={`modal fade show d-block pop${wide ? " wide" : ""}`}
@@ -90,7 +88,7 @@ function PrivacyBody() {
 
 function LinkList({ title, links, onModal }) {
   return (
-    <>
+    <div className="mmf-col">
       <h4 className="foot-h">{title}</h4>
       <ul className="foot-list">
         {links.map((l) => (
@@ -101,67 +99,73 @@ function LinkList({ title, links, onModal }) {
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }
 
 export default function Footer() {
-  const [modal, setModal] = useState(null); // "digambar" | "shwetambar" | "privacy" | null
+  const [modal, setModal] = useState(null);
 
   useEffect(() => { document.body.style.overflow = modal ? "hidden" : "auto"; }, [modal]);
   const close = () => setModal(null);
 
   return (
     <>
-      <footer id="contact" className="site-footer">
+      <footer id="contact" className="site-footer site-footer--premium">
+        <div className="mmf-blessing" aria-hidden="true">॥ जय जिनेन्द्र ॥</div>
+
         <div className="site-container">
-          <div className="footer-top">
-            <div className="row footer-grid">
-
-              <div className="col-12 col-md-3">
-                <div style={{ marginBottom: "1rem" }}>
-                  <img
-                    src="/website/Mano_Milan_Final_Website.png"
-                    alt="Aaryan's Manomilan Logo"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = "https://placehold.co/150x48/DC143C/FFFFFF?text=Aaryan's+Manomilan";
-                    }}
-                  />
-                </div>
-                <div className="foot-social">
-                  <a href="https://www.facebook.com/share/19sczFNKnf/"><i className="bi bi-facebook" /></a>
-                  <a href="https://www.instagram.com/aaryansmanomilan?igsh=Y3p0cGd4b3I3a284"><i className="bi bi-instagram" /></a>
-                  <a href="https://www.linkedin.com/in/aaryans-manomilan-257615388/"><i className="bi bi-linkedin" /></a>
-                </div>
+          <div className="mmf-grid">
+            <div className="mmf-brand">
+              <a className="mmf-logo" href="/" aria-label="Aaryans Manomilan home">
+                <img
+                  src="/website/Mano_Milan_Final_Website.png"
+                  alt="Aaryan's Manomilan Logo"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = "https://placehold.co/150x48/DC143C/FFFFFF?text=Aaryan's+Manomilan";
+                  }}
+                />
+              </a>
+              <p className="mmf-name">Aaryans Manomilan</p>
+              <p className="mmf-tagline">Jain Matrimonial</p>
+              <p className="mmf-blurb">
+                Connecting Jain families with trusted, value-led matchmaking across communities.
+              </p>
+              <div className="foot-social">
+                <a href="https://www.facebook.com/share/19sczFNKnf/" aria-label="Facebook"><i className="bi bi-facebook" aria-hidden="true" /></a>
+                <a href="https://www.instagram.com/aaryansmanomilan?igsh=Y3p0cGd4b3I3a284" aria-label="Instagram"><i className="bi bi-instagram" aria-hidden="true" /></a>
+                <a href="https://www.linkedin.com/in/aaryans-manomilan-257615388/" aria-label="LinkedIn"><i className="bi bi-linkedin" aria-hidden="true" /></a>
               </div>
+            </div>
 
-              <div className="col-12 col-md-3"><LinkList title="Quick Links" links={QUICK_LINKS} onModal={setModal} /></div>
-              <div className="col-12 col-md-3"><LinkList title="Community" links={COMMUNITY_LINKS} onModal={setModal} /></div>
+            <LinkList title="Quick Links" links={QUICK_LINKS} onModal={setModal} />
+            <LinkList title="Community" links={COMMUNITY_LINKS} onModal={setModal} />
 
-              <div className="col-12 col-md-3">
-                <h4 className="foot-h">Contact us</h4>
-                <ul className="foot-list">
-                  <li className="d-flex align-items-start">
-                    <i className="bi bi-geo-alt-fill foot-icon" style={{ marginTop: ".25rem" }} />
-                    <span>{ADDRESS}</span>
-                  </li>
-                  <li className="d-flex align-items-center">
-                    <i className="bi bi-envelope-fill foot-icon" />
-                    <a href="mailto:aaryansmanomilan@gmail.com">aaryansmanomilan@gmail.com</a>
-                  </li>
-                  <li className="d-flex align-items-center">
-                    <i className="bi bi-telephone-fill foot-icon" />
-                    <a href="tel:+917030932526">7030932526</a>
-                  </li>
-                </ul>
-              </div>
-
+            <div className="mmf-col">
+              <h4 className="foot-h">Contact us</h4>
+              <ul className="foot-list">
+                <li className="mmf-contact-item">
+                  <i className="bi bi-geo-alt-fill foot-icon" aria-hidden="true" />
+                  <span>{ADDRESS}</span>
+                </li>
+                <li className="mmf-contact-item">
+                  <i className="bi bi-envelope-fill foot-icon" aria-hidden="true" />
+                  <a href="mailto:aaryansmanomilan@gmail.com">aaryansmanomilan@gmail.com</a>
+                </li>
+                <li className="mmf-contact-item">
+                  <i className="bi bi-telephone-fill foot-icon" aria-hidden="true" />
+                  <a href="tel:+917030932526">7030932526</a>
+                </li>
+              </ul>
             </div>
           </div>
 
-          <div className="foot-copy">
-            &copy; 2025 Aaryans Manomilan. All Rights Reserved. Designed with <i className="bi bi-heart-fill" style={{ margin: "0 .25rem" }} /> Aayojanai.com
+          <div className="mmf-bottom">
+            <p>&copy; 2025 Aaryans Manomilan. All Rights Reserved.</p>
+            <p className="mmf-credit">
+              Designed with <i className="bi bi-heart-fill" aria-hidden="true" /> Aayojanai.com
+            </p>
           </div>
         </div>
       </footer>

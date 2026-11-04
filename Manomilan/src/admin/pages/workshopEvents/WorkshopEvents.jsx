@@ -17,6 +17,7 @@ import {
 import AdminLayout from "../../components/AdminLayout";
 import AdminStats from "../../components/AdminStats";
 import AdminPagination from "../../components/AdminPagination";
+import RecordEditorName from "../../components/RecordEditorName";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { request } from "../../../api";
 import { useAdminPermission } from "../../../permission-context";
@@ -371,7 +372,11 @@ export default function WorkshopEvents() {
                     <td data-label="Workshop">
                       <div className="mc-event-cell">
                         <img src={workshop.qr_image_url} alt="" />
-                        <div><strong>{workshop.title}</strong><small>{workshop.workshop_code}</small></div>
+                        <div>
+                          <strong>{workshop.title}</strong>
+                          <small>{workshop.workshop_code}</small>
+                          <RecordEditorName record={workshop} />
+                        </div>
                       </div>
                     </td>
                     <td data-label="Schedule">

@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/AdminLayout";
+import RecordEditorName from "../../components/RecordEditorName";
 import { useAdminPermission } from "../../../permission-context";
 import { getTicket } from "./api/ticketApi";
 import "./tickets.css";
@@ -161,6 +162,7 @@ export default function TicketDetail({ params = {} }) {
                   <span><CalendarDays size={15} /> Created {formatDate(ticket.created_at)}</span>
                   <span className="tk-detail-ticket-reference">Ticket No: <strong>{ticket.ticket_no}</strong></span>
                 </div>
+                <RecordEditorName record={ticket} />
 
                 {ticket.description ? (
                   <section className="tk-detail-description">

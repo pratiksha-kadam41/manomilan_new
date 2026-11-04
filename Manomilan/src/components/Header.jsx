@@ -1,9 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 
 const PLACEHOLDER = "https://placehold.co/200x180/DC143C/FFFFFF?text=Aaryan's+Manomilan";
 
-// If a logo file is missing, show a placeholder once.
-const logoFallback = (e) => { e.currentTarget.onerror = null; e.currentTarget.src = PLACEHOLDER; };
+const logoFallback = (e) => {
+  e.currentTarget.onerror = null;
+  e.currentTarget.src = PLACEHOLDER;
+};
 
 const DESKTOP_LINKS = [
   ["Home", "/"],
@@ -27,72 +30,170 @@ const REGISTER_URL = "/melava-registration";
 const LOGIN_URL = "/login";
 
 export default function Header() {
-  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+  const [menu, setMenu] = useState({ path: pathname, open: false });
+  const [regMenu, setRegMenu] = useState({ path: pathname, open: false });
+  const closeRef = useRef(null);
 
-  useEffect(() => { document.body.style.overflow = open ? "hidden" : "auto"; }, [open]);
-  const toggle = () => setOpen((o) => !o);
+  const open = menu.open && menu.path === pathname;
+  const regOpen = regMenu.open && regMenu.path === pathname;
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setMenu({ path: pathname, open: false });
+    };
+
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", handleKeyDown);
+    const focusTimer = window.setTimeout(() => closeRef.current?.focus(), 60);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      window.clearTimeout(focusTimer);
+    };
+  }, [open, pathname]);
+
+  const toggle = () => setMenu({ path: pathname, open: !open });
+  const closeMenu = () => setMenu({ path: pathname, open: false });
+  const toggleReg = () => setRegMenu({ path: pathname, open: !regOpen });
+  const closeReg = () => setRegMenu({ path: pathname, open: false });
+
+  const isActive = (href) => (href === "/" ? pathname === "/" || pathname === "" : pathname === href);
 
   return (
     <>
-      <header className="site-header sticky-top">
-        <div className="site-container header-inner d-flex justify-content-between align-items-center position-relative">
-          <img src="/website/output-onlinepngtools.png" onError={logoFallback} alt="Jain emblem"
-               className="d-none d-lg-block" style={{ width: 100, height: 125 }} />
+      <header className="site-header site-header--premium">
+        <div className="mmh-bar">
+          <div className="site-container mmh-bar-inner">
+            <img
+              src="/website/output-onlinepngtools.png"
+              onError={logoFallback}
+              alt=""
+              aria-hidden="true"
+              className="mmh-side-mark"
+            />
 
-          <div className="header-logo-box">
-            <a href="/">
-              <img src="/website/Mano_Milan_Final_Website.png" onError={logoFallback} alt="Aaryan's Manomilan Logo"
-                   className="mx-auto mx-lg-0" style={{ width: 140, height: 155 }} />
-            </a>
+            <p className="mmh-header-blessing">
+              <span aria-hidden="true">॥</span>
+              <span className="mmh-header-blessing-text">जय जिनेन्द्र</span>
+              <span aria-hidden="true">॥</span>
+            </p>
+
+            <img
+              src="/website/output-onlinepngtools.png"
+              onError={logoFallback}
+              alt=""
+              aria-hidden="true"
+              className="mmh-side-mark"
+            />
           </div>
+        </div>
 
-          <div className="d-none d-lg-block" style={{ width: "1rem" }} />
+        <div className="mmh-menu">
+          <div className="site-container mmh-menu-inner">
+            <nav className="mmh-links" aria-label="Primary">
+              {DESKTOP_LINKS.map(([label, href]) => {
+                const active = isActive(href);
+                return (
+                  <a
+                    key={label}
+                    href={href}
+                    className={`mmh-nav-link${active ? " is-active" : ""}`}
+                    aria-current={active ? "page" : undefined}
+                    onClick={closeReg}
+                  >
+                    {label}
+                  </a>
+                );
+              })}
 
-          {/* title + desktop menu */}
-          <div className="d-none d-lg-flex flex-column align-items-center justify-content-center flex-grow-1 pt-1">
-            <h3 className="header-title">
-              <b><span style={{ color: "white" }}>||</span> जय जिनेन्द्र <span style={{ color: "white" }}>||</span></b>
-            </h3>
-            <nav className="main-nav">
-              {DESKTOP_LINKS.map(([label, href]) => (
-                <a key={label} href={href}>{label}</a>
-              ))}
-              <span className="reg-dropdown">
-                <span className="reg-trigger">Registration Plan</span>
-                <div className="reg-menu">
-                  <a href={REGISTER_URL}>Melava Registration</a>
-                  <a href={LOGIN_URL}>Login</a>
+              <span className="mmh-reg-dropdown">
+                <button
+                  type="button"
+                  className="mmh-reg-trigger"
+                  aria-haspopup="true"
+                  aria-expanded={regOpen}
+                  onClick={toggleReg}
+                >
+                  Registration Plan
+                  <i className="bi bi-chevron-down" aria-hidden="true" />
+                </button>
+                <div className={`mmh-reg-menu${regOpen ? " show" : ""}`}>
+                  <a href={REGISTER_URL} onClick={closeReg}>Melava Registration</a>
+                  <a href={LOGIN_URL} onClick={closeReg}>Login</a>
                 </div>
               </span>
             </nav>
+
+            <a className="mmh-menu-login" href={LOGIN_URL}>
+              <i className="bi bi-person-circle" aria-hidden="true" />
+              Login
+            </a>
           </div>
+        </div>
 
-          <img src="/website/output-onlinepngtools.png" onError={logoFallback} alt="Jain emblem"
-               className="d-none d-lg-block" style={{ width: 100, height: 125 }} />
+        <div className="mmh-mobile-bar">
+          <button
+            type="button"
+            className="mmh-hamburger"
+            onClick={toggle}
+            aria-label={open ? "Close menu" : "Open menu"}
+            aria-expanded={open}
+            aria-controls="mmh-mobile-menu"
+          >
+            <span />
+            <span />
+            <span />
+          </button>
 
-          {/* phone: Login / Register / hamburger */}
-          <div className="d-flex d-lg-none align-items-center gap-2">
-            <a href={LOGIN_URL} className="btn btn-sm bg-white fw-semibold shadow-sm"
-               style={{ color: "#DC143C", border: "1px solid #DC143C", fontSize: ".75rem" }}>Login</a>
-            <a href={REGISTER_URL} className="btn btn-sm fw-semibold shadow-sm text-white text-nowrap"
-               style={{ background: "#DC143C", fontSize: ".75rem" }}>Register</a>
-            <div className="hamburger" onClick={toggle}><span /><span /><span /></div>
+          <p className="mmh-mobile-blessing">॥ जय जिनेन्द्र ॥</p>
+
+          <div className="mmh-mobile-actions">
+            <a href={LOGIN_URL} className="mmh-mobile-login">Login</a>
+            <a href={REGISTER_URL} className="mmh-mobile-register">Register</a>
           </div>
         </div>
       </header>
 
-      {/* phone full-screen menu */}
-      <div className={`mobile-menu${open ? " active" : ""}`}>
-        <div onClick={toggle} style={{ position: "absolute", top: 20, right: 20, color: "#fff", fontSize: 40, cursor: "pointer", zIndex: 9999 }}>&times;</div>
+      <div
+        id="mmh-mobile-menu"
+        className={`mmh-mobile-menu${open ? " active" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site menu"
+      >
+        <button
+          ref={closeRef}
+          type="button"
+          className="mmh-mobile-close"
+          onClick={closeMenu}
+          aria-label="Close menu"
+        >
+          <i className="bi bi-x-lg" aria-hidden="true" />
+        </button>
+
         <nav>
-          <h3 style={{ fontSize: 32, color: "#fff", textShadow: "1px 1px 2px rgba(0,0,0,.3)", marginBottom: 30 }}>
-            <b>|| जय जिनेन्द्र ||</b>
-          </h3>
-          {MOBILE_LINKS.map(([label, href]) => (
-            <a key={label} href={href} onClick={toggle}>{label}</a>
-          ))}
-          <a href={REGISTER_URL} onClick={toggle}>Melava Registration</a>
-          <a href={LOGIN_URL} onClick={toggle}>Login</a>
+          <p className="mmh-mobile-title">॥ जय जिनेन्द्र ॥</p>
+          {MOBILE_LINKS.map(([label, href]) => {
+            const active = isActive(href);
+            return (
+              <a
+                key={label}
+                href={href}
+                onClick={closeMenu}
+                className={active ? "is-active" : undefined}
+                aria-current={active ? "page" : undefined}
+              >
+                {label}
+              </a>
+            );
+          })}
+          <a href={REGISTER_URL} onClick={closeMenu}>Melava Registration</a>
+          <a href={LOGIN_URL} onClick={closeMenu}>Login</a>
         </nav>
       </div>
     </>

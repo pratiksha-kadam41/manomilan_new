@@ -121,7 +121,11 @@ export default function SystemManagement() {
   const permissionGrants = useMemo(
     () => permissionModules.map((module) => ({
       module_id: module.id,
-      actions: module.permissions.filter((permission) => permission.granted).map((permission) => permission.key),
+      actions: [...new Set(
+        module.permissions
+          .filter((permission) => permission.granted)
+          .map((permission) => permission.key),
+      )],
     })),
     [permissionModules],
   );

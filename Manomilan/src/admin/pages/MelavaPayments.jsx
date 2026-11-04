@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import {
   BadgeCheck,
   BookOpen,
   Clock,
-  Download,
   FileText,
   Heart,
   RefreshCw,
@@ -18,6 +16,7 @@ import AdminLayout from "../components/AdminLayout";
 import AdminStats from "../components/AdminStats";
 import AdminPagination from "../components/AdminPagination";
 import AgeRangeFilter from "../components/AgeRangeFilter";
+import RecordEditorName from "../components/RecordEditorName";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { useAdminPermission } from "../../permission-context";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
@@ -54,6 +53,14 @@ const formatDate = (value) => {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 };
 
+const initials = (value) => String(value || "")
+  .trim()
+  .split(/\s+/)
+  .filter(Boolean)
+  .slice(0, 2)
+  .map((part) => part[0].toUpperCase())
+  .join("") || "?";
+
 export default function MelavaPayments() {
   const canApprovePayments = useAdminPermission("approve", "/admin/melava");
   const [registrations, setRegistrations] = useState([]);
@@ -73,6 +80,7 @@ export default function MelavaPayments() {
   const [paymentVerified, setPaymentVerified] = useState(false);
   const [paymentFile, setPaymentFile] = useState(null);
   const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentDecision, setPaymentDecision] = useState(null);
   const [paymentError, setPaymentError] = useState("");
   const [toast, setToast] = useState(null);
   const [bioData, setBioData] = useState(null);
@@ -144,8 +152,11 @@ export default function MelavaPayments() {
 
   const openPayment = (row) => {
     setSelectedRegistration(row);
-    setPaymentType("registration");
-    setPaymentVerified(Boolean(row.payment_verified));
+    const defaultType = row.is_booklet_req ? "both" : "registration";
+    setPaymentType(defaultType);
+    setPaymentVerified(defaultType === "both"
+      ? Boolean(row.payment_verified && row.booklet_payment_verified)
+      : Boolean(row.payment_verified));
     setPaymentFile(null);
     setPaymentError("");
   };
@@ -157,14 +168,15 @@ export default function MelavaPayments() {
     setPaymentFile(null);
   };
 
-  const savePayment = async (event) => {
-    event.preventDefault();
+  const savePayment = async (event, verified = paymentVerified) => {
+    event?.preventDefault();
     if (!selectedRegistration) return;
     setPaymentError("");
     setPaymentSaving(true);
+    setPaymentDecision(verified ? "verify" : "reject");
     const body = new FormData();
     body.append("payment_type", paymentType);
-    body.append("payment_verified", paymentVerified ? "1" : "0");
+    body.append("payment_verified", verified ? "1" : "0");
     if (paymentFile) body.append("payment_screenshot", paymentFile);
 
     try {
@@ -173,12 +185,18 @@ export default function MelavaPayments() {
         body,
       });
       setSelectedRegistration(null);
-      setToast({ type: "success", message: response?.message || "Payment updated successfully." });
+      setToast({
+        type: "success",
+        message: response?.message || (verified
+          ? "Payment proof verified successfully."
+          : "Payment proof rejected and marked unverified."),
+      });
       await load();
     } catch (err) {
       setPaymentError(err.message || "Unable to update this payment.");
     } finally {
       setPaymentSaving(false);
+      setPaymentDecision(null);
     }
   };
 
@@ -241,6 +259,18 @@ export default function MelavaPayments() {
     { key: "groom", label: "Grooms", value: stats.groom, icon: User, tone: "blue", hint: "Male candidates" },
     { key: "bride", label: "Brides", value: stats.bride, icon: Heart, tone: "magenta", hint: "Female candidates" },
   ], [stats]);
+  const currentPaymentProofs = selectedRegistration
+    ? (paymentType === "booklet"
+      ? [{ label: "Booklet", url: selectedRegistration.booklet_payment_screenshot_url }]
+      : paymentType === "both"
+        ? [
+          { label: "Melava registration", url: selectedRegistration.payment_screenshot_url },
+          { label: "Booklet", url: selectedRegistration.booklet_payment_screenshot_url },
+        ]
+        : [{ label: "Melava registration", url: selectedRegistration.payment_screenshot_url }])
+      .filter((proof) => proof.url)
+      .filter((proof, index, proofs) => proofs.findIndex((item) => item.url === proof.url) === index)
+    : [];
 
   return (
     <AdminLayout currentPath="/admin/melava">
@@ -370,6 +400,7 @@ export default function MelavaPayments() {
                           <span className="ui-person-text">
                             <strong>{name}</strong>
                             <small>{row.username || "Mobile unavailable"}</small>
+                            <RecordEditorName record={row} />
                           </span>
                         </div>
                       </td>
@@ -400,7 +431,6 @@ export default function MelavaPayments() {
                               <Wallet size={14} /> Payment
                             </button>
                           ) : null}
-                          <Link className="ui-btn small secondary" to={`/melava-registration?admin_edit=${row.id}`}>Edit</Link>
                         </div>
                       </td>
                     </tr>
@@ -430,73 +460,82 @@ export default function MelavaPayments() {
           if (event.target === event.currentTarget) closePayment();
         }}>
           <section className="mp-dialog mp-payment-dialog" role="dialog" aria-modal="true" aria-labelledby="mp-payment-title">
-            <button type="button" className="mp-dialog-close" onClick={closePayment} disabled={paymentSaving} aria-label="Close payment dialog">
-              <X size={18} />
-            </button>
-            <h2 id="mp-payment-title">Add or update payment</h2>
-            <p>{selectedRegistration.fullName || selectedRegistration.profile?.fullName || "Candidate"} · {selectedRegistration.username || ""}</p>
-            <form onSubmit={savePayment}>
-              <label className="mp-field">
-                <span>Payment category</span>
-                <select
-                  value={paymentType}
-                  onChange={(event) => {
-                    const nextType = event.target.value;
-                    setPaymentType(nextType);
-                    setPaymentVerified(Boolean(nextType === "booklet"
-                      ? selectedRegistration.booklet_payment_verified
-                      : selectedRegistration.payment_verified));
-                    setPaymentFile(null);
-                  }}
-                  disabled={paymentSaving}
-                >
-                  <option value="registration">Melava registration</option>
-                  {selectedRegistration.is_booklet_req ? <option value="booklet">Booklet</option> : null}
-                </select>
-              </label>
-              <div className="mp-current-payment">
-                <span>Current payment proof</span>
-                {(paymentType === "booklet"
-                  ? selectedRegistration.booklet_payment_screenshot_url
-                  : selectedRegistration.payment_screenshot_url) ? (
-                  <a
-                    href={paymentType === "booklet"
-                      ? selectedRegistration.booklet_payment_screenshot_url
-                      : selectedRegistration.payment_screenshot_url}
-                    target="_blank"
-                    rel="noreferrer"
+            <header className="mp-payment-header">
+              <span className="mp-payment-header-icon"><Wallet size={22} /></span>
+              <div>
+                <h2 id="mp-payment-title">Add or update payment</h2>
+                <p>{selectedRegistration.fullName || selectedRegistration.profile?.fullName || "Candidate"} · {selectedRegistration.username || "Mobile unavailable"}</p>
+                <RecordEditorName record={selectedRegistration} />
+              </div>
+              <button type="button" className="mp-dialog-close" onClick={closePayment} disabled={paymentSaving} aria-label="Close payment dialog">
+                <X size={18} />
+              </button>
+            </header>
+            <form onSubmit={(event) => savePayment(event)}>
+              <div className="mp-payment-form-body">
+                <label className="mp-field">
+                  <span>Payment category</span>
+                  <select
+                    value={paymentType}
+                    onChange={(event) => {
+                      const nextType = event.target.value;
+                      setPaymentType(nextType);
+                      setPaymentVerified(nextType === "booklet"
+                        ? Boolean(selectedRegistration.booklet_payment_verified)
+                        : nextType === "both"
+                          ? Boolean(selectedRegistration.payment_verified && selectedRegistration.booklet_payment_verified)
+                          : Boolean(selectedRegistration.payment_verified));
+                      setPaymentFile(null);
+                    }}
+                    disabled={paymentSaving}
                   >
-                    <Download size={15} /> View current proof
-                  </a>
-                ) : <span className="mp-muted">No proof uploaded</span>}
+                    <option value="registration">Melava registration</option>
+                    {selectedRegistration.is_booklet_req ? (
+                      <option value="both">Melava registration + booklet</option>
+                    ) : null}
+                  </select>
+                </label>
+                <div className="mp-current-payment">
+                  <span>Current payment proof</span>
+                  {currentPaymentProofs.length ? currentPaymentProofs.map((proof) => (
+                    <div className="mp-proof-item" key={proof.url}>
+                      {currentPaymentProofs.length > 1 ? <small>{proof.label}</small> : null}
+                      {/\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(proof.url) ? (
+                        <img
+                          className="mp-proof-preview"
+                          src={apiMediaUrl(proof.url)}
+                          alt={`${proof.label} payment proof`}
+                        />
+                      ) : (
+                        <iframe
+                          className="mp-proof-preview mp-proof-pdf"
+                          src={apiMediaUrl(proof.url)}
+                          title={`${proof.label} payment proof PDF`}
+                        />
+                      )}
+                    </div>
+                  )) : <span className="mp-muted">No proof uploaded</span>}
+                </div>
+                <label className="mp-field">
+                  <span>Upload or replace proof <small>(JPG, PNG, WebP or PDF; max 5 MB)</small></span>
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.pdf"
+                    onChange={(event) => setPaymentFile(event.target.files?.[0] || null)}
+                    disabled={paymentSaving}
+                  />
+                </label>
+                {paymentError ? <div className="mp-alert er" role="alert">{paymentError}</div> : null}
               </div>
-              <label className="mp-field">
-                <span>Upload or replace proof <small>(JPG, PNG, WebP or PDF; max 5 MB)</small></span>
-                <input
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.pdf"
-                  onChange={(event) => setPaymentFile(event.target.files?.[0] || null)}
-                  disabled={paymentSaving}
-                />
-              </label>
-              <label className="mp-field">
-                <span>Payment status</span>
-                <select
-                  value={paymentVerified ? "verified" : "pending"}
-                  onChange={(event) => setPaymentVerified(event.target.value === "verified")}
-                  disabled={paymentSaving}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="verified">Verified</option>
-                </select>
-              </label>
-              {paymentError ? <div className="mp-alert er" role="alert">{paymentError}</div> : null}
-              <div className="mp-dialog-actions">
+              <footer className="mp-payment-footer">
                 <button type="button" className="mp-btn mp-btn-ghost" onClick={closePayment} disabled={paymentSaving}>Cancel</button>
-                <button type="submit" className="mp-btn mp-btn-green" disabled={paymentSaving}>
-                  {paymentSaving ? "Saving..." : "Save payment"}
+                <button type="button" className="mp-btn mp-btn-red" onClick={() => savePayment(null, false)} disabled={paymentSaving}>
+                  {paymentDecision === "reject" ? "Saving..." : "Reject"}
                 </button>
-              </div>
+                <button type="button" className="mp-btn mp-btn-green" onClick={() => savePayment(null, true)} disabled={paymentSaving}>
+                  {paymentDecision === "verify" ? "Saving..." : "Verify"}
+                </button>
+              </footer>
             </form>
           </section>
         </div>

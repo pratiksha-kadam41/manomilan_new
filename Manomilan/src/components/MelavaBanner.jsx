@@ -23,7 +23,7 @@ export default function MelavaBanner() {
   if (error || campaigns.length === 0) return null;
 
   return (
-    <section className="melava-banner">
+    <section className="melava-banner mmh-melava-banner">
       <div className="site-container">
         <div className="melava-banner-inner">
           {campaigns.map((campaign) => (

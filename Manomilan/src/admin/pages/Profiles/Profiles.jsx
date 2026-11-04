@@ -9,6 +9,7 @@ import AdminLayout from "../../components/AdminLayout";
 import AdminStats from "../../components/AdminStats";
 import AdminPagination from "../../components/AdminPagination";
 import AgeRangeFilter from "../../components/AgeRangeFilter";
+import RecordEditorName from "../../components/RecordEditorName";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
 import { request, download, apiMediaUrl } from "../../../api";
 import { touchSession } from "../../../auth";
@@ -405,7 +406,10 @@ export default function Profiles() {
                         <td className="ui-muted">{rowNumber}</td>
                         <td><span className="ui-chip">{p.registration_number}</span></td>
                         <td><Avatar p={p} onOpen={setPhoto} /></td>
-                        <td><Link className="ui-link" to={LINKS.view(p.id, rowNumber)}>{p.full_name}</Link></td>
+                        <td>
+                          <Link className="ui-link" to={LINKS.view(p.id, rowNumber)}>{p.full_name}</Link>
+                          <RecordEditorName record={p} />
+                        </td>
                         <td><span className="ui-muted" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><Phone size={13} /> {p.mobile}</span></td>
                         <td className="ui-muted">{p.registration_date}</td>
                         <td>

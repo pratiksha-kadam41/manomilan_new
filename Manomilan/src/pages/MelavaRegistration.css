@@ -218,6 +218,7 @@
   padding: 4px 2px 8px;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .melava-page .stepper::-webkit-scrollbar {
@@ -239,6 +240,7 @@
   cursor: pointer;
   transition: 0.2s;
   scroll-snap-align: start;
+  white-space: nowrap;
 }
 
 .melava-page .st i {
@@ -416,7 +418,7 @@
 }
 
 .melava-page .f label b {
-  color: var(--acc);
+  color: #d92d20;
   margin-left: 3px;
 }
 
@@ -484,6 +486,7 @@
   color: var(--mut);
   font-size: 0.78rem;
   margin-top: 5px;
+  line-height: 1.35;
 }
 
 .melava-page .f small.err {
@@ -564,6 +567,21 @@
   .melava-page .choice-btn {
     width: 100%;
   }
+}
+
+.melava-page .search-hint {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff7e6;
+  border: 1px solid #f3d9a4;
+  color: #7a4b00;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.melava-page form[hidden] {
+  display: none;
 }
 
 /* ---------- Buttons & alerts ---------- */
@@ -1138,7 +1156,7 @@
   .melava-page .f select,
   .melava-page .f textarea,
   .melava-page .srow input {
-    font-size: 16px;
+    font-size: 16px; /* prevents iOS zoom on focus */
   }
 
   .melava-page .srow {
@@ -1158,8 +1176,20 @@
     font-size: 0.95rem;
   }
 
+  /* Back / Next stay within thumb reach while scrolling */
+  .melava-page form > .nav {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    margin: 0 -12px;
+    padding: 10px 12px;
+    background: #fff;
+    box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+  }
+
   .melava-page .nav .btn {
     flex: 1;
+    min-height: 50px;
   }
 
   .melava-page .fee-preview,
@@ -1408,4 +1438,29 @@
     min-height: 78px;
     padding: 16px 12px;
   }
+}
+
+.melava-page .payment-record {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #d5e5e5;
+  border-radius: 10px;
+  background: #f4f9f9;
+}
+
+.melava-page .payment-record.verified {
+  border-color: #b7ddc5;
+  background: #f0faf3;
+}
+
+.melava-page .payment-record a {
+  width: fit-content;
+  color: var(--b);
+  font-weight: 700;
+}
+
+.melava-page .pdf-download {
+  margin-top: 14px;
 }

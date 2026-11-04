@@ -260,7 +260,7 @@ const EventCard = memo(function EventCard({ event, index }) {
    4. PAGE
    ===================================================================== */
 
-export default function Dashboard() {
+export default function Dashboard({ currentPath = "/admin" }) {
   const permissions = useContext(AdminPermissionContext);
   const roleName = getSession()?.user?.role?.name || "Admin";
   const [stats, setStats] = useState(null);
@@ -356,7 +356,7 @@ export default function Dashboard() {
     return filtered.slice(0, RECENT_LIMIT);
   }, [stats, recentType]);
 
-  const events = useMemo(() => (stats?.upcoming_melava_events || []).slice(0, 3), [stats]);
+  const events = useMemo(() => stats?.upcoming_melava_events || [], [stats]);
   const header = useMemo(() => ({ greeting: getGreeting(), today: TODAY_FMT.format(new Date()), roleName }), [roleName]);
   const visibleQuickActions = QUICK_ACTIONS.filter(({ permission, to }) =>
     hasModulePermission(permissions, permission, to)
@@ -381,7 +381,7 @@ export default function Dashboard() {
   const busy = loading && customReady;
 
   return (
-    <AdminLayout currentPath="/admin">
+    <AdminLayout currentPath={currentPath}>
       <div className="dx-page">
         {/* ---------- Hero ---------- */}
         <header className="dx-hero">
@@ -515,7 +515,10 @@ export default function Dashboard() {
         <div className="dx-main">
           {canViewProfiles ? <section className="dx-panel" aria-label="Recent registrations" style={{ "--i": 3 }}>
             <div className="dx-panel-head">
-              <h2>Recent registrations</h2>
+              <div>
+                <h2>Recent registrations</h2>
+                <small className="dx-panel-caption">Last 10 days · Up to 5 registrations</small>
+              </div>
               <div className="dx-chips" role="group" aria-label="Filter by type">
                 {TYPE_FILTERS.map((f) => (
                   <button key={f.id} type="button" className={recentType === f.id ? "active" : ""}

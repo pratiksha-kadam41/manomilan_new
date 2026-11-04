@@ -1,7 +1,7 @@
 
  :root {
   --adm-bg: #f4f7fb;
-  --adm-primary: #1f7a6f;
+  --adm-primary: #5a125ff3;
   --adm-text: #1d2939;
   --adm-muted: #667085;
   --adm-border: #e5eaf0;
@@ -645,6 +645,7 @@ body {
 /* ================= 7. Recent people & events ================= */
 .dx-main { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
 
+.dx-panel-caption { display: block; margin-top: 3px; color: var(--dx-muted); font-size: 11px; }
 .dx-chips { display: flex; gap: 6px; }
 .dx-chips button {
   padding: 5px 12px;

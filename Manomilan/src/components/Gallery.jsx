@@ -10,10 +10,13 @@ const PHOTOS = [
 
 export default function Gallery() {
   return (
-    <section id="gallery" className="gallery">
+    <section id="gallery" className="gallery mmh-gallery">
       <div className="site-container">
-        <h2 className="sec-title">Captured Moments</h2>
-        <p className="sec-sub">Real Stories. Real Connections. Real Happiness.</p>
+        <h2 className="sec-title mmh-sec-title">Captured Moments</h2>
+        <div className="mmh-divider" aria-hidden="true">
+          <i className="bi bi-camera-fill" />
+        </div>
+        <p className="sec-sub mmh-sec-sub">Real Stories. Real Connections. Real Happiness.</p>
 
         <div className="row g-3 g-md-4">
           {PHOTOS.map((p) => (

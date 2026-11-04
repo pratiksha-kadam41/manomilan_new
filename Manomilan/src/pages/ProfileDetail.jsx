@@ -43,7 +43,7 @@ const assetUrl = (path) => {
   }
 
   const cleanPath = path.replace(/^\/+/, "");
-  if (/^(?:profile_photos|full_body_photos|half_body_photos|selfie_photos|profile_photos\/candidate)\//i.test(cleanPath)) {
+  if (/^(?:profile_photos|full_body_photos|half_body_photos|selfie_photos|payment_screenshots|profile_photos\/candidate)\//i.test(cleanPath)) {
     return `${ASSET_BASE}/storage/${cleanPath}`;
   }
 
@@ -162,7 +162,7 @@ async function getProfile(id, signal) {
   return normalizeProfile(profile);
 }
 
-async function updateProfile(profileId, values, documentFiles) {
+async function updateProfile(profileId, values, documentFiles, photoFiles, removedPhotoUrls) {
   if (!isValidId(profileId)) throw new ApiError("Invalid profile.", 400);
 
   const form = new FormData();
@@ -173,6 +173,8 @@ async function updateProfile(profileId, values, documentFiles) {
   Object.entries(documentFiles || {}).forEach(([key, file]) => {
     if (file) form.append(`documents[${key}]`, file);
   });
+  (photoFiles || []).forEach(({ file }) => form.append("candidate_photos[]", file));
+  (removedPhotoUrls || []).forEach((url) => form.append("remove_photos[]", url));
 
   const json = await request(`/api/profiles/${profileId}/update`, { method: "POST", body: form });
   const profile = json?.data ?? json;
@@ -372,6 +374,7 @@ const TABS = [
     ],
   },
   { id: "documents", label: "Documents", icon: <FaFileAlt /> },
+  { id: "melava", label: "Melava Registrations", icon: <FaCalendarAlt /> },
   {
     id: "other", label: "Other Information", icon: <FaInfoCircle />,
     sections: [
@@ -634,6 +637,179 @@ function Cards({ sections, profile }) {
   );
 }
 
+function PaymentHistory({ payments, onVerify, verifyingId }) {
+  const entries = Array.isArray(payments) ? payments : [];
+
+  return (
+    <section className="pd-card pd-melava-history">
+      <h3 className="pd-card-head"><span className="pd-card-ic"><FaIdCard /></span>Payment History</h3>
+      <div className="pd-card-body">
+        {entries.length ? (
+          <div className="pd-melava-list">
+            {entries.map((payment) => {
+              const verified = payment.payment_verified;
+              const proof = payment.payment_screenshot_url || payment.payment_screenshot;
+              const proofUrl = assetUrl(proof);
+              const busy = verifyingId === `payment-${payment.id}`;
+
+              return (
+                <div className="pd-melava-row" key={payment.id}>
+                  <div className="pd-melava-name">
+                    <strong>{payment.category ? fmt(payment.category) : "Payment"}</strong>
+                    {payment.amount !== null && payment.amount !== undefined && payment.amount !== ""
+                      ? <span>Amount: {fmt(payment.amount, "money")}</span>
+                      : null}
+                    {payment.payment_date ? <span>Payment date: {fmt(payment.payment_date, "date")}</span> : null}
+                    {payment.payment_method ? <span>Method: {fmt(payment.payment_method)}</span> : null}
+                    {payment.reference_number ? <span>Reference: {fmt(payment.reference_number)}</span> : null}
+                    {payment.remarks ? <span>{fmt(payment.remarks)}</span> : null}
+                  </div>
+                  <span className={`pd-melava-payment${verified ? " is-verified" : ""}`}>
+                    {verified ? <FaCheckCircle /> : <FaClock />}
+                    {verified ? "Payment verified" : "Payment pending"}
+                  </span>
+                  {proof ? (
+                    <a className="pd-melava-proof" href={proofUrl} aria-label="View payment proof">
+                      {/\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(proof) ? (
+                        <><img src={proofUrl} alt="Payment proof" loading="lazy" /><span>View proof</span></>
+                      ) : (
+                        <><FaFileAlt /> View proof</>
+                      )}
+                    </a>
+                  ) : <span className="pd-melava-no-proof">No payment proof uploaded</span>}
+                  {!verified && proof ? (
+                    <button
+                      type="button"
+                      className="pd-payment-verify"
+                      onClick={() => onVerify(payment, `payment-${payment.id}`)}
+                      disabled={busy}
+                    >
+                      <FaCheck /> {busy ? "Verifying..." : "Verify Payment"}
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="pd-melava-empty">No payment records found for this candidate.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function MelavaRegistrationHistory({ registrations, payments, onVerify, verifyingId }) {
+  return (
+    <>
+    <section className="pd-card pd-melava-history">
+      <h3 className="pd-card-head"><span className="pd-card-ic"><FaCalendarAlt /></span>Melava Registrations</h3>
+      <div className="pd-card-body">
+        {Array.isArray(registrations) && registrations.length > 0 ? (
+          <div className="pd-melava-list">
+            {registrations.map((registration) => (
+              <div className="pd-melava-row" key={registration.id || registration.melava_campaign_id}>
+                <div className="pd-melava-name">
+                  <strong>{fmt(registration.melava_number) || "Melava"}</strong>
+                  {registration.campaign_title ? <span>{registration.campaign_title}</span> : null}
+                  {registration.registered_at ? (
+                    <span>{fmt(registration.registered_at, "date")}</span>
+                  ) : null}
+                </div>
+                <span className={`pd-melava-payment${registration.payment_verified ? " is-verified" : ""}`}>
+                  {registration.payment_verified ? <FaCheckCircle /> : <FaClock />}
+                  {registration.payment_verified ? "Payment verified" : "Payment pending"}
+                </span>
+                {registration.is_booklet_req ? (
+                  <span className="pd-melava-booklet">
+                    Booklet requested - {registration.booklet_payment_verified ? "Payment verified" : "Payment pending"}
+                  </span>
+                ) : null}
+                {registration.payment_screenshot ? (
+                  <>
+                    <a
+                      className="pd-melava-proof"
+                      href={assetUrl(registration.payment_screenshot)}
+                      aria-label={`View payment proof for ${fmt(registration.melava_number) || "Melava"}`}
+                    >
+                      {/\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(registration.payment_screenshot) ? (
+                        <>
+                          <img
+                            src={assetUrl(registration.payment_screenshot)}
+                            alt={`Payment proof for ${fmt(registration.melava_number) || "Melava"}`}
+                            loading="lazy"
+                          />
+                          <span>View payment proof</span>
+                        </>
+                      ) : (
+                        <><FaFileAlt /> View payment proof</>
+                      )}
+                    </a>
+                    {!registration.payment_verified ? (
+                      <button
+                        type="button"
+                        className="pd-payment-verify"
+                        disabled={verifyingId === `melava-${registration.id}`}
+                        onClick={() => onVerify({
+                          id: registration.id,
+                          type: "melava",
+                        }, `melava-${registration.id}`)}
+                      >
+                        <FaCheck /> {verifyingId === `melava-${registration.id}` ? "Verifying..." : "Verify Payment"}
+                      </button>
+                    ) : null}
+                  </>
+                ) : (
+                  <span className="pd-melava-no-proof">No payment proof uploaded</span>
+                )}
+                {registration.booklet_payment_screenshot ? (
+                  <>
+                    <a
+                      className="pd-melava-proof"
+                      href={assetUrl(registration.booklet_payment_screenshot)}
+                      aria-label={`View booklet payment proof for ${fmt(registration.melava_number) || "Melava"}`}
+                    >
+                      {/\.(?:jpe?g|png|webp)(?:[?#]|$)/i.test(registration.booklet_payment_screenshot) ? (
+                        <>
+                          <img
+                            src={assetUrl(registration.booklet_payment_screenshot)}
+                            alt="Booklet payment proof"
+                            loading="lazy"
+                          />
+                          <span>View booklet proof</span>
+                        </>
+                      ) : (
+                        <><FaFileAlt /> View booklet proof</>
+                      )}
+                    </a>
+                    {!registration.booklet_payment_verified ? (
+                      <button
+                        type="button"
+                        className="pd-payment-verify"
+                        disabled={verifyingId === `booklet-${registration.id}`}
+                        onClick={() => onVerify({
+                          id: registration.id,
+                          type: "booklet",
+                        }, `booklet-${registration.id}`)}
+                      >
+                        <FaCheck /> {verifyingId === `booklet-${registration.id}` ? "Verifying..." : "Verify Booklet"}
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="pd-melava-empty">No Melava registrations found for this candidate.</p>
+        )}
+      </div>
+    </section>
+    <PaymentHistory payments={payments} onVerify={onVerify} verifyingId={verifyingId} />
+    </>
+  );
+}
+
 function EditField({ field, value, onChange }) {
   const id = `pd-edit-${field.k}`;
   const common = {
@@ -760,6 +936,48 @@ function Documents({ docs, onOpen, openingId, onDelete, deletingId }) {
             ))}
           </ul>
         )}
+      </div>
+    </section>
+  );
+}
+
+function PhotoEditor({ photos, removedPhotoUrls, onRemovePhoto, pendingPhotos, onAddPhotos, onRemovePending }) {
+  return (
+    <section className="pd-card pd-photo-editor">
+      <h3 className="pd-card-head"><span className="pd-card-ic"><FaImages /></span>Manage Candidate Photos</h3>
+      <div className="pd-card-body">
+        <p className="pd-edit-hint">Add new photos or mark existing photos for deletion. Changes are applied when you save the profile.</p>
+        <label className="pd-btn pd-btn-sm pd-btn-teal pd-file-label pd-photo-upload">
+          <FaUpload /> Add Photos
+          <input type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={onAddPhotos} />
+        </label>
+        {photos.length || pendingPhotos.length ? (
+          <div className="pd-photo-edit-list">
+            {photos.map((photo) => {
+              const marked = removedPhotoUrls.includes(photo.url);
+              return (
+                <div className={`pd-photo-edit-item${marked ? " is-removed" : ""}`} key={photo.id}>
+                  <img src={photo.url} alt="" />
+                  <span title={photo.label}>{photo.label}</span>
+                  <button type="button" className="pd-btn pd-btn-sm pd-btn-outline"
+                    onClick={() => onRemovePhoto(photo.url)} aria-pressed={marked}>
+                    {marked ? "Keep" : <><FaTrash /> Delete</>}
+                  </button>
+                </div>
+              );
+            })}
+            {pendingPhotos.map((photo, index) => (
+              <div className="pd-photo-edit-item" key={`${photo.file.name}-${photo.file.lastModified}-${index}`}>
+                <img src={photo.preview} alt="" />
+                <span title={photo.file.name}>{photo.file.name}</span>
+                <button type="button" className="pd-btn pd-btn-sm pd-btn-outline"
+                  onClick={() => onRemovePending(index)} aria-label={`Remove ${photo.file.name}`}>
+                  <FaTimes /> Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : <p className="pd-text">No photos are uploaded yet.</p>}
       </div>
     </section>
   );
@@ -1081,6 +1299,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   const [state, setState] = useState({ status: "loading", profile: null, error: "", notFound: false });
   const [tab, setTab] = useState("personal");
   const [notice, setNotice] = useState(null); // { type: "success" | "error", text }
+  const [verifyingPaymentId, setVerifyingPaymentId] = useState(null);
   const [bioData, setBioData] = useState(null);
   const [loadingBioData, setLoadingBioData] = useState(false);
   const [openingId, setOpeningId] = useState(null);
@@ -1088,7 +1307,10 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({});
   const [documentFiles, setDocumentFiles] = useState({});
+  const [photoFiles, setPhotoFiles] = useState([]);
+  const [removedPhotoUrls, setRemovedPhotoUrls] = useState([]);
   const [saving, setSaving] = useState(false);
+  const photoFilesRef = useRef([]);
 
   const load = useCallback(async (signal) => {
     setState({ status: "loading", profile: null, error: "", notFound: false });
@@ -1100,6 +1322,27 @@ export default function ProfileDetail({ params, startInEdit = false }) {
       setState({ status: "error", profile: null, error: err.message || "Something went wrong.", notFound: err.status === 404 });
     }
   }, [id]);
+
+  const handleVerifyPayment = async (payment, busyId) => {
+    setVerifyingPaymentId(busyId);
+    setNotice(null);
+    try {
+      await request(`/api/profiles/${id}/payment-screenshots/${payment.id}/verify`, {
+        method: "POST",
+        body: {
+          type: payment.type || "payment",
+          ...(payment.melava_id ? { melava_id: payment.melava_id } : {}),
+        },
+      });
+      const updatedProfile = await getProfile(id);
+      setState({ status: "ready", profile: updatedProfile, error: "", notFound: false });
+      setNotice({ type: "success", text: "Payment verified successfully." });
+    } catch (err) {
+      setNotice({ type: "error", text: err.message || "Could not verify this payment." });
+    } finally {
+      setVerifyingPaymentId(null);
+    }
+  };
 
   useEffect(() => {
     if (!idOk) return undefined;
@@ -1118,12 +1361,22 @@ export default function ProfileDetail({ params, startInEdit = false }) {
     return () => clearTimeout(t);
   }, [notice]);
 
+  useEffect(() => {
+    photoFilesRef.current = photoFiles;
+  }, [photoFiles]);
+
+  useEffect(() => () => {
+    photoFilesRef.current.forEach((photo) => URL.revokeObjectURL(photo.preview));
+  }, []);
+
   const profile = state.profile;
 
   useEffect(() => {
     if (startInEdit && profile && !editing) {
       setForm(buildEditForm(profile));
       setDocumentFiles({});
+      setPhotoFiles([]);
+      setRemovedPhotoUrls([]);
       setEditing(true);
     }
   }, [startInEdit, profile, editing]);
@@ -1151,11 +1404,16 @@ export default function ProfileDetail({ params, startInEdit = false }) {
     if (!profile) return;
     setForm(buildEditForm(profile));
     setDocumentFiles({});
+    setPhotoFiles([]);
+    setRemovedPhotoUrls([]);
     setEditing(true);
     setNotice(null);
   };
 
   const cancelEditing = () => {
+    photoFiles.forEach((photo) => URL.revokeObjectURL(photo.preview));
+    setPhotoFiles([]);
+    setRemovedPhotoUrls([]);
     setEditing(false);
     setForm({});
     setDocumentFiles({});
@@ -1186,6 +1444,38 @@ export default function ProfileDetail({ params, startInEdit = false }) {
     setDocumentFiles((current) => ({ ...current, [key]: file }));
   };
 
+  const handlePhotoFiles = (event) => {
+    const selected = Array.from(event.target.files || []);
+    event.target.value = "";
+    const valid = [];
+    const errors = [];
+    selected.forEach((file) => {
+      if (!/^image\/(?:jpeg|png|webp)$/i.test(file.type)
+        || !/\.(?:jpe?g|png|webp)$/i.test(file.name)
+        || file.size > 5 * 1024 * 1024) {
+        errors.push(`${file.name}: choose a JPG, PNG, or WebP image up to 5 MB.`);
+      } else {
+        valid.push({ file, preview: URL.createObjectURL(file) });
+      }
+    });
+    if (valid.length) setPhotoFiles((current) => [...current, ...valid]);
+    if (errors.length) setNotice({ type: "error", text: errors.join(" ") });
+  };
+
+  const handleRemovePendingPhoto = (index) => {
+    setPhotoFiles((current) => {
+      const photo = current[index];
+      if (photo) URL.revokeObjectURL(photo.preview);
+      return current.filter((_, itemIndex) => itemIndex !== index);
+    });
+  };
+
+  const handleRemovePhoto = (url) => {
+    setRemovedPhotoUrls((current) => current.includes(url)
+      ? current.filter((item) => item !== url)
+      : [...current, url]);
+  };
+
   const handleSave = async () => {
     if (!form.full_name?.trim()) {
       setNotice({ type: "error", text: "Full name is required." });
@@ -1203,7 +1493,10 @@ export default function ProfileDetail({ params, startInEdit = false }) {
     setSaving(true);
     setNotice(null);
     try {
-      const updated = await updateProfile(id, form, documentFiles);
+      const updated = await updateProfile(id, form, documentFiles, photoFiles, removedPhotoUrls);
+      photoFiles.forEach((photo) => URL.revokeObjectURL(photo.preview));
+      setPhotoFiles([]);
+      setRemovedPhotoUrls([]);
       setState({ status: "ready", profile: updated, error: "", notFound: false });
       setEditing(false);
       setForm({});
@@ -1272,7 +1565,24 @@ export default function ProfileDetail({ params, startInEdit = false }) {
         <Hero p={profile} onView={() => goToTab("personal")} onEdit={startEditing}
           onDownload={handleOpenBioData} downloading={loadingBioData} editing={editing} />
 
-        <Gallery photos={profile.photos || []} />
+        <Gallery photos={[
+          ...(profile.photos || []).filter((photo) => !removedPhotoUrls.includes(photo.url)),
+          ...photoFiles.map((photo, index) => ({
+            id: `pending-photo-${index}`,
+            label: photo.file.name,
+            url: photo.preview,
+          })),
+        ]} />
+        {editing ? (
+          <PhotoEditor
+            photos={profile.photos || []}
+            removedPhotoUrls={removedPhotoUrls}
+            onRemovePhoto={handleRemovePhoto}
+            pendingPhotos={photoFiles}
+            onAddPhotos={handlePhotoFiles}
+            onRemovePending={handleRemovePendingPhoto}
+          />
+        ) : null}
 
         <div id="pd-tabs" className="pd-tabs" role="tablist" aria-label="Profile sections">
           {TABS.map((t) => (
@@ -1284,7 +1594,14 @@ export default function ProfileDetail({ params, startInEdit = false }) {
         </div>
         <div id="pd-panel" role="tabpanel" aria-labelledby={`pd-tab-${active.id}`}
           className={`pd-panel${activeIndex === 0 ? " pd-panel-first" : ""}`}>
-          {editing ? (
+          {active.id === "melava" ? (
+            <MelavaRegistrationHistory
+              registrations={profile.melava_registrations}
+              payments={profile.payment_screenshots}
+              onVerify={handleVerifyPayment}
+              verifyingId={verifyingPaymentId}
+            />
+          ) : editing ? (
             active.id === "documents" ? (
               <DocumentEditor docs={profile.documents} files={documentFiles} onFileChange={handleDocumentFile}
                 onOpen={handleOpenDocument} openingId={openingId} />

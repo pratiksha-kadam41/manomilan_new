@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft, BadgeCheck, CheckCircle2, Clock, Download, ImageOff, UploadCloud, X, ZoomIn,
-  Loader2, AlertTriangle, Phone, Check, Upload,
+  Loader2, AlertTriangle, Phone, Check, Upload, FileText,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
+import RecordEditorName from "../../components/RecordEditorName";
 import { apiMediaUrl, apiUrl } from "../../../api";
 import { getSession, clearSession } from "../../../auth";
 import "./payment.css";
@@ -14,9 +15,10 @@ import "./payment.css";
    Load:    GET  {BASE}/profiles/:id/payment-screenshots
             → {
                 profile:     { id, full_name, registration_number, mobile },
-                screenshots: [ { id, type, status, image_url }, ... ]
+                screenshots: [ { id, type, status, image_url, payment_details }, ... ]
               }
-              type   = "payment" (normal registration payment) or "melava" (Melava registration payment)
+              payment_details is a JSON record of amount, date, method, reference, remarks and proof path
+              screenshots contains every payment entry for the profile
               status = "pending" or "verified"
    Verify:  POST {BASE}/profiles/:id/payment-screenshots/:screenshotId/verify
    Upload:  POST {BASE}/profiles/:id/payment-screenshot
@@ -26,7 +28,11 @@ const BASE = apiUrl;
 const LINKS = { back: "/admin/profiles" };
 
 const MAX_FILE_MB = 5;                                        // keep in step with your Laravel validation
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+const todayIsoDate = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
 
 const authHeaders = () => {
   const s = getSession();
@@ -60,8 +66,8 @@ const safeUrl = (url) => {
   }
 };
 
-const cleanStatus = (s) => (s === "verified" ? "verified" : "pending");
-const cleanType = (t) => (["melava", "combined"].includes(t) ? t : "payment");
+const cleanStatus = (s) => (["verified", "approved"].includes(s) ? "verified" : s === "rejected" ? "rejected" : "pending");
+const cleanType = (t) => (["melava", "booklet", "combined"].includes(t) ? t : "payment");
 
 async function getPayments(id) {
   const res = guard(await fetch(`${BASE}/profiles/${encodeURIComponent(id)}/payment-screenshots`, { headers: authHeaders() }));
@@ -76,9 +82,10 @@ async function verifyPayment(profileId, screenshotId, type, melavaId) {
   }));
 }
 
-async function uploadScreenshot(id, file) {
+async function uploadScreenshot(id, file, details) {
   const body = new FormData();
   body.append("payment_screenshot", file);
+  Object.entries(details).forEach(([key, value]) => body.append(`payment_details[${key}]`, value));
   guard(await fetch(`${BASE}/profiles/${encodeURIComponent(id)}/payment-screenshot`, {
     method: "POST",
     headers: authHeaders(),                       // no Content-Type here: the browser sets it for file uploads
@@ -95,8 +102,8 @@ const formatSize = (bytes) => (bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)
 function StatusBadge({ status, label }) {
   const ok = status === "verified";
   return (
-    <span className={`ps-badge ${ok ? "ok" : "wait"}`}>
-      {ok ? <CheckCircle2 size={14} /> : <Clock size={14} />} {label}
+    <span className={`ps-badge ${ok ? "ok" : status === "rejected" ? "rejected" : "wait"}`}>
+      {ok ? <CheckCircle2 size={14} /> : status === "rejected" ? <X size={14} /> : <Clock size={14} />} {label}
     </span>
   );
 }
@@ -104,14 +111,20 @@ function StatusBadge({ status, label }) {
 function Screenshot({ item, title, busy, onVerify, onOpen }) {
   const [broken, setBroken] = useState(false);
   const verified = item.status === "verified";
+  const isPdf = /\.pdf(?:[?#]|$)/i.test(item.image_url || "");
+  const details = item.payment_details || {};
+  const hasDetails = Object.values(details).some((value) => value !== null && value !== "");
   return (
     <article className={`ps-shot ${verified ? "is-ok" : "is-wait"}`}>
       <header className="ps-shot-head">
         <h3>{title}</h3>
-        <StatusBadge status={item.status} label={verified ? "Verified" : "Pending"} />
+        <StatusBadge status={item.status} label={item.status === "verified" ? "Verified" : item.status === "rejected" ? "Rejected" : "Pending"} />
       </header>
+      <RecordEditorName record={item} />
 
-      {item.image_url && !broken ? (
+      {item.image_url && isPdf ? (
+        <iframe className="ps-img ps-pdf" src={item.image_url} title={`${title} PDF`} />
+      ) : item.image_url && !broken ? (
         <button type="button" className="ps-img" onClick={() => onOpen({ url: item.image_url, title })} aria-label={`Enlarge ${title}`}>
           <img src={item.image_url} alt={title} loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
           <span className="ps-zoom"><ZoomIn size={16} /> Click to enlarge</span>
@@ -120,9 +133,22 @@ function Screenshot({ item, title, busy, onVerify, onOpen }) {
         <div className="ps-img ps-img-empty"><ImageOff size={32} /><span>Image not available</span></div>
       )}
 
+      {hasDetails ? (
+        <dl className="ps-payment-details">
+          {details.category && <div><dt>Category</dt><dd>{details.category.replaceAll("_", " ")}</dd></div>}
+          {details.amount !== null && details.amount !== undefined && details.amount !== "" && (
+            <div><dt>Amount</dt><dd>{details.amount}</dd></div>
+          )}
+          {details.payment_date && <div><dt>Payment date</dt><dd>{details.payment_date}</dd></div>}
+          {details.payment_method && <div><dt>Method</dt><dd>{details.payment_method}</dd></div>}
+          {details.reference_number && <div><dt>Reference</dt><dd>{details.reference_number}</dd></div>}
+          {details.remarks && <div className="ps-payment-remarks"><dt>Remarks</dt><dd>{details.remarks}</dd></div>}
+        </dl>
+      ) : null}
+
       <footer className="ps-shot-foot">
         {item.image_url && (
-          <a className="ps-btn ps-btn-green" href={item.image_url} download target="_blank" rel="noopener noreferrer">
+          <a className="ps-btn ps-btn-green" href={item.image_url} download>
             <Download size={16} /> Download
           </a>
         )}
@@ -155,6 +181,14 @@ export default function PaymentScreenshot({ params }) {
   const [viewer, setViewer] = useState(null);          // { url, title } shown full-size
 
   const [file, setFile] = useState(null);
+  const [paymentDetails, setPaymentDetails] = useState({
+    category: "profile",
+    amount: "",
+    payment_date: todayIsoDate(),
+    payment_method: "",
+    reference_number: "",
+    remarks: "",
+  });
   const [fileError, setFileError] = useState("");
   const [preview, setPreview] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -181,10 +215,12 @@ export default function PaymentScreenshot({ params }) {
           (Array.isArray(data.screenshots) ? data.screenshots : []).map((s) => ({
             id: s.id,
             type: cleanType(s.type),
-            status: cleanStatus(s.status),
+            status: cleanStatus(s.payment_details?.verification_status || s.status),
             payment_status: cleanStatus(s.payment_status),
             melava_status: cleanStatus(s.melava_status),
             image_url: safeUrl(apiMediaUrl(s.image_url)),
+            payment_details: s.payment_details || {},
+            created_at: s.created_at || null,
             melava_id: s.melava_id,
           })),
         );
@@ -208,11 +244,17 @@ export default function PaymentScreenshot({ params }) {
   const doVerify = async () => {
     if (!confirm || verifyingId) return;
     const { item } = confirm;
-    setVerifyingId(item.id);
+    setVerifyingId(`${item.type}:${item.id}`);
     try {
       await verifyPayment(id, item.id, item.type, item.melava_id);
-      setShots((list) => list.map((s) => (s.id === item.id
-        ? { ...s, status: "verified", payment_status: "verified", melava_status: "verified" }
+      setShots((list) => list.map((s) => (s.id === item.id && s.type === item.type
+        ? {
+          ...s,
+          status: "verified",
+          payment_status: "verified",
+          melava_status: "verified",
+          payment_details: { ...s.payment_details, verification_status: "verified" },
+        }
         : s)));
       showToast("success", "Payment verified.");
       setConfirm(null);
@@ -232,11 +274,23 @@ export default function PaymentScreenshot({ params }) {
     if (fileInput.current) fileInput.current.value = "";
   };
 
+  const resetPaymentDetails = () => setPaymentDetails({
+    category: "profile",
+    amount: "",
+    payment_date: todayIsoDate(),
+    payment_method: "",
+    reference_number: "",
+    remarks: "",
+  });
+
   const onPick = (e) => {
     const picked = e.target.files?.[0];
     clearFile();
     if (!picked) return;
-    if (!ALLOWED_TYPES.includes(picked.type)) { setFileError("Please choose a JPG, PNG or WEBP image."); return; }
+    if (!ALLOWED_TYPES.includes(picked.type) && !/\.(?:jpe?g|png|webp|pdf)$/i.test(picked.name)) {
+      setFileError("Please choose a JPG, PNG, WEBP or PDF file.");
+      return;
+    }
     if (picked.size > MAX_FILE_MB * 1024 * 1024) { setFileError(`The image must be smaller than ${MAX_FILE_MB} MB.`); return; }
     setFile(picked);
     setPreview(URL.createObjectURL(picked));
@@ -249,14 +303,21 @@ export default function PaymentScreenshot({ params }) {
     if (!file || uploading) return;
     setUploading(true);
     try {
-      await uploadScreenshot(id, file);
+      await uploadScreenshot(id, file, paymentDetails);
       if (BASE) {
         reload();                                                   // real backend: fetch the new list
       } else {                                                      // sample mode: show it locally
-        setShots((list) => [...list, { id: Date.now(), type: "payment", status: "pending", image_url: URL.createObjectURL(file) }]);
+        setShots((list) => [...list, {
+          id: Date.now(),
+          type: "payment",
+          status: "pending",
+          image_url: URL.createObjectURL(file),
+          payment_details: { ...paymentDetails, verification_status: "pending" },
+        }]);
       }
       clearFile();
-      showToast("success", "Screenshot uploaded. It needs to be verified.");
+      resetPaymentDetails();
+      showToast("success", "Payment entry added. It needs to be verified.");
     } catch (err) {
       showToast("error", err.message);
     } finally {
@@ -265,8 +326,8 @@ export default function PaymentScreenshot({ params }) {
   };
 
   /* ---- what to show in the top badges ---- */
-  const paymentShots = shots.filter((s) => s.type === "payment" || s.type === "combined");
-  const melavaShot = shots.find((s) => s.type === "melava" || s.type === "combined");
+  const paymentShots = shots.filter((s) => s.type === "payment" || s.type === "combined" || s.type === "booklet");
+  const melavaShot = shots.find((s) => s.type === "melava" || s.type === "combined" || s.type === "booklet");
   const paymentVerified = paymentShots.some((s) => (s.payment_status || s.status) === "verified");
   const melavaVerified = melavaShot
     ? (melavaShot.melava_status || melavaShot.status) === "verified"
@@ -279,8 +340,8 @@ export default function PaymentScreenshot({ params }) {
         {/* ---------- Title ---------- */}
         <div className="ps-top">
           <div>
-            <h1>Payment Screenshots</h1>
-            <p>Check the payment proof uploaded by the candidate and verify it.</p>
+            <h1>Payment History</h1>
+                <p>Track every candidate payment entry, review proof, and verify payments.</p>
           </div>
           <a href={LINKS.back} className="ps-btn ps-btn-teal"><ArrowLeft size={16} /> Back to Profiles</a>
         </div>
@@ -337,15 +398,17 @@ export default function PaymentScreenshot({ params }) {
                 if (s.type === "payment") n += 1;
                 const title = s.type === "melava"
                   ? "Melava Registration Screenshot"
+                  : s.type === "booklet"
+                    ? "Booklet Payment Screenshot"
                   : s.type === "combined"
                     ? "Shared Payment Screenshot"
-                    : `Screenshot #${n}`;
+                    : `Payment Entry #${n}`;
                 return (
                   <Screenshot
-                    key={s.id}
+                    key={`${s.type}-${s.id}`}
                     item={s}
                     title={title}
-                    busy={verifyingId === s.id}
+                    busy={verifyingId === `${s.type}:${s.id}`}
                     onVerify={(item, t) => setConfirm({ item, title: t })}
                     onOpen={setViewer}
                   />
@@ -356,18 +419,50 @@ export default function PaymentScreenshot({ params }) {
             {/* ---------- Upload another screenshot ---------- */}
             {!loading && (
               <form className="ps-card ps-upload" onSubmit={doUpload}>
-                <h3>Upload Additional Screenshot</h3>
-                <p>If the user uploaded the wrong screenshot, you can upload a new one here. It will be added to the list and will need to be verified.</p>
+                <h3>Add Payment Entry</h3>
+                <p>Add another payment record for this candidate. Entries are saved individually and await verification.</p>
+
+                <div className="ps-entry-fields">
+                  <label>
+                    <span>Payment category</span>
+                    <select value={paymentDetails.category} onChange={(event) => setPaymentDetails((current) => ({ ...current, category: event.target.value }))} disabled={uploading}>
+                      <option value="profile">Profile payment</option>
+                      <option value="melava">Melava registration</option>
+                      <option value="booklet">Booklet</option>
+                      <option value="combined">Melava + booklet</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Amount</span>
+                    <input type="number" min="0" step="0.01" value={paymentDetails.amount} onChange={(event) => setPaymentDetails((current) => ({ ...current, amount: event.target.value }))} placeholder="Enter amount" disabled={uploading} />
+                  </label>
+                  <label>
+                    <span>Payment date</span>
+                    <input type="date" value={paymentDetails.payment_date} onChange={(event) => setPaymentDetails((current) => ({ ...current, payment_date: event.target.value }))} disabled={uploading} />
+                  </label>
+                  <label>
+                    <span>Payment method</span>
+                    <input value={paymentDetails.payment_method} onChange={(event) => setPaymentDetails((current) => ({ ...current, payment_method: event.target.value }))} placeholder="Cash, UPI, bank transfer..." disabled={uploading} />
+                  </label>
+                  <label>
+                    <span>Transaction/reference number</span>
+                    <input value={paymentDetails.reference_number} onChange={(event) => setPaymentDetails((current) => ({ ...current, reference_number: event.target.value }))} placeholder="Optional" disabled={uploading} />
+                  </label>
+                  <label className="ps-entry-remarks">
+                    <span>Remarks</span>
+                    <textarea value={paymentDetails.remarks} onChange={(event) => setPaymentDetails((current) => ({ ...current, remarks: event.target.value }))} rows={2} placeholder="Optional notes" disabled={uploading} />
+                  </label>
+                </div>
 
                 <label className={`ps-drop ${file ? "has-file" : ""} ${fileError ? "has-error" : ""}`}>
-                  <input ref={fileInput} type="file" accept={ALLOWED_TYPES.join(",")} onChange={onPick} disabled={uploading} />
-                  {preview ? (
+                  <input ref={fileInput} type="file" accept=".jpg,.jpeg,.png,.webp,.pdf" onChange={onPick} disabled={uploading} />
+                  {preview && !/\.pdf$/i.test(file?.name || "") ? (
                     <img src={preview} alt="Selected screenshot preview" className="ps-preview" />
                   ) : (
-                    <UploadCloud size={30} />
+                    file && /\.pdf$/i.test(file.name) ? <FileText size={30} /> : <UploadCloud size={30} />
                   )}
                   <span className="ps-drop-text">
-                    {file ? <><strong>{file.name}</strong><small>{formatSize(file.size)}</small></> : <><strong>Choose an image</strong><small>JPG, PNG or WEBP · up to {MAX_FILE_MB} MB</small></>}
+                    {file ? <><strong>{file.name}</strong><small>{formatSize(file.size)}</small></> : <><strong>Choose proof file</strong><small>JPG, PNG, WEBP or PDF · up to {MAX_FILE_MB} MB</small></>}
                   </span>
                 </label>
                 {fileError && <p className="ps-err" role="alert">{fileError}</p>}

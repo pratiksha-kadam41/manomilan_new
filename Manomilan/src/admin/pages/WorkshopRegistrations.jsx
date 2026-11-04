@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import AdminPagination from "../components/AdminPagination";
+import RecordEditorName from "../components/RecordEditorName";
 import { useAdminPermission } from "../../permission-context";
 import { apiMediaUrl, request } from "../../api";
 import "../components/admin-ui.css";
@@ -268,7 +269,10 @@ export default function WorkshopRegistrations() {
                 {!loading && registrations.map((registration, index) => (
                   <tr key={registration.id}>
                     <td>{(Number(pagination?.from || 1) - 1) + index + 1}</td>
-                    <td><strong className="wr-candidate-name">{registration.full_name}</strong></td>
+                    <td>
+                      <strong className="wr-candidate-name">{registration.full_name}</strong>
+                      <RecordEditorName record={registration} />
+                    </td>
                     <td>{registration.workshop_event?.title || "Legacy registration"}{registration.registration_fee !== null && registration.registration_fee !== undefined ? <small className="wr-registration-fee">{formatFee(registration.registration_fee, registration.registration_currency)}</small> : null}</td>
                     <td><a className="wr-phone" href={`tel:${registration.mobile_number}`}>{registration.mobile_number}</a></td>
                     <td>{registration.whatsapp_number || "—"}</td>
@@ -319,6 +323,7 @@ export default function WorkshopRegistrations() {
               {detailLoading ? <div className="wr-modal-loading">Loading candidate details…</div> : (
                 <>
                   <div className="wr-modal-status"><StatusBadge status={selected.status} /><span><CalendarDays size={15} /> Registered {formatDate(selected.created_at, true)}</span></div>
+                  <RecordEditorName record={selected} />
                   <div className="wr-detail-grid">
                     <Detail label="Mobile Number" value={selected.mobile_number} />
                     <Detail label="WhatsApp Number" value={selected.whatsapp_number} />

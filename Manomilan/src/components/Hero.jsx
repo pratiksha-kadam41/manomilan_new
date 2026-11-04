@@ -13,52 +13,84 @@ const ig = (path) => `https://www.instagram.com/reel/${path}`;
 
 // img = cover picture in public/videos, href = Instagram reel it opens
 const LEFT_REELS = [
-  { img: "/videos/stage.jpeg", alt: "Stage Image", href: ig("DY1-7DdTnTk/?igsh=Z3M3bjZ5Y3BxOGxq") },
-  { img: "/videos/7000 muli mul.jpeg", alt: "7000 Muli Mul", href: ig("DYUU_XdicAu/?igsh=Yzg2MGZ4dzUxdmRo") },
-  { img: "/videos/gandhi.jpeg", alt: "Gandhi", href: ig("DYsC-COzMhW/?igsh=MXFwc3FoaDZjYWRqbA==") },
-  { img: "/videos/kondekar.jpeg", alt: "Kondekar", href: ig("DY6iCYrTvlH/?igsh=MXNlb3VzYjc3Y2oxNQ==") },
-  { img: "/videos/mamta.jpeg", alt: "Mamta", href: ig("DY6ik19zTCV/?igsh=MXQ0dG9lNWw3OHBkNw==") },
-  { img: "/videos/rupresha.jpeg", alt: "Rupresha", href: "#" },
-  { img: "/videos/shetty sir.jpeg", alt: "Shetty Sir", href: ig("DYwFWa_CwKW/?igsh=cDRyM3E2bHVoYzNh") },
-  { img: "/videos/dagade sir.jpeg", alt: "Dagade Sir", href: ig("DY6jH6OzjiR/?igsh=MTBubWlldG5vOXM0dg") },
+  { img: "/videos/stage.jpeg", alt: "Stage Image", href: ig("DY1-7DdTnTk/") },
+  { img: "/videos/7000 muli mul.jpeg", alt: "7000 Muli Mul", href: ig("DYUU_XdicAu/") },
+  { img: "/videos/gandhi.jpeg", alt: "Gandhi", href: ig("DYsC-COzMhW/") },
+  { img: "/videos/kondekar.jpeg", alt: "Kondekar", href: ig("DY6iCYrTvlH/") },
+  { img: "/videos/mamta.jpeg", alt: "Mamta", href: ig("DY6ik19zTCV/") },
+  { img: "/videos/shetty sir.jpeg", alt: "Shetty Sir", href: ig("DYwFWa_CwKW/") },
+  { img: "/videos/dagade sir.jpeg", alt: "Dagade Sir", href: ig("DY6jH6OzjiR/") },
 ];
 
 const RIGHT_REELS = [
-  { img: "/videos/new_reel.jpeg", alt: "New Reel", href: ig("DZpd_ZPpd3B/?igsh=M21sdjd1cG9mOG9z") },
-  { img: "/videos/new_reel_dz7b.png", alt: "New Reel DZ7b", href: ig("DZ7bHsutz-g/?igsh=cG56emx1c2tuMzZv") },
-  { img: "/videos/new_reel_dzzn.png", alt: "New Reel DZZN", href: ig("DZznG7KCtVs/?igsh=MXNscGFjM2V0NTBjdA==") },
-  { img: "/videos/new_reel_dzuk.png", alt: "New Reel DZUK", href: ig("DZukKtlJfbZ/?igsh=MWwxM2FjanZ6ZmZ2Nw==") },
-  { img: "/videos/new_reel_dak3.png", alt: "New Reel DAK3", href: ig("DaK30XuNa0y/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==") },
+  { img: "/videos/new_reel.jpeg", alt: "New Reel", href: ig("DZpd_ZPpd3B/") },
+  { img: "/videos/new_reel_dz7b.png", alt: "New Reel DZ7b", href: ig("DZ7bHsutz-g/") },
+  { img: "/videos/new_reel_dzzn.png", alt: "New Reel DZZN", href: ig("DZznG7KCtVs/") },
+  { img: "/videos/new_reel_dzuk.png", alt: "New Reel DZUK", href: ig("DZukKtlJfbZ/") },
+  { img: "/videos/new_reel_dak3.png", alt: "New Reel DAK3", href: ig("DaK30XuNa0y/") },
 ];
 
-// Phone-shaped frame that scrolls sideways every 3.5 seconds.
-function ReelFrame({ reels }) {
+// Existing local images used only if a reel thumbnail is unavailable.
+const LEFT_FALLBACKS = [
+  "/website/gallery1.jpeg",
+  "/website/2.jpeg",
+  "/website/gallery2.jpeg",
+  "/website/3.jpeg",
+  "/website/gallery3.jpeg",
+  "/website/4.jpeg",
+  "/website/gallery4.jpeg",
+  "/website/photo101.jpg",
+];
+
+const RIGHT_FALLBACKS = [
+  "/website/photo501.png",
+  "/website/gallery2.jpeg",
+  "/website/gallery3.jpeg",
+  "/website/gallery4.jpeg",
+  "/website/upcoming.jpeg",
+];
+
+// Phone-shaped frame that scrolls sideways every 1 second.
+function ReelFrame({ reels, title, fallbacks }) {
   const track = useRef(null);
 
   useEffect(() => {
     const el = track.current;
     if (!el) return undefined;
     let i = 0;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const id = setInterval(() => {
       i = (i + 1) % reels.length;
-      el.scrollTo({ left: el.clientWidth * i, behavior: "smooth" });
-    }, 3500);
+      el.scrollTo({ left: el.clientWidth * i, behavior: reduceMotion ? "auto" : "smooth" });
+    }, 1000);
     return () => clearInterval(id);
   }, [reels.length]);
 
   return (
-    <div className="reel">
-      <div className="reel-track" ref={track}>
-        {reels.map((r) => (
-          <div className="reel-slide" key={r.img}>
-            <a href={r.href} target="_blank" rel="noreferrer">
-              <img src={r.img} alt={r.alt} />
-              <div className="reel-play">
-                <svg fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
-              </div>
-            </a>
-          </div>
-        ))}
+    <div className="mmh-reel-frame">
+      {title ? <span className="mmh-reel-caption">{title}</span> : null}
+      <div className="reel mmh-reel">
+        <div className="reel-track" ref={track}>
+          {reels.map((r, i) => (
+            <div className="reel-slide" key={r.img}>
+              <a href={r.href} target="_blank" rel="noreferrer" aria-label={`${r.alt} — watch on Instagram`}>
+                <img
+                  src={r.img}
+                  alt={r.alt}
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    const fallback = fallbacks?.length ? fallbacks[i % fallbacks.length] : "";
+                    if (fallback) e.currentTarget.src = fallback;
+                  }}
+                />
+                <span className="reel-play" aria-hidden="true">
+                  <svg fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                </span>
+              </a>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -188,61 +220,104 @@ export default function Hero() {
   })();
 
   return (
-    <section id="home" className="hero">
-      <div className="hero-bgs">
+    <section id="home" className="hero mmh-hero">
+      <div className="mmh-hero-bgs" aria-hidden="true">
         {BACKGROUNDS.map((src, i) => (
-          <div key={src} className={`hero-bg-image${i === active ? " active" : ""}`}
-               style={{ backgroundImage: `url('${src}')` }} />
+          <div
+            key={src}
+            className={`mmh-hero-bg-image${i === active ? " active" : ""}`}
+            style={{ backgroundImage: `url('${src}')` }}
+          />
         ))}
       </div>
-      <div className="hero-overlay" />
+      <div className="mmh-hero-pattern" aria-hidden="true" />
 
-      <div className="site-container hero-content">
-        <div className="d-flex flex-column flex-lg-row align-items-center justify-content-between text-white py-5">
+      <div className="site-container mmh-hero-content">
+        <div className="mmh-hero-grid">
+          <div className="mmh-hero-left">
+            <span className="mmh-hero-eyebrow">॥ जय जिनेन्द्र ॥</span>
 
-          {/* left: text */}
-          <div className="hero-left">
-            <h3 className="hero-h3" style={{ fontSize: 34 }}>येथे मनं मिळतात...</h3>
-            <h3 className="hero-h3" style={{ fontSize: 44 }}>नाती जुळतात…</h3>
+            <h1 className="mmh-hero-title">
+              <span className="mmh-hero-title-line">येथे मनं मिळतात...</span>
+              <span className="mmh-hero-title-line mmh-hero-title-line--accent">नाती जुळतात…</span>
+            </h1>
 
-            <div className="hero-registration-options">
-              <div className="hero-registration-option">
-                <a href={REGISTER_URL} className="btn-melava">Melava Registration</a>
-                <span className="fee">
+            <div className="mmh-divider" aria-hidden="true">
+              <i className="bi bi-heart-fill" />
+            </div>
+
+            <p className="mmh-hero-tagline">
+              Where Souls Connect.<br />
+              Because Every Jain Heart<br />
+              Deserves a True Match.
+            </p>
+
+            <div className="mmh-hero-actions">
+              <div className="mmh-action-card">
+                <a href={REGISTER_URL} className="mmh-btn mmh-btn--primary">
+                  <i className="bi bi-calendar-heart" aria-hidden="true" />
+                  Melava Registration
+                </a>
+                <span className="mmh-fee">
                   {melavaPrice.price}
                   {melavaPrice.detail ? <small>{melavaPrice.detail}</small> : null}
                 </span>
               </div>
+
               {SHOW_WORKSHOP_REGISTRATION && (
-                <div className="hero-registration-option">
-                  <a href="/workshop-registration" className="btn-workshop">
+                <div className="mmh-action-card">
+                  <a href="/workshop-registration" className="mmh-btn mmh-btn--secondary">
+                    <i className="bi bi-mortarboard" aria-hidden="true" />
                     Workshop Registration
                   </a>
-                  <span className="fee">
+                  <span className="mmh-fee">
                     {workshopFee}
                     {workshopEvents.length > 0 && !workshopEventsError && !workshopEventsLoading ? (
                       <small>
                         {workshopEvents.length === 1
-                        ? workshopEvents[0].title
+                          ? workshopEvents[0].title
                           : workshopEvents.length > 1
-                          ? "Select an active workshop"
-                          : ""}
+                            ? "Select an active workshop"
+                            : ""}
                       </small>
                     ) : null}
                   </span>
                 </div>
               )}
             </div>
-
-            <h2 className="hero-tagline blinking-text">
-              Where Souls Connect. <br />Because Every Jain Heart<br />Deserves a True Match.
-            </h2>
           </div>
 
-          {/* right: two reel frames (desktop only) */}
-          <div className="hero-right">
-            <ReelFrame reels={LEFT_REELS} />
-            <ReelFrame reels={RIGHT_REELS} />
+          <div className="mmh-hero-center">
+            <span className="mmh-hero-logo-wrap">
+              <img
+                src="/website/Mano_Milan_Final_Website.png"
+                alt="Aaryans Manomilan Logo"
+                className="mmh-hero-logo"
+              />
+            </span>
+            <p className="mmh-hero-community">Jain Matrimony Community</p>
+            <div className="mmh-hero-lotus" aria-hidden="true">
+              <span className="mmh-hero-lotus-line" />
+              <i className="bi bi-flower1" />
+              <span className="mmh-hero-lotus-line" />
+            </div>
+          </div>
+
+          <div className="mmh-hero-right">
+            <div className="mmh-media-head">
+              <span className="mmh-media-kicker">Melava &amp; Community</span>
+              <h2 className="mmh-media-title">Moments That Matter</h2>
+            </div>
+
+            <div className="mmh-reels">
+              <ReelFrame reels={LEFT_REELS} title="Event Highlights" fallbacks={LEFT_FALLBACKS} />
+              <ReelFrame reels={RIGHT_REELS} title="Community Reels" fallbacks={RIGHT_FALLBACKS} />
+            </div>
+
+            <p className="mmh-media-note">
+              <i className="bi bi-instagram" aria-hidden="true" />
+              Tap a card to watch the original reel
+            </p>
           </div>
         </div>
       </div>

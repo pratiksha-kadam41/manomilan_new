@@ -13,6 +13,10 @@ localStorage.removeItem("adminToken");
 export const isAdminRole = (role) => ADMIN_ROLES.includes(role);
 
 const isCandidateUser = (user) => {
+  if (user?.role?.name) {
+    return String(user.role.name).trim().toLowerCase() === "candidate";
+  }
+
   const portal = String(user?.portal || "").trim().toLowerCase();
   return portal === "candidate"
     || (portal !== "admin"
@@ -52,8 +56,9 @@ export function getSession() {
   const session = read();
   if (!session) return null;
 
-  if (isCandidateUser(session.user) && session.role !== "candidate") {
-    session.role = "candidate";
+  const resolvedRole = session.user ? roleForUser(session.user) : session.role;
+  if (session.role !== resolvedRole) {
+    session.role = resolvedRole;
     sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
   }
 
@@ -221,7 +226,9 @@ export function clearDashboardCache() {
   sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
 }
 
-async function loadDashboard(endpoint, { force = false, period = "", from = "", to = "" } = {}) {
+async function loadDashboard(endpoint, {
+  force = false, period = "", from = "", to = "", gender = "", status = "", source = "",
+} = {}) {
   if (!force) {
     const cached = readDashboardCache();
     if (cached) return cached;
@@ -231,6 +238,9 @@ async function loadDashboard(endpoint, { force = false, period = "", from = "", 
   if (period) query.set("period", period);
   if (from) query.set("from", from);
   if (to) query.set("to", to);
+  if (gender && gender !== "all") query.set("gender", gender);
+  if (status && status !== "all") query.set("status", status);
+  if (source) query.set("source", source);
   const queryString = query.toString();
 
   dashboardRequest = request(`${endpoint}${queryString ? `?${queryString}` : ""}`).then((body) => {

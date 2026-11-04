@@ -9,16 +9,19 @@ const CARDS = [
 
 export default function WhyChoose() {
   return (
-    <section id="why-choose-us" className="why">
+    <section id="why-choose-us" className="why mmh-why">
       <div className="site-container">
-        <h2 className="sec-title">Why Choose Aaryans Manomilan?</h2>
-        <p className="sec-sub">Commitment to community, culture, and finding your forever match.</p>
+        <h2 className="sec-title mmh-sec-title">Why Choose Aaryans Manomilan?</h2>
+        <div className="mmh-divider" aria-hidden="true">
+          <i className="bi bi-flower1" />
+        </div>
+        <p className="sec-sub mmh-sec-sub">Commitment to community, culture, and finding your forever match.</p>
 
         <div className="row why-grid">
           {CARDS.map((c) => (
             <div key={c.title} className="col-12 col-md-6 col-lg-4">
-              <div className="why-card lift">
-                <div className="why-icon">
+              <div className="why-card lift mmh-why-card">
+                <div className="why-icon mmh-why-icon">
                   <img src={c.img} width="70" height="50" alt="" />
                 </div>
                 <h3>{c.title}</h3>

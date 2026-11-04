@@ -4,6 +4,7 @@ import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap-icons/font/bootstrap-icons.css'
 import './App.css' // must come AFTER bootstrap
 import './styles/manomilan-premium.css'
+import './styles/site-premium.css'
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(

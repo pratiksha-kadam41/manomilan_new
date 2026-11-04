@@ -1,0 +1,12 @@
+.record-editor-name {
+  display: block;
+  margin-top: 4px;
+  color: #667085;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.record-editor-name strong {
+  color: #344054;
+  font-weight: 600;
+}

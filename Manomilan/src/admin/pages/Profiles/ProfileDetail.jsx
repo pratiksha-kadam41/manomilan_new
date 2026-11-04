@@ -7,6 +7,7 @@ import {
   FaPause, FaPhoneAlt, FaPlay, FaRedo, FaStar, FaTrash, FaUsers,
 } from "react-icons/fa";
 import AdminLayout from "../../components/AdminLayout";
+import RecordEditorName from "../../components/RecordEditorName";
 import { ApiError, apiMediaUrl, download, request } from "../../../api";
 import "../../components/admin-ui.css";
 import "./ProfileDetail.css";
@@ -300,6 +301,7 @@ function RecordList({ title, records, fields }) {
       {records.map((record, index) => (
         <div className="pd-record" key={`${title}-${index}`}>
           <strong>{title} {index + 1}</strong>
+          <RecordEditorName record={record} />
           <div className="pd-grid">
             {fields.map(([label, key]) => (
               <div className="pd-field" key={key}>
@@ -499,6 +501,7 @@ function SummaryCard({ profile }) {
           <span><FaMapMarkerAlt /> {profile.city}</span>
         )}
       </div>
+      <RecordEditorName record={profile} />
     </aside>
   );
 }
