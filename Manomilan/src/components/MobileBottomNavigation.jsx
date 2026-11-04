@@ -1,12 +1,12 @@
 import { useEffect, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Heart, House, Lightbulb, Phone } from "lucide-react";
+import { HeartHandshake, House, MessagesSquare, Workflow } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Home", href: "/", Icon: House },
-  { label: "How It Works", href: "/how-it-works", Icon: Lightbulb },
-  { label: "Success Stories", href: "/success-stories", Icon: Heart },
-  { label: "Contact Us", href: "/contactus", Icon: Phone },
+  { label: "How It Works", href: "/how-it-works", Icon: Workflow },
+  { label: "Success Stories", href: "/success-stories", Icon: HeartHandshake },
+  { label: "Contact Us", href: "/contactus", Icon: MessagesSquare },
 ];
 
 const isActivePath = (pathname, href) => (
@@ -38,7 +38,7 @@ export default function MobileBottomNavigation() {
               className={`mobile-bottom-nav__item${active ? " is-active" : ""}`}
               aria-current={active ? "page" : undefined}
             >
-              <Icon className="mobile-bottom-nav__icon" aria-hidden="true" strokeWidth={2.5} />
+              <Icon className="mobile-bottom-nav__icon" aria-hidden="true" strokeWidth={2} />
               <span>{label}</span>
             </Link>
           );
