@@ -196,13 +196,17 @@ export default function Login() {
             }}
           />
         </a>
+        <div className="login-welcome-divider" aria-hidden="true">
+          <span>♥</span>
+        </div>
         <h1 className="login-welcome">
           Welcome <em>Back!</em>
         </h1>
         <p className="login-welcome-sub">
           Login to continue your
           <br />
-          <strong>Melava</strong> journey...
+          <strong>Melava journey...</strong>
+          <span className="login-welcome-underline" aria-hidden="true" />
         </p>
       </section>
 
