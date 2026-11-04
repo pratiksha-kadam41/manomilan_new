@@ -173,6 +173,14 @@ class SystemManagementController extends Controller
         return response()->json(['success' => true, 'data' => $role]);
     }
 
+    public function showRole(Request $request, Role $role)
+    {
+        $role->loadCount('users');
+        $role->setAttribute('is_protected', $role->isProtectedSystemRole());
+
+        return response()->json(['success' => true, 'data' => $role]);
+    }
+
     public function deleteRole(Request $request, Role $role)
     {
         $this->protectSystemRole($role);
@@ -359,6 +367,13 @@ class SystemManagementController extends Controller
         return response()->json(['success' => true, 'data' => $module->fresh()]);
     }
 
+    public function showModule(Request $request, Module $module)
+    {
+        $module->setAttribute('available_permissions', array_keys(ModulePermission::ACTIONS));
+
+        return response()->json(['success' => true, 'data' => $module]);
+    }
+
     public function deleteModule(Request $request, Module $module)
     {
         $hasGrants = ModulePermission::query()
@@ -380,8 +395,12 @@ class SystemManagementController extends Controller
         return response()->json(['success' => true]);
     }
 
-    public function users(Request $request)
+    public function users(Request $request, User $user = null)
     {
+        if ($user) {
+            return response()->json(['success' => true, 'data' => $user->load('role')]);
+        }
+
         $filters = $request->validate(['q' => ['nullable', 'string', 'max:120']]);
         $users = User::query()
             ->with('role:id,name')
