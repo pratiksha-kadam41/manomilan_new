@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy } from "lucide-react";
-import { request } from "../api";
+import { apiMediaUrl, request } from "../api";
 import { getSession, isAdminRole } from "../auth";
 import { SUBCASTES } from "../data/casteOptions";
 import "./MelavaRegistration.css";
@@ -1702,7 +1702,7 @@ export default function MelavaRegistration() {
       const name = String(item.file?.name || item.preview || "").split("?")[0].toLowerCase();
       return /\.(?:jpe?g|png|webp|gif|bmp)$/.test(name);
     };
-    const itemSource = (item) => item.file || item.preview;
+    const itemSource = (item) => item.file || apiMediaUrl(item.preview);
     const formatIncome = (value) => {
       const text = String(value ?? "").trim();
       const amount = Number(text.replace(/,/g, ""));
@@ -2188,9 +2188,9 @@ export default function MelavaRegistration() {
                 {item.file ? (
                   item.file.type.startsWith("image/") ? <img src={item.preview} alt="" /> : <span className="doc-name">{item.file.name}</span>
                 ) : ["profilePhoto", "full_body_photo", "half_body_photo", "selfie_photo", "candidatePhotos", "additionalPhotos"].includes(bucket) ? (
-                  <img src={item.preview} alt="Existing uploaded file" />
+                  <img src={apiMediaUrl(item.preview)} alt="Existing uploaded file" />
                 ) : item.preview ? (
-                  <a className="doc-name" href={item.preview} target="_blank" rel="noreferrer">View uploaded document</a>
+                  <a className="doc-name" href={apiMediaUrl(item.preview)} target="_blank" rel="noreferrer">View uploaded document</a>
                 ) : null}
               </span>
             ))}
@@ -2350,7 +2350,7 @@ export default function MelavaRegistration() {
                 <span className="doc-name" key={`${field.n}-${index}`}>{item.file.name}</span>
               )
             ) : (
-              <img key={`${field.n}-${index}`} src={item.preview} alt="" />
+              <img key={`${field.n}-${index}`} src={apiMediaUrl(item.preview)} alt="" />
             ),
           )}
         </div>
@@ -2512,7 +2512,7 @@ export default function MelavaRegistration() {
                 <small>Booklet: {form.booklet_required ? "Requested" : "Not requested"}</small>
               </div>
               <div className="qr-box">
-                {settings.qr_image_url ? <img src={settings.qr_image_url} alt="Payment QR code" /> : <div className="qr-empty">QR code unavailable</div>}
+                {settings.qr_image_url ? <img src={apiMediaUrl(settings.qr_image_url)} alt="Payment QR code" /> : <div className="qr-empty">QR code unavailable</div>}
                 <small>Scan with any UPI app</small>
               </div>
             </div>
@@ -2568,7 +2568,7 @@ export default function MelavaRegistration() {
             <p>{adminEditId ? "Update the candidate details and save the existing registration." : "Fill the form step by step. You can go Back anytime."}</p>
 
           </div>
-          {!adminEditId && settings.qr_image_url ? <img className="hero-qr" src={settings.qr_image_url} alt="Melava payment QR" /> : null}
+          {!adminEditId && settings.qr_image_url ? <img className="hero-qr" src={apiMediaUrl(settings.qr_image_url)} alt="Melava payment QR" /> : null}
         </div>
 
         <section className="card campaign-card">
