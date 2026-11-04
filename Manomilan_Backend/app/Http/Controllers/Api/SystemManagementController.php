@@ -237,7 +237,7 @@ class SystemManagementController extends Controller
             'permissions' => ['present', 'array'],
             'permissions.*.module_id' => ['required', 'integer', 'distinct', 'exists:modules,id'],
             'permissions.*.actions' => ['present', 'array'],
-            'permissions.*.actions.*' => ['required', 'string', 'distinct', Rule::in(array_keys(ModulePermission::ACTIONS))],
+            'permissions.*.actions.*' => ['required', 'string', Rule::in(array_keys(ModulePermission::ACTIONS))],
         ]);
         if ($this->isCandidateRole($role)) {
             $candidateModuleIds = Module::query()
