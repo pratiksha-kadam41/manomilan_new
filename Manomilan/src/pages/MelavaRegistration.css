@@ -1,21 +1,21 @@
 .melava-page {
-  --b: #2a6365;
-  --bd: #1e4a4b;
-  --soft: #eaf3f3;
-  --acc: #d94d5c;
-  --bg: #f2f8f9;
-  --ink: #1f2937;
-  --mut: #6b7280;
-  --line: #dce8ed;
+  --b: #8b0038;
+  --bd: #650022;
+  --soft: #fff0f4;
+  --acc: #d4145a;
+  --bg: #fff8f0;
+  --ink: #4a1027;
+  --mut: #6f5962;
+  --line: #ecd8df;
   width: 100%;
   min-height: 100vh;
   align-self: stretch;
   background:
-    radial-gradient(ellipse at 2% 20%, rgba(116, 196, 194, 0.1), transparent 25rem),
-    radial-gradient(ellipse at 98% 75%, rgba(116, 196, 194, 0.1), transparent 25rem),
+    radial-gradient(ellipse at 2% 8%, rgba(212, 20, 90, 0.09), transparent 28rem),
+    radial-gradient(ellipse at 98% 78%, rgba(197, 138, 36, 0.12), transparent 28rem),
     var(--bg);
   color: var(--ink);
-  font: 16px/1.55 "Nunito Sans", system-ui, sans-serif;
+  font: 16px/1.55 "Segoe UI", system-ui, -apple-system, "Noto Sans Devanagari", sans-serif;
   text-align: left;
   padding-bottom: 32px;
 }
@@ -1014,6 +1014,24 @@
     padding: 20px 18px 32px;
   }
 
+  .melava-page .stepper {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .melava-page .st {
+    display: grid;
+    min-width: 0;
+    min-height: 84px;
+    align-content: center;
+    justify-items: center;
+    white-space: normal;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+
   .melava-page .w3,
   .melava-page .w4 {
     grid-column: span 6;
@@ -1045,6 +1063,11 @@
 
   .melava-page .wrap {
     padding: 12px 12px 28px;
+  }
+
+  .melava-page .stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
   .melava-page .hero {
@@ -1130,8 +1153,6 @@
   }
 
   .melava-page .st {
-    flex: 0 0 96px;
-    min-width: 96px;
     border-radius: 11px;
     padding: 8px 6px;
     font-size: 0.72rem;
@@ -1463,4 +1484,170 @@
 
 .melava-page .pdf-download {
   margin-top: 14px;
+}
+
+/* Public registration page uses the same maroon, blush and gold palette as home. */
+.melava-page .hero {
+  border: 1px solid rgba(231, 196, 140, 0.55);
+  background: linear-gradient(120deg, #650022 0%, #8b0038 55%, #d4145a 100%);
+  box-shadow: 0 14px 34px rgba(101, 0, 34, 0.18);
+}
+
+.melava-page .hero .must {
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.melava-page .card {
+  border: 1px solid rgba(139, 0, 56, 0.1);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 32px rgba(74, 16, 39, 0.08);
+}
+
+.melava-page .campaign-card {
+  border-color: rgba(197, 138, 36, 0.3);
+  background: linear-gradient(135deg, #fff 0%, #fff8f4 100%);
+}
+
+.melava-page .campaign-art {
+  border-color: rgba(197, 138, 36, 0.28);
+  background: #fff0f4;
+}
+
+.melava-page .campaign-eyebrow,
+.melava-page .card > .sub,
+.melava-page .f small {
+  color: #66515b;
+}
+
+.melava-page .campaign-status {
+  border: 1px solid #b7ddc5;
+}
+
+.melava-page .st {
+  border-color: #e8d5dc;
+  color: #634653;
+}
+
+.melava-page .st.on {
+  background: linear-gradient(135deg, #d4145a, #8b0038 75%, #650022);
+  border-color: #8b0038;
+  box-shadow: 0 7px 18px rgba(139, 0, 56, 0.24);
+}
+
+.melava-page .st.done {
+  color: #8b0038;
+  border-color: #e8b8c9;
+  background: #fff0f4;
+}
+
+.melava-page .bar {
+  background: #f0dfe5;
+}
+
+.melava-page .bar b {
+  background: linear-gradient(90deg, #8b0038, #d4145a 72%, #c58a24);
+}
+
+.melava-page .sec {
+  border-left: 3px solid #c58a24;
+  background: linear-gradient(90deg, #fff0f4, #fff9f3);
+  color: #650022;
+}
+
+.melava-page .repeatable-sections > .grid,
+.melava-page .fee-box {
+  border-color: #ecd8df;
+  background: #fff9f7;
+}
+
+.melava-page .repeatable-field input:focus,
+.melava-page .repeatable-field select:focus,
+.melava-page .f input:focus,
+.melava-page .f select:focus,
+.melava-page .f textarea:focus,
+.melava-page .srow input:focus {
+  border-color: #d4145a;
+  box-shadow: 0 0 0 4px rgba(212, 20, 90, 0.12);
+}
+
+.melava-page .f input[type="file"] {
+  border-color: #df9db6;
+  background: #fff5f8;
+}
+
+.melava-page .search {
+  border-color: rgba(197, 138, 36, 0.35);
+  background: linear-gradient(135deg, #fffdf9, #fff3f6);
+}
+
+.melava-page .choice-btn {
+  border-color: #e4c4cf;
+  color: #650022;
+}
+
+.melava-page .choice-btn.active {
+  border-color: #8b0038;
+  background: #8b0038;
+}
+
+.melava-page .btn.p,
+.melava-page .pills input:checked + span {
+  background: linear-gradient(135deg, #d4145a, #8b0038 70%, #650022);
+  color: #fff;
+}
+
+.melava-page .btn.p:hover {
+  background: linear-gradient(135deg, #b80f4d, #650022);
+}
+
+.melava-page .btn.g,
+.melava-page .mini {
+  border-color: #e4c4cf;
+  color: #650022;
+}
+
+.melava-page .btn.g:hover,
+.melava-page .mini:hover {
+  background: #fff0f4;
+}
+
+.melava-page .fee-preview,
+.melava-page .opt,
+.melava-page .payment-record {
+  border: 1px solid #eed9e1;
+  background: #fff4f7;
+}
+
+.melava-page .payment-record.verified {
+  border-color: #b7ddc5;
+  background: #f0faf3;
+}
+
+.melava-page .legal {
+  border-color: #f0c4d2;
+  background: #fff5f8;
+}
+
+.melava-page .legal input {
+  accent-color: #8b0038;
+}
+
+.melava-page .pv {
+  border-color: #e8d5dc;
+}
+
+.melava-page .pv header {
+  background: #fff0f4;
+  color: #650022;
+}
+
+.melava-page .pv header button {
+  border-color: #8b0038;
+  color: #8b0038;
+}
+
+.melava-page :is(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid rgba(212, 20, 90, 0.35);
+  outline-offset: 2px;
 }
