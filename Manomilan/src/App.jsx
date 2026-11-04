@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import Header from "./components/Header.jsx";
 import Footer from "./components/Footer.jsx";
+import MobileBottomNavigation from "./components/MobileBottomNavigation.jsx";
 import ComingSoon from "./pages/ComingSoon.jsx";
 import { getSession, isAdminRole, homeForRole, watchActivity } from "./auth";
 
@@ -136,6 +137,16 @@ const isSuperAdminSession = (user) => {
 };
 
 const SUPER_ADMIN_PERMISSIONS = { is_super_admin: true, modules: [] };
+
+const MOBILE_NAV_PATHS = new Set([
+  "/",
+  "/aboutus",
+  "/how-it-works",
+  "/success-stories",
+  "/our-services",
+  "/contactus",
+  "/melava-registration",
+]);
 
 const legacyHashPath = window.location.hash.match(/^#(\/[^?]*)(?:\?(.*))?$/);
 if (legacyHashPath) {
@@ -428,6 +439,7 @@ export default function App() {
   const { Page: Matched, params } = matchRoute(path);
   const Page = needsLogin ? Login : Matched;
   const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration || isWorkshopRegistration || isMaintenancePath;
+  const showMobileBottomNavigation = MOBILE_NAV_PATHS.has(path);
 
   if (maintenanceActive && isPublicPath) {
     return (
@@ -465,6 +477,7 @@ export default function App() {
         </AdminPermissionContext.Provider>
       ) : <ComingSoon path={path} />}
       {!hideChrome && <Footer />}
+      {showMobileBottomNavigation && <MobileBottomNavigation />}
     </>
   );
 }

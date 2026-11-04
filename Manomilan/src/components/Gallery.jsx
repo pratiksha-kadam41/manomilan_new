@@ -3,7 +3,7 @@ const PHOTOS = [
   { src: "/website/gallery1.jpeg", alt: "Hast Melap Ceremony", cols: "col-6 col-sm-4 col-lg-3" },
   { src: "/website/gallery2.jpeg", alt: "Engagement", cols: "col-6 col-sm-4 col-lg-3" },
   { src: "/website/gallery3.jpeg", alt: "Pheras Ritual", cols: "col-6 col-sm-4 col-lg-3" },
-  { src: "/website/gallery4.jpeg", alt: "Family Gathering", cols: "d-none d-lg-block col-lg-3" },
+  { src: "/website/gallery4.jpeg", alt: "Family Gathering", cols: "col-6 col-sm-4 col-lg-3" },
   { src: "/website/photo501.png", fallback: "/website/gallery5.jpeg", alt: "Vidhi Detail", cols: "col-6 col-sm-4 col-lg-6" },
   { src: "/website/photo101.jpg", alt: "Wedding Party", cols: "col-6 col-sm-4 col-lg-6" },
 ];
