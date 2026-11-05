@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Download, ExternalLink, X } from "lucide-react";
-import { apiMediaUrl } from "../../../api";
+import { apiMediaUrl, getProfilePhoto } from "../../../api";
 import { BIODATA_TEMPLATES } from "./biodataTemplates.js";
 import "./BioDataModal.css";
 
@@ -30,6 +30,7 @@ const dateText = (value) => {
 };
 
 function BioDataPaper({ profile, template, orientation, paperRef }) {
+  const profilePhoto = apiMediaUrl(getProfilePhoto(profile, ["photo_url", "photo", "profile_photo"]));
   const personal = [
     ["Date of Birth", dateText(profile.dob)],
     ["Mobile No", display(profile.mobile)],
@@ -84,8 +85,8 @@ function BioDataPaper({ profile, template, orientation, paperRef }) {
                 </div>
               ))}
             </dl>
-            {(profile.photo_url || profile.photo || profile.profile_photo) && (
-              <img className="bd-photo" src={apiMediaUrl(profile.photo_url || profile.photo || profile.profile_photo)} alt={`${display(profile.full_name)} profile`} crossOrigin="anonymous" />
+            {profilePhoto && (
+              <img className="bd-photo" src={profilePhoto} alt={`${display(profile.full_name)} profile`} crossOrigin="anonymous" />
             )}
           </div>
         </section>

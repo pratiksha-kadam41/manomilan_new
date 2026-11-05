@@ -507,6 +507,58 @@ class Profile extends Model
         ];
     }
 
+    public function additionalPhotoPaths(): array
+    {
+        $photos = $this->photos;
+        if (! is_array($photos)) {
+            $photos = is_string($photos) && $photos !== '' ? (json_decode($photos, true) ?: []) : [];
+        }
+        if (! is_array($photos)) {
+            $photos = [];
+        }
+
+        $sources = [
+            $photos['additional_photos'] ?? $photos['additionalPhotos'] ?? null,
+            $this->getAttribute('additional_photos'),
+        ];
+
+        $paths = [];
+        $collect = function ($value) use (&$collect, &$paths): void {
+            if (is_string($value)) {
+                $decoded = json_decode($value, true);
+                if (is_array($decoded)) {
+                    $collect($decoded);
+                    return;
+                }
+                $value = trim($value);
+                if ($value !== '') {
+                    $paths[] = $value;
+                }
+                return;
+            }
+            if (is_array($value)) {
+                foreach ($value as $item) {
+                    $collect($item);
+                }
+            }
+        };
+
+        foreach ($sources as $source) {
+            $collect($source);
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    public function profilePhotoWithFallback($primary): ?string
+    {
+        if (is_string($primary) && trim($primary) !== '') {
+            return $primary;
+        }
+
+        return $this->additionalPhotoPaths()[0] ?? null;
+    }
+
     public function syncDocumentVerificationStatus(): bool
     {
         $this->unsetRelation('documentVerification');

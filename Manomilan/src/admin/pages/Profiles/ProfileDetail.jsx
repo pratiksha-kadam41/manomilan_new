@@ -8,7 +8,7 @@ import {
 } from "react-icons/fa";
 import AdminLayout from "../../components/AdminLayout";
 import RecordEditorName from "../../components/RecordEditorName";
-import { ApiError, apiMediaUrl, download, request } from "../../../api";
+import { ApiError, apiMediaUrl, download, getProfilePhoto, request } from "../../../api";
 import { useAdminPermission } from "../../../permission-context";
 import "../../components/admin-ui.css";
 import "./ProfileDetail.css";
@@ -70,7 +70,7 @@ function normalizeProfile(profile) {
   const documents = Array.isArray(profile.documents) ? profile.documents : [];
   return {
     ...profile,
-    _photo: normalizeUrl(profile.profile_photo || profile.photo || ""),
+    _photo: normalizeUrl(getProfilePhoto(profile, ["profile_photo", "photo", "photo_url"])),
     photos: (Array.isArray(profile.photos) ? profile.photos : [])
       .filter((photo) => photo && typeof photo === "object")
       .map((photo, index) => ({

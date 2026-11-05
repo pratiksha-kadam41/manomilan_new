@@ -1138,6 +1138,10 @@ class MelavaRegistrationController extends Controller
         $profile = $registration->profile;
         $employment = $profile?->employments?->sortByDesc('id')->first();
         $education = $profile?->educations?->sortByDesc('id')->first();
+        $profilePhoto = $profile && is_array($profile->photos)
+            ? ($profile->photos['profile_photo'] ?? $profile->photos['profilePicture'] ?? $profile->photos[0] ?? null)
+            : null;
+        $profilePhoto = $profile?->profilePhotoWithFallback($profilePhoto);
         $data = [
             'id' => $registration->id,
             'updated_by_user_id' => $registration->updated_by_user_id,
@@ -1166,7 +1170,7 @@ class MelavaRegistrationController extends Controller
             'currency' => $registration->campaign?->currency,
             'total_amount' => (float) ($registration->campaign?->registration_fee ?? 0)
                 + ($registration->is_booklet_req ? (float) ($registration->campaign?->booklet_fee ?? 0) : 0),
-            'profile_photo_url' => $this->fileUrl(request(), $profile?->photos['profile_photo'] ?? null),
+            'profile_photo_url' => $this->fileUrl(request(), is_string($profilePhoto) ? $profilePhoto : null),
         ];
         if ($includeForm) {
             $data['edit_form'] = ['profile' => $profile?->toArray() ?? []];

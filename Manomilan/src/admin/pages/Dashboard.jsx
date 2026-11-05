@@ -1,6 +1,7 @@
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
 import { getAdminDashboardOverview, getSession } from "../../auth";
+import { getProfilePhoto } from "../../api";
 import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
 import { Link } from "react-router-dom";
 import {
@@ -152,7 +153,7 @@ function SafeImage({ src, alt = "", className, children }) {
 
 const Avatar = memo(function Avatar({ profile }) {
   const [a, b] = gradientFor(profile.name);
-  const photo = profile.photo || profile.photo_url || profile.image || profile.avatar;
+  const photo = getProfilePhoto(profile, ["photo", "photo_url", "image", "avatar"]);
   return (
     <span className={`dx-avatar ${slug(profile.type)}`} style={{ "--g1": a, "--g2": b }}>
       <SafeImage src={photo} alt="" className="dx-avatar-img">

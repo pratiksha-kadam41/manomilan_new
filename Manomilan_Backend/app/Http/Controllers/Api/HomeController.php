@@ -80,10 +80,13 @@ class HomeController extends Controller
                     ->map(function (Profile $profile): array {
                         $employment = $profile->employments->sortByDesc('id')->first();
                         $education = $profile->educations->sortByDesc('id')->first();
+                        $photo = is_array($profile->photos) ? ($profile->photos['profile_photo'] ?? $profile->photos[0] ?? null) : null;
+                        $photo = $profile->profilePhotoWithFallback($photo);
 
                         return [
                             'id' => $profile->id,
                             'name' => $profile->full_name ?: 'Candidate',
+                            'photo' => $this->profilePhotoUrl(is_string($photo) ? $photo : null),
                             'type' => ucfirst((string) $profile->groomorbride),
                             'location' => $employment?->employment_city
                                 ?: $education?->education_city
@@ -637,6 +640,10 @@ class HomeController extends Controller
         }
 
         if (str_starts_with($path, 'candidate/')) {
+            return url('storage/'.$path);
+        }
+
+        if (str_starts_with($path, 'additional_photos/') || str_starts_with($path, 'profile_photos/')) {
             return url('storage/'.$path);
         }
 

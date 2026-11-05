@@ -30,6 +30,101 @@ export class ApiError extends Error {
 
 export const apiUrl = API_URL;
 
+const PHOTO_OBJECT_KEYS = [
+  "url",
+  "photo_url",
+  "photoUrl",
+  "profile_photo",
+  "profilePhoto",
+  "profile_photo_url",
+  "image_url",
+  "image",
+  "path",
+  "photo_path",
+  "file_path",
+  "src",
+  "photo",
+  "additional_photo_urls",
+  "additional_photos",
+  "additionalPhotos",
+  "photos",
+  "data",
+];
+
+function firstPhoto(value) {
+  if (typeof value === "string") {
+    const photo = value.trim();
+    if (!photo || /^(?:null|undefined|\[\]|\{\})$/i.test(photo)) return "";
+
+    if (photo.startsWith("[") || photo.startsWith("{") || photo.startsWith('"')) {
+      try {
+        const parsed = JSON.parse(photo);
+        if (parsed !== photo) return firstPhoto(parsed);
+      } catch {
+        return "";
+      }
+    }
+
+    return photo;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const photo = firstPhoto(item);
+      if (photo) return photo;
+    }
+    return "";
+  }
+
+  if (value && typeof value === "object") {
+    for (const key of PHOTO_OBJECT_KEYS) {
+      if (key in value) {
+        const photo = firstPhoto(value[key]);
+        if (photo) return photo;
+      }
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (/^\d+$/.test(key)) {
+        const photo = firstPhoto(item);
+        if (photo) return photo;
+      }
+    }
+  }
+
+  return "";
+}
+
+export function getProfilePhoto(profile, primaryFields = []) {
+  if (!profile || typeof profile !== "object") return "";
+
+  const candidateProfiles = [profile, profile.profile].filter(
+    (candidate) => candidate && typeof candidate === "object",
+  );
+  for (const candidate of candidateProfiles) {
+    for (const field of primaryFields) {
+      const photo = firstPhoto(candidate[field]);
+      if (photo) return photo;
+    }
+  }
+
+  for (const candidate of candidateProfiles) {
+    const additionalPhotos = [
+      candidate.additional_photo_urls,
+      candidate.additional_photos,
+      candidate.additionalPhotos,
+      candidate.photos?.additional_photo_urls,
+      candidate.photos?.additional_photos,
+      candidate.photos?.additionalPhotos,
+    ];
+    for (const value of additionalPhotos) {
+      const photo = firstPhoto(value);
+      if (photo) return photo;
+    }
+  }
+
+  return "";
+}
+
 export function apiMediaUrl(value) {
   const mediaPath = String(value || "").trim();
   if (!mediaPath) return "";
@@ -41,6 +136,7 @@ export function apiMediaUrl(value) {
     "half_body_photos/",
     "selfie_photos/",
     "melava_candidate_photos/",
+    "melava_additional_photos/",
   ];
   const mediaFolders = /^\/(?:storage\/)?candidate(?:_images|_documents)\//i;
 
@@ -64,6 +160,16 @@ export function apiMediaUrl(value) {
     } else if (/^candidate_images\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;
     } else if (/^candidate_documents\//i.test(storedPath)) {
+      path = `/storage/${storedPath}`;
+    } else if (/^uploads\/(?:melava_documents|melava_additional_photos)\//i.test(storedPath)) {
+      path = `/${storedPath}`;
+    } else if (/^uploads\/profile_photos\//i.test(storedPath)) {
+      path = `/storage/${storedPath.replace(/^uploads\//i, "")}`;
+    } else if (/^uploads\//i.test(storedPath)) {
+      path = `/storage/${storedPath}`;
+    } else if (/^melava_additional_photos\//i.test(storedPath)) {
+      path = `/uploads/${storedPath}`;
+    } else if (/^additional_photos\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;
     } else if (/^profile_photos\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;

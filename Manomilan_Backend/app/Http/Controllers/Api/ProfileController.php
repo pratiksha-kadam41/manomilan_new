@@ -274,6 +274,7 @@ class ProfileController extends Controller
                 'profiles.special_cases',
                 'profiles.about_me',
                 'profiles.photos',
+                'profiles.additional_photos',
                 'profiles.monthly_income',
                 'profiles.annual_income',
                 'profiles.personal_medical_history',
@@ -605,44 +606,18 @@ class ProfileController extends Controller
             };
 
             $storedPhotos = is_array($profile->photos) ? $profile->photos : [];
-            foreach ([
-                'Profile Photo' => $storedPhotos['profile_photo'] ?? $profile->profilePhoto,
-                'Full Body Photo' => $storedPhotos['full_body_photo'] ?? $profile->full_body_photo,
-                'Half Body Photo' => $storedPhotos['half_body_photo'] ?? $profile->half_body_photo,
-                'Selfie Photo' => $storedPhotos['selfie_photo'] ?? $profile->selfie_photo,
-            ] as $label => $path) {
-                $addPhoto($label, $path);
+            $primaryPhoto = $storedPhotos['profile_photo'] ?? $storedPhotos['profilePicture'] ?? $storedPhotos[0] ?? $profile->profilePhoto ?? null;
+            $profilePhoto = $profile->profilePhotoWithFallback($primaryPhoto);
+            if (is_string($profilePhoto)) {
+                $addPhoto('Profile Photo', $profilePhoto);
             }
 
-            $additionalPhotos = $storedPhotos['additional_photos'] ?? $profile->additional_photos;
-            if (is_string($additionalPhotos)) {
-                $additionalPhotos = json_decode($additionalPhotos, true) ?: [];
-            }
-            foreach (array_values(is_array($additionalPhotos) ? $additionalPhotos : []) as $index => $path) {
-                $addPhoto('Additional Photo '.($index + 1), $path);
-            }
-
-            foreach (array_values($storedPhotos['candidate_photos'] ?? []) as $index => $path) {
-                $addPhoto('Candidate Photo '.($index + 1), $path);
-            }
-
-            if (
-                Schema::hasTable('profile_melava_registrations')
-                && Schema::hasColumn('profile_melava_registrations', 'candidate_photos')
-            ) {
-                $candidatePhotos = ProfileMelavaRegistration::query()
-                    ->where('profile_id', $profile->id)
-                    ->get(['candidate_photos']);
-
-                foreach ($candidatePhotos as $registration) {
-                    $paths = $registration->candidate_photos;
-                    if (is_string($paths)) {
-                        $paths = json_decode($paths, true) ?: [];
-                    }
-
-                    foreach (array_values(is_array($paths) ? $paths : []) as $index => $path) {
-                        $addPhoto('Candidate Photo '.($index + 1), $path);
-                    }
+            $additionalPhotoIndex = 1;
+            foreach ($this->profilePhotoPaths($profile, $storedPhotos) as $path) {
+                $photoCount = count($photos);
+                $addPhoto('Additional Photo '.$additionalPhotoIndex, $path);
+                if (count($photos) > $photoCount) {
+                    $additionalPhotoIndex++;
                 }
             }
 
@@ -653,8 +628,8 @@ class ProfileController extends Controller
                 'profile_id' => $profile->reg_id,
                 'serial_no' => null,
                 'full_name' => $profile->full_name,
-                'profile_photo' => $storedPhotos['profile_photo'] ?? $profile->profilePhoto,
-                'photo' => $storedPhotos['profile_photo'] ?? $profile->profilePhoto,
+                'profile_photo' => $profilePhoto,
+                'photo' => $profilePhoto,
                 'photos' => $photos,
                 'mobile' => $profile->user?->username ?? $profile->phone,
                 'email' => $profile->email ?? $profile->user?->email,
@@ -1399,7 +1374,8 @@ class ProfileController extends Controller
             $partnerPreference = $profile->partnerPreferences;
             $latestMelava = $profile->profileMelavaRegistrations->sortByDesc('id')->first();
             $photos = is_array($profile->photos) ? $profile->photos : [];
-            $photo = $photos['profile_photo'] ?? $profile->profile_photo ?? $profile->profilePhoto;
+            $photo = $photos['profile_photo'] ?? $photos['profilePicture'] ?? $photos[0] ?? $profile->profile_photo ?? $profile->profilePhoto;
+            $photo = $profile->profilePhotoWithFallback($photo);
             $birthDate = $profile->birth_date ?: $profile->birthDate ?: $latestMelava?->birthDate;
             $height = $profile->height_cm
                 ? rtrim(rtrim(number_format((float) $profile->height_cm, 2, '.', ''), '0'), '.').' cm'
@@ -1762,6 +1738,7 @@ class ProfileController extends Controller
         $profile->loadMissing(['profileDocuments', 'user']);
         $storedPhotos = is_array($profile->photos) ? $profile->photos : [];
         $profilePhoto = $storedPhotos['profile_photo'] ?? $storedPhotos[0] ?? $profile->profilePhoto;
+        $profilePhoto = $profile->profilePhotoWithFallback($profilePhoto);
         $verification = DocumentVerification::firstOrCreate(['profile_id' => $profile->id]);
         $documentColumns = [
             'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
@@ -1876,6 +1853,7 @@ class ProfileController extends Controller
             $addresses = [];
         }
         $profilePhoto = $photoPaths['profile_photo'] ?? $photoPaths['profilePicture'] ?? $photoPaths[0] ?? $profile->profile_photo ?? null;
+        $profilePhoto = $profile->profilePhotoWithFallback($profilePhoto);
 
         $normalizeList = function ($value) {
             if (is_array($value)) {
@@ -2092,45 +2070,46 @@ class ProfileController extends Controller
     private function profilePhotoPaths(Profile $profile, array $photos): array
     {
         $paths = [];
-        foreach ($photos as $value) {
-            foreach (is_array($value) ? $value : [$value] as $path) {
-                if (is_string($path) && trim($path) !== '') {
-                    $paths[] = $this->normalizePhotoPath($path);
+        $collect = function ($value) use (&$collect, &$paths): void {
+            if (is_string($value)) {
+                $decoded = json_decode($value, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $collect($decoded);
+
+                    return;
+                }
+
+                if (trim($value) !== '') {
+                    $paths[] = $this->normalizePhotoPath($value);
+                }
+
+                return;
+            }
+
+            if (is_array($value)) {
+                foreach ($value as $item) {
+                    $collect($item);
                 }
             }
+        };
+
+        foreach ($photos as $value) {
+            $collect($value);
         }
 
         foreach (['profilePhoto', 'full_body_photo', 'half_body_photo', 'selfie_photo'] as $column) {
-            $path = $profile->getAttribute($column);
-            if (is_string($path) && trim($path) !== '') {
-                $paths[] = $this->normalizePhotoPath($path);
-            }
+            $collect($profile->getAttribute($column));
         }
 
         if (Schema::hasColumn($profile->getTable(), 'additional_photos')) {
-            $additional = $profile->getAttribute('additional_photos');
-            if (is_string($additional)) {
-                $additional = json_decode($additional, true) ?: [];
-            }
-            foreach (is_array($additional) ? $additional : [] as $path) {
-                if (is_string($path) && trim($path) !== '') {
-                    $paths[] = $this->normalizePhotoPath($path);
-                }
-            }
+            $collect($profile->getAttribute('additional_photos'));
         }
 
         if (Schema::hasTable('profile_melava_registrations')
             && Schema::hasColumn('profile_melava_registrations', 'candidate_photos')) {
             foreach (ProfileMelavaRegistration::where('profile_id', $profile->id)->get(['candidate_photos']) as $registration) {
                 $candidatePhotos = $registration->candidate_photos;
-                if (is_string($candidatePhotos)) {
-                    $candidatePhotos = json_decode($candidatePhotos, true) ?: [];
-                }
-                foreach (is_array($candidatePhotos) ? $candidatePhotos : [] as $path) {
-                    if (is_string($path) && trim($path) !== '') {
-                        $paths[] = $this->normalizePhotoPath($path);
-                    }
-                }
+                $collect($candidatePhotos);
             }
         }
 
@@ -2193,6 +2172,14 @@ class ProfileController extends Controller
 
         if (str_starts_with($path, 'candidate/')) {
             return url('storage/'.$path);
+        }
+
+        if (str_starts_with($path, 'uploads/profile_photos/')) {
+            $path = substr($path, strlen('uploads/'));
+        }
+
+        if (str_starts_with($path, 'uploads/melava_documents/')) {
+            return url($path);
         }
 
         return Storage::disk('public')->url($path);

@@ -20,7 +20,7 @@ import RecordEditorName from "../components/RecordEditorName";
 import useDebouncedValue from "../hooks/useDebouncedValue";
 import { useAdminPermission } from "../../permission-context";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
-import { request, apiMediaUrl } from "../../api";
+import { request, apiMediaUrl, getProfilePhoto } from "../../api";
 import "../components/admin-ui.css";
 import "./melavaPayments.css";
 
@@ -389,12 +389,17 @@ export default function MelavaPayments() {
                 ) : null}
                 {registrations.map((row, index) => {
                   const name = row.fullName || row.profile?.fullName || "Unnamed candidate";
+                  const profilePhoto = apiMediaUrl(getProfilePhoto(row, [
+                    "profile_photo_url",
+                    "photo_url",
+                    "profile_photo",
+                  ]));
                   return (
                     <tr key={row.id}>
                       <td>
                         <div className="ui-person">
-                          {(row.profile_photo_url || row.photo_url || row.profile_photo) ? (
-                            <span className="ui-avatar"><img src={apiMediaUrl(row.profile_photo_url || row.photo_url || row.profile_photo)} alt="" loading="lazy" /></span>
+                          {profilePhoto ? (
+                            <span className="ui-avatar"><img src={profilePhoto} alt="" loading="lazy" /></span>
                           ) : (
                             <span className="ui-avatar">{initials(row.full_name)}</span>
                           )}

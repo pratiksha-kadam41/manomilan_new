@@ -11,7 +11,7 @@ import AdminPagination from "../../components/AdminPagination";
 import AgeRangeFilter from "../../components/AgeRangeFilter";
 import RecordEditorName from "../../components/RecordEditorName";
 import useDebouncedValue from "../../hooks/useDebouncedValue";
-import { request, download, apiMediaUrl } from "../../../api";
+import { request, download, apiMediaUrl, getProfilePhoto } from "../../../api";
 import { touchSession } from "../../../auth";
 import { PermissionGate, useAdminPermission } from "../../../permission-context";
 import "../../components/admin-ui.css";
@@ -80,7 +80,7 @@ const initials = (name = "") =>
 
 function Avatar({ p, onOpen }) {
   const [broken, setBroken] = useState(false);
-  const photoSrc = apiMediaUrl(p.photo_url || p.photo || p.profile_photo || p.image);
+  const photoSrc = apiMediaUrl(getProfilePhoto(p, ["photo_url", "photo", "profile_photo", "image"]));
   if (!photoSrc || broken)
     return <div className="ui-avatar" aria-hidden="true">{initials(p.full_name)}</div>;
   return (

@@ -4,7 +4,7 @@ import {
   Eye, ArrowLeft, Save, Loader2, AlertTriangle, CheckCircle2, Clock, XCircle, Ban,
 } from "lucide-react";
 import AdminLayout from "../../components/AdminLayout";
-import { apiMediaUrl, request } from "../../../api";
+import { apiMediaUrl, getProfilePhoto, request } from "../../../api";
 import { useAdminPermission } from "../../../permission-context";
 import "./verify.css";
 
@@ -89,7 +89,7 @@ const isImageUrl = (url) => /\.(?:jpe?g|png|gif|webp|bmp|svg)(?:[?#].*)?$/i.test
 
 function Photo({ profile }) {
   const [broken, setBroken] = useState(false);
-  const photoSrc = apiMediaUrl(profile.photo_url || profile.photo || profile.profile_photo);
+  const photoSrc = apiMediaUrl(getProfilePhoto(profile, ["photo_url", "photo", "profile_photo"]));
   if (!photoSrc || broken)
     return <div className="pv-avatar" aria-hidden="true">{initials(profile.full_name)}</div>;
   return (
@@ -141,12 +141,12 @@ export default function ProfileVerify({ params }) {
         full_name: data.profile?.full_name || data.profile?.fullName || "Unnamed profile",
         registration_number: data.profile?.registration_number || "N/A",
         registration_date: data.profile?.registration_date || "N/A",
-        photo_url: apiMediaUrl(
-          data.profile?.photo_url
-          || data.profile?.profile_photo
-          || data.profile?.photo
-          || data.profile?.photoUrl
-        ),
+        photo_url: apiMediaUrl(getProfilePhoto(data.profile, [
+          "photo_url",
+          "profile_photo",
+          "photo",
+          "photoUrl",
+        ])),
       });
       setFiles(Object.fromEntries(DOCUMENTS.map(({ key }) => [key, safeUrl(docs[key]?.file_url)])));
       setForm(next);
