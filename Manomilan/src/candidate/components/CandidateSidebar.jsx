@@ -1,5 +1,5 @@
 import {
-  Bell, Heart, Home, Inbox, KeyRound, LogOut, Send, User, Users,
+  Bell, Heart, Home, Inbox, KeyRound, LogOut, ReceiptText, Send, User, Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { accountItems, menuItems } from "../data/candidateData";
@@ -10,6 +10,7 @@ const ICONS = {
   search: Users,
   inbox: Inbox,
   send: Send,
+  receipt: ReceiptText,
   bell: Bell,
   key: KeyRound,
 };

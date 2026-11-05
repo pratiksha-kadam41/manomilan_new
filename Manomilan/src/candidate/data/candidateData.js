@@ -4,6 +4,7 @@ export const menuItems = [
   { label: "Find Matches", path: "/candidate/matches", icon: "search", requiresComplete: true },
   { label: "Interests Received", path: "/candidate/interests-received", icon: "inbox", requiresComplete: true },
   { label: "Interests Sent", path: "/candidate/interests-sent", icon: "send", requiresComplete: true },
+  { label: "Melava Receipts", path: "/candidate/melava-receipts", icon: "receipt", requiresComplete: true },
 ];
 
 export const accountItems = [

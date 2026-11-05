@@ -1590,6 +1590,484 @@ body.candidate-mode *::after {
   font-size: 11.5px;
 }
 
+.cnd-receipt-header-art {
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border: 1px solid #f1d4de;
+  border-radius: 20px;
+  color: var(--cnd-burgundy);
+  background: linear-gradient(145deg, #fff5f8, #ffe2eb);
+  box-shadow: 0 12px 26px rgba(139, 34, 69, 0.1);
+}
+
+.cnd-receipt-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.cnd-receipt-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(232, 213, 220, 0.9);
+  border-radius: var(--cnd-radius);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--cnd-shadow-sm);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cnd-receipt-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 34px rgba(74, 9, 31, 0.12);
+}
+
+.cnd-receipt-banner {
+  position: relative;
+  height: 158px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #721e3e, #e83e6c);
+}
+
+.cnd-receipt-banner-empty {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.8);
+  background:
+    radial-gradient(circle at 75% 20%, rgba(255, 194, 212, 0.32), transparent 28%),
+    linear-gradient(135deg, #721e3e, #e83e6c);
+}
+
+.cnd-receipt-banner::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, rgba(33, 5, 17, 0.02), rgba(33, 5, 17, 0.48));
+}
+
+.cnd-receipt-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.cnd-receipt-card:hover .cnd-receipt-banner img {
+  transform: scale(1.04);
+}
+
+.cnd-receipt-event-tag {
+  position: absolute;
+  right: 14px;
+  bottom: 13px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 99px;
+  color: #fff;
+  background: rgba(52, 8, 26, 0.58);
+  font-size: 10px;
+  font-weight: 600;
+  backdrop-filter: blur(7px);
+}
+
+.cnd-receipt-body {
+  padding: 18px;
+}
+
+.cnd-receipt-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cnd-receipt-title-row h2 {
+  color: var(--cnd-ink);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cnd-receipt-id {
+  display: block;
+  margin-top: 5px;
+  color: var(--cnd-muted);
+  font-size: 10px;
+}
+
+.cnd-receipt-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 12px;
+  margin: 20px 0;
+  padding: 16px 0;
+  border-top: 1px solid var(--cnd-line);
+  border-bottom: 1px solid var(--cnd-line);
+}
+
+.cnd-receipt-details > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  color: var(--cnd-rose);
+}
+
+.cnd-receipt-details span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cnd-receipt-details small {
+  color: var(--cnd-muted);
+  font-size: 9px;
+}
+
+.cnd-receipt-details strong {
+  overflow: hidden;
+  color: var(--cnd-text);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cnd-receipt-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cnd-receipt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cnd-receipt-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cnd-success);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.cnd-receipt-footer.is-unavailable .cnd-receipt-status {
+  color: var(--cnd-muted);
+}
+
+.cnd-receipt-download {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 8px 11px;
+  font-size: 10.5px;
+}
+
+.cnd-receipt-download-error {
+  margin-top: 9px;
+  color: var(--cnd-danger);
+  font-size: 10px;
+  text-align: right;
+}
+
+.cnd-pdf-label {
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+}
+
+.cnd-receipts-empty-card {
+  min-height: 320px;
+}
+
+.candidate-receipt-export-wrap {
+  position: absolute;
+  top: 0;
+  left: -10000px;
+  z-index: 0;
+  width: 588px;
+  pointer-events: none;
+}
+
+.candidate-receipt-export-wrap.is-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  width: auto;
+  max-height: 100vh;
+  padding: 28px 16px 20px;
+  overflow: auto;
+  pointer-events: auto;
+  background: rgba(36, 18, 26, 0.78);
+  backdrop-filter: blur(7px);
+}
+
+.candidate-receipt-export-wrap.is-preview .candidate-receipt-export {
+  flex: 0 0 auto;
+}
+
+.candidate-receipt-preview-close {
+  position: fixed;
+  top: 14px;
+  right: 16px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  color: #fff;
+  background: rgba(36, 18, 26, 0.65);
+}
+
+.candidate-receipt-preview-actions {
+  flex: 0 0 auto;
+  padding-bottom: 4px;
+}
+
+.candidate-receipt-export {
+  box-sizing: border-box;
+  width: 588px;
+  margin: 0 auto;
+  padding: 0 14px 28px;
+  overflow: hidden;
+  color: #28151d;
+  border: 1px solid #e8dfe4;
+  border-radius: 8px;
+  background: #f7f3f5;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.candidate-receipt-export-head {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 88px;
+  margin: 0 -14px;
+  padding: 10px 46px;
+  color: #fff;
+  background:
+    radial-gradient(ellipse at 90% 118%, transparent 0 29%, rgba(255, 38, 132, 0.66) 29.5% 30.5%, transparent 31% 39%, rgba(255, 38, 132, 0.42) 39.5% 40.5%, transparent 41%),
+    linear-gradient(116deg, #a50042 0%, #65072e 61%, #b80d57 100%);
+}
+
+.candidate-receipt-export-head::after {
+  position: absolute;
+  right: -66px;
+  bottom: -108px;
+  width: 430px;
+  height: 218px;
+  border: 2px solid rgba(255, 68, 151, 0.6);
+  border-radius: 50%;
+  box-shadow:
+    0 -18px 0 -1px rgba(255, 68, 151, 0.45),
+    0 -36px 0 -1px rgba(255, 68, 151, 0.32);
+  content: "";
+  transform: rotate(-18deg);
+}
+
+.candidate-receipt-export-head img {
+  position: relative;
+  z-index: 1;
+  width: 116px;
+  height: 64px;
+  object-fit: contain;
+  border-right: 2px solid rgba(255, 255, 255, 0.75);
+  padding-right: 17px;
+}
+
+.candidate-receipt-export-head div {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.candidate-receipt-export-head strong {
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.candidate-receipt-export-head span {
+  font-size: 12px;
+}
+
+.candidate-receipt-paper-card {
+  position: relative;
+  z-index: 2;
+  margin: 12px 0 0;
+  overflow: hidden;
+  border: 1px solid #eadfe5;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 9px 24px rgba(79, 24, 48, 0.13);
+}
+
+.candidate-receipt-export-body {
+  padding: 17px 20px 0;
+}
+
+.candidate-receipt-export-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #efb5cd;
+}
+
+.candidate-receipt-export-title h1 {
+  margin: 0;
+  color: #24131b;
+  font-size: 23px;
+  text-transform: capitalize;
+}
+
+.candidate-receipt-export-title > span {
+  padding: 8px 11px;
+  border-radius: 10px;
+  color: #8c0c43;
+  background: #ffe4ef;
+  font-size: 11px;
+}
+
+.candidate-receipt-export-rows {
+  margin-top: 8px;
+}
+
+.candidate-receipt-export-rows > div {
+  display: grid;
+  grid-template-columns: 42px 121px 14px 1fr;
+  align-items: center;
+  min-height: 32px;
+  border-bottom: 1px solid #f0dce5;
+  font-size: 11px;
+}
+
+.candidate-receipt-export-rows span {
+  color: #5b5360;
+}
+
+.candidate-receipt-row-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 28px;
+  border-radius: 8px;
+  color: #a00046 !important;
+  background: #ffe4ef;
+}
+
+.candidate-receipt-row-icon svg {
+  stroke-width: 2.2;
+}
+
+.candidate-receipt-export-rows strong {
+  color: #30232a;
+}
+
+.candidate-receipt-paid {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 8px;
+  color: #087c28 !important;
+  background: #d9f6df;
+}
+
+.candidate-receipt-paid svg {
+  stroke-width: 3;
+}
+
+.candidate-receipt-thanks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin: 18px 0 9px;
+  padding: 10px;
+  border-radius: 11px;
+  color: #a00046;
+  background: #ffe0ed;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.candidate-receipt-note {
+  margin: 0;
+  color: #706976;
+  font-size: 9px;
+  font-style: italic;
+  text-align: center;
+}
+
+.candidate-receipt-export-foot {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 114px;
+  margin-top: 21px;
+  padding: 15px 20px 0;
+  border-top: 2px solid #f5d6e2;
+}
+
+.candidate-receipt-export-foot > img:first-child {
+  width: 108px;
+  height: 66px;
+  object-fit: contain;
+}
+
+.candidate-receipt-export-foot > img:last-child {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+}
+
+.candidate-receipt-export-foot div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  margin: 0 10px;
+  padding: 5px 12px;
+  border-right: 2px solid #e890b2;
+  border-left: 2px solid #e890b2;
+  text-align: center;
+}
+
+.candidate-receipt-export-foot strong {
+  color: #7f123b;
+  font-size: 12px;
+}
+
+.candidate-receipt-export-foot span {
+  font-size: 8px;
+}
+
 .cnd-card-head-action {
   flex-shrink: 0;
 }
@@ -4433,6 +4911,10 @@ body.candidate-mode *::after {
     flex: 1;
   }
 
+  .cnd-receipt-list {
+    grid-template-columns: 1fr;
+  }
+
   .cnd-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4735,6 +5217,152 @@ body.candidate-mode *::after {
   .cnd-card {
     padding: 16px;
     border-radius: 17px;
+  }
+
+  .cnd-receipt-header-art {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+  }
+
+  .cnd-receipt-banner {
+    height: 142px;
+  }
+
+  .cnd-receipt-body {
+    padding: 15px;
+  }
+
+  .cnd-receipt-title-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .cnd-receipt-details {
+    gap: 13px 8px;
+    margin: 17px 0;
+    padding: 14px 0;
+  }
+
+  .cnd-receipt-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cnd-receipt-actions {
+    width: 100%;
+  }
+
+  .cnd-receipt-download {
+    width: 100%;
+  }
+
+  .candidate-receipt-export {
+    padding: 0 12px 20px;
+  }
+
+  .candidate-receipt-export-wrap.is-preview {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .candidate-receipt-export-wrap.is-preview .candidate-receipt-export {
+    width: calc(100vw - 16px);
+  }
+
+  .candidate-receipt-export-head {
+    min-height: 92px;
+    margin: 0 -12px 16px;
+    padding: 12px 18px;
+    gap: 10px;
+  }
+
+  .candidate-receipt-export-head img {
+    width: 78px;
+    height: 54px;
+    padding-right: 10px;
+  }
+
+  .candidate-receipt-export-head strong {
+    font-size: 17px;
+  }
+
+  .candidate-receipt-export-head span {
+    font-size: 10px;
+  }
+
+  .candidate-receipt-export-body {
+    padding: 0 8px;
+  }
+
+  .candidate-receipt-export-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 12px;
+  }
+
+  .candidate-receipt-export-title h1 {
+    font-size: 23px;
+  }
+
+  .candidate-receipt-export-title > span {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+
+  .candidate-receipt-export-rows > div {
+    grid-template-columns: 28px 112px 12px 1fr;
+    min-height: 36px;
+    font-size: 10px;
+  }
+
+  .candidate-receipt-row-icon {
+    width: 23px;
+    height: 23px;
+  }
+
+  .candidate-receipt-row-icon svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .candidate-receipt-paid {
+    padding: 5px 7px;
+  }
+
+  .candidate-receipt-thanks {
+    margin-top: 18px;
+    padding: 11px 8px;
+    font-size: 10px;
+  }
+
+  .candidate-receipt-note {
+    font-size: 9px;
+  }
+
+  .candidate-receipt-export-foot {
+    gap: 8px;
+    margin-top: 18px;
+    padding: 14px 4px 0;
+  }
+
+  .candidate-receipt-export-foot > img:first-child {
+    width: 68px;
+    height: 40px;
+  }
+
+  .candidate-receipt-export-foot > img:last-child {
+    width: 48px;
+    height: 48px;
+  }
+
+  .candidate-receipt-export-foot strong {
+    font-size: 10px;
+  }
+
+  .candidate-receipt-export-foot span {
+    font-size: 7px;
   }
 
   .cnd-hero {

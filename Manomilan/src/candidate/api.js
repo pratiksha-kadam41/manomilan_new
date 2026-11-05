@@ -157,6 +157,11 @@ export const getCandidateProfile = async () => {
   return candidateProfileCache;
 };
 
+export const getCandidateMelavaRegistrations = async () => {
+  const result = data(await request("/candidate/melava-registrations"));
+  return result?.registrations || [];
+};
+
 export const invalidateCandidateProfileCache = () => {
   candidateProfileCache = null;
   candidateProfileCachedAt = 0;

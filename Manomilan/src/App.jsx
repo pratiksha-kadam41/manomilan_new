@@ -28,6 +28,7 @@ const CandidateMatches = lazy(() => import("./candidate/pages/Matches"));
 const CandidateProfile = lazy(() => import("./candidate/pages/Profile"));
 const CandidateActivity = lazy(() => import("./candidate/pages/Activity"));
 const CandidateNotifications = lazy(() => import("./candidate/pages/Notifications"));
+const CandidateMelavaReceipts = lazy(() => import("./candidate/pages/MelavaReceipts"));
 const CandidateProfileView = lazy(() => import("./candidate/pages/CandidateProfileView"));
 const Profiles = lazy(() => import("./admin/pages/Profiles/Profiles.jsx"));
 const ProfileVerify = lazy(() => import("./admin/pages/Profiles/ProfileVerify.jsx"));
@@ -78,6 +79,7 @@ const ROUTES = {
   "/candidate/interests-sent": () => (
     <CandidateActivity currentPath="/candidate/interests-sent" />
   ),
+  "/candidate/melava-receipts": CandidateMelavaReceipts,
   "/candidate/notifications": CandidateNotifications,
   "/candidate/change-password": ChangePassword,
   "/admin": Dashboard,

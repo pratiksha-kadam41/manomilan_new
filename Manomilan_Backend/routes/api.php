@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\WorkshopEventController;
 use App\Http\Controllers\Candidate\DashboardController as CandidateDashboardController;
 use App\Http\Controllers\Candidate\InterestController as CandidateInterestController;
 use App\Http\Controllers\Candidate\MatchController as CandidateMatchController;
+use App\Http\Controllers\Candidate\MelavaController as CandidateMelavaController;
 use App\Http\Controllers\Candidate\NotificationController as CandidateNotificationController;
 use App\Http\Controllers\Candidate\PreferenceController as CandidatePreferenceController;
 use App\Http\Controllers\Candidate\ProfileController as CandidateProfileController;
@@ -210,6 +211,7 @@ Route::prefix('admin/success-stories')->group(function () {
     Route::get('/profiles/{profileId}/receipt', [ReceiptController::class, 'show'])->whereNumber('profileId');
 
     Route::prefix('candidate')->group(function () {
+        Route::get('/melava-registrations', [CandidateMelavaController::class, 'registrations']);
         Route::get('/profile/status', [CandidateProfileController::class, 'status']);
         Route::get('/profile', [CandidateProfileController::class, 'show']);
         Route::post('/profile', [CandidateProfileController::class, 'store']);
