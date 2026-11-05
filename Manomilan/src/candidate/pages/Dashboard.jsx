@@ -149,10 +149,12 @@ export default function Dashboard() {
   const [suggested, setSuggested] = useState([]);
   const [recentProfiles, setRecentProfiles] = useState([]);
   const [suggestedLoading, setSuggestedLoading] = useState(true);
+  const [suggestedLoadingMore, setSuggestedLoadingMore] = useState(false);
   const [recentLoading, setRecentLoading] = useState(true);
   const [loading, setLoading] = useState(() => !dashboardCache);
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
+  const [suggestedMoreError, setSuggestedMoreError] = useState("");
   const [recentError, setRecentError] = useState("");
   const [busy, setBusy] = useState({});
   const [selected, setSelected] = useState(null);
@@ -160,8 +162,13 @@ export default function Dashboard() {
   const [showMissingDetails, setShowMissingDetails] = useState(false);
   const recentSection = useRef(null);
   const suggestedSection = useRef(null);
+  const suggestedLoadMoreRef = useRef(null);
   const recentRequestProfile = useRef(null);
   const suggestedRequestProfile = useRef(null);
+  const suggestedLoadedIds = useRef(new Set());
+  const suggestedHasMore = useRef(false);
+  const suggestedLoadingMoreRef = useRef(false);
+  const suggestedPage = useRef(1);
   const { toasts, push, dismiss } = useToasts();
 
   const load = useCallback(async (force = false) => {
@@ -201,22 +208,30 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    if (!loading && completion <= 50) {
+    if (!loading && completion < 30) {
       setSuggestedLoading(false);
       setRecentLoading(false);
     }
   }, [loading, completion]);
 
   const loadSuggested = useCallback(async () => {
-    if (!profile?.id || completion <= 50 || suggestedRequestProfile.current === profile.id) return;
+    if (!profile?.id || completion < 30 || suggestedRequestProfile.current === profile.id) return;
     suggestedRequestProfile.current = profile.id;
     setSuggestedLoading(true);
     setSuggestedError("");
+    setSuggestedMoreError("");
+    suggestedLoadedIds.current = new Set();
+    suggestedHasMore.current = false;
+    suggestedPage.current = 1;
     try {
       const result = await getMatches({
-        sort: "best_match", per_page: 6, include_filters: 0, shuffle_seed: shuffleSeed,
+        sort: "best_match", per_page: 6, page: 1, feed: 1,
+        include_filters: 0, shuffle_seed: shuffleSeed,
       });
-      setSuggested(Array.isArray(result?.matches) ? result.matches : []);
+      const matches = Array.isArray(result?.matches) ? result.matches : [];
+      suggestedLoadedIds.current = new Set(matches.map((match) => String(match.id)));
+      suggestedHasMore.current = Boolean(result?.pagination?.has_more);
+      setSuggested(matches);
     } catch (matchError) {
       suggestedRequestProfile.current = null;
       setSuggestedError(matchError.message || "Could not load compatible profiles.");
@@ -225,8 +240,44 @@ export default function Dashboard() {
     }
   }, [profile?.id, completion, shuffleSeed]);
 
+  const loadMoreSuggested = useCallback(async () => {
+    if (
+      !profile?.id
+      || completion < 30
+      || !suggestedHasMore.current
+      || suggestedLoadingMoreRef.current
+    ) return;
+
+    suggestedLoadingMoreRef.current = true;
+    setSuggestedLoadingMore(true);
+    setSuggestedMoreError("");
+    const page = suggestedPage.current + 1;
+    try {
+      const result = await getMatches({
+        sort: "best_match",
+        per_page: 6,
+        page,
+        feed: 1,
+        include_filters: 0,
+        shuffle_seed: shuffleSeed,
+        exclude_ids: [...suggestedLoadedIds.current].join(","),
+      });
+      const nextMatches = (Array.isArray(result?.matches) ? result.matches : [])
+        .filter((match) => !suggestedLoadedIds.current.has(String(match.id)));
+      nextMatches.forEach((match) => suggestedLoadedIds.current.add(String(match.id)));
+      suggestedPage.current = page;
+      suggestedHasMore.current = Boolean(result?.pagination?.has_more);
+      setSuggested((current) => [...current, ...nextMatches]);
+    } catch (matchError) {
+      setSuggestedMoreError(matchError.message || "Could not load more compatible profiles.");
+    } finally {
+      suggestedLoadingMoreRef.current = false;
+      setSuggestedLoadingMore(false);
+    }
+  }, [profile?.id, completion, shuffleSeed]);
+
   const loadRecent = useCallback(async () => {
-    if (!profile?.id || completion <= 50 || recentRequestProfile.current === profile.id) return;
+    if (!profile?.id || completion < 30 || recentRequestProfile.current === profile.id) return;
     recentRequestProfile.current = profile.id;
     setRecentLoading(true);
     setRecentError("");
@@ -245,7 +296,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const section = recentSection.current;
-    if (!section || !profile?.id || completion <= 50 || recentRequestProfile.current === profile.id) return undefined;
+    if (!section || !profile?.id || completion < 30 || recentRequestProfile.current === profile.id) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
@@ -257,7 +308,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     const section = suggestedSection.current;
-    if (!section || !profile?.id || completion <= 50 || suggestedRequestProfile.current === profile.id) return undefined;
+    if (!section || !profile?.id || completion < 30 || suggestedRequestProfile.current === profile.id) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting) return;
       observer.disconnect();
@@ -266,6 +317,24 @@ export default function Dashboard() {
     observer.observe(section);
     return () => observer.disconnect();
   }, [profile?.id, completion, loadSuggested]);
+
+  useEffect(() => {
+    const sentinel = suggestedLoadMoreRef.current;
+    if (
+      !sentinel
+      || !suggestedHasMore.current
+      || suggestedLoading
+      || suggestedLoadingMore
+      || suggestedMoreError
+      || completion < 30
+    ) return undefined;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) loadMoreSuggested();
+    }, { rootMargin: "500px 0px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [completion, loadMoreSuggested, suggested.length, suggestedLoading, suggestedLoadingMore, suggestedMoreError]);
 
   const updateMatch = (profileId, patch) => {
     setSuggested((items) => items.map((item) => (
@@ -407,8 +476,8 @@ export default function Dashboard() {
               <ErrorState message={recentError} onRetry={loadRecent} />
             ) : recentLoading ? (
               <CardGridSkeleton count={3} />
-            ) : completion <= 50 ? (
-              <div className="mm-recent-loading">Complete your profile to more than 50% to unlock new candidate recommendations.</div>
+            ) : completion < 30 ? (
+              <div className="mm-recent-loading">Complete your profile to at least 30% to unlock new candidate recommendations.</div>
             ) : (
               <div className="mm-recent-loading">No candidates available right now.</div>
             )}
@@ -439,11 +508,20 @@ export default function Dashboard() {
               <ErrorState message={suggestedError} onRetry={loadSuggested} />
             ) : suggestedLoading ? (
               <CardGridSkeleton count={3} />
-            ) : completion <= 50 ? (
-              <div className="mm-recent-loading">Complete your profile to more than 50% to unlock personalized recommendations.</div>
+            ) : completion < 30 ? (
+              <div className="mm-recent-loading">Complete your profile to at least 30% to unlock personalized recommendations.</div>
             ) : (
               <div className="mm-recent-loading">No candidates available right now.</div>
             )}
+            {suggested.length && suggestedHasMore.current ? (
+              <div ref={suggestedLoadMoreRef} aria-live="polite">
+                {suggestedMoreError ? (
+                  <ErrorState message={suggestedMoreError} onRetry={loadMoreSuggested} />
+                ) : suggestedLoadingMore ? (
+                  <CardGridSkeleton count={3} />
+                ) : null}
+              </div>
+            ) : null}
           </section>
 
           <div className="cnd-dashboard-legacy">

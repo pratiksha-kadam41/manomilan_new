@@ -17,6 +17,10 @@ class DashboardController extends CandidateController
         try {
             $user = $this->candidate($request);
             $profile = $user->profile()->with('preference')->first();
+            if ($profile) {
+                $profile->calculateCompletionPercentage();
+                $profile->refresh();
+            }
             $preference = $profile?->preference;
 
             $stats = [

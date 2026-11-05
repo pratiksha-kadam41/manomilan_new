@@ -566,12 +566,7 @@ class ProfileController extends Controller
             ];
 
             foreach (self::DOCUMENT_KEYS as $key) {
-                $path = $profile->{$key};
-                if (! filled($path)) {
-                    $path = collect($documentColumns[$key] ?? [])
-                        ->map(fn (string $column) => $profile->profileDocuments?->{$column})
-                        ->first(fn ($documentPath) => filled($documentPath));
-                }
+                $path = $this->documentPath($profile, $key, $documentColumns);
                 if (! is_string($path) || trim($path) === '') {
                     continue;
                 }
@@ -1507,24 +1502,7 @@ class ProfileController extends Controller
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
-            $documentColumns = [
-                'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
-                'birthDateProof' => ['birth_certificate'],
-                'addressProof' => ['address_proof'],
-                'educationProof' => ['education_certificate'],
-                'professionProof' => ['profession_proof'],
-                'incomeProof' => ['income_proof'],
-                'casteCertificate' => ['caste_certificate'],
-                'medicalFitnessCertificate' => ['medical_fitness_certificate'],
-                'selfieVerification' => [],
-            ];
-            $path = $profile->{$docId};
-            if (! filled($path)) {
-                $profile->loadMissing('profileDocuments');
-                $path = collect($documentColumns[$docId] ?? [])
-                    ->map(fn (string $column) => $profile->profileDocuments?->{$column})
-                    ->first(fn ($documentPath) => filled($documentPath));
-            }
+            $path = $this->documentPath($profile, $docId);
 
             $filePath = $this->localUploadPath($path);
             if (! $filePath) {
@@ -1740,26 +1718,10 @@ class ProfileController extends Controller
         $profilePhoto = $storedPhotos['profile_photo'] ?? $storedPhotos[0] ?? $profile->profilePhoto;
         $profilePhoto = $profile->profilePhotoWithFallback($profilePhoto);
         $verification = DocumentVerification::firstOrCreate(['profile_id' => $profile->id]);
-        $documentColumns = [
-            'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
-            'birthDateProof' => ['birth_certificate'],
-            'addressProof' => ['address_proof'],
-            'educationProof' => ['education_certificate'],
-            'professionProof' => ['profession_proof'],
-            'incomeProof' => ['income_proof'],
-            'casteCertificate' => ['caste_certificate'],
-            'medicalFitnessCertificate' => ['medical_fitness_certificate'],
-            'selfieVerification' => [],
-        ];
 
         $documents = [];
         foreach (self::DOCUMENT_KEYS as $key) {
-            $path = array_key_exists($key, $profile->getAttributes()) ? $profile->{$key} : null;
-            if (! filled($path)) {
-                $path = collect($documentColumns[$key] ?? [])
-                    ->map(fn (string $column) => $profile->profileDocuments?->{$column})
-                    ->first(fn ($documentPath) => filled($documentPath));
-            }
+            $path = $this->documentPath($profile, $key);
 
             $documents[$key] = [
                 'file_url' => $this->fileUrl($path),
@@ -2007,13 +1969,23 @@ class ProfileController extends Controller
             return null;
         }
 
-        $path = ltrim(str_replace('\\', '/', trim($path)), '/');
+        $path = rawurldecode(ltrim(str_replace('\\', '/', trim($path)), '/'));
         if ($path === '') {
             return null;
         }
 
-        if (str_starts_with($path, 'storage/')) {
+        if (preg_match('#^https?://#i', $path)) {
+            $path = (string) parse_url($path, PHP_URL_PATH);
+            $path = ltrim($path, '/');
+        }
+
+        if (str_starts_with($path, 'storage/app/public/')) {
+            $path = substr($path, strlen('storage/app/public/'));
+        } elseif (str_starts_with($path, 'storage/')) {
             $path = substr($path, strlen('storage/'));
+        }
+        if (str_starts_with($path, 'public/')) {
+            $path = substr($path, strlen('public/'));
         }
 
         $segments = explode('/', $path);
@@ -2021,16 +1993,26 @@ class ProfileController extends Controller
             return null;
         }
 
-        $candidates = [];
-
-        if (str_starts_with($path, 'uploads/')) {
-            $candidates[] = public_path($path);
+        $relativePaths = [$path];
+        foreach ([
+            'uploads/profile_photos/',
+            'uploads/melava_documents/',
+            'uploads/melava_birth_docs/',
+            'uploads/melava_candidate_photos/',
+            'uploads/melava_additional_photos/',
+        ] as $legacyPrefix) {
+            if (str_starts_with($path, $legacyPrefix)) {
+                $relativePaths[] = substr($path, strlen('uploads/'));
+            }
         }
 
-        $candidates[] = public_path($path);
-        $candidates[] = storage_path('app/public/'.$path);
+        $candidates = [];
+        foreach (array_unique($relativePaths) as $relativePath) {
+            $candidates[] = public_path($relativePath);
+            $candidates[] = storage_path('app/public/'.$relativePath);
+        }
 
-        foreach ($candidates as $candidate) {
+        foreach (array_unique($candidates) as $candidate) {
             $file = realpath($candidate);
             if (! $file || ! is_file($file)) {
                 continue;
@@ -2046,6 +2028,40 @@ class ProfileController extends Controller
                 if (strncmp($file, $rootPrefix, strlen($rootPrefix)) === 0) {
                     return $file;
                 }
+            }
+        }
+
+        return null;
+    }
+
+    private function documentPath(Profile $profile, string $key, ?array $documentColumns = null): ?string
+    {
+        $documentColumns ??= [
+            'identificationProof' => ['aadhaar_card', 'pan_card', 'passport'],
+            'birthDateProof' => ['birth_certificate'],
+            'addressProof' => ['address_proof'],
+            'educationProof' => ['education_certificate'],
+            'professionProof' => ['profession_proof'],
+            'incomeProof' => ['income_proof'],
+            'casteCertificate' => ['caste_certificate'],
+            'medicalFitnessCertificate' => ['medical_fitness_certificate'],
+            'selfieVerification' => [],
+        ];
+
+        $profileColumns = Schema::getColumnListing($profile->getTable());
+        $paths = [];
+        if (in_array($key, $profileColumns, true)) {
+            $paths[] = $profile->getAttribute($key);
+        }
+
+        $profile->loadMissing('profileDocuments');
+        foreach ($documentColumns[$key] ?? [] as $column) {
+            $paths[] = $profile->profileDocuments?->{$column};
+        }
+
+        foreach ($paths as $path) {
+            if (is_string($path) && $this->localUploadPath($path)) {
+                return $path;
             }
         }
 
@@ -2166,6 +2182,12 @@ class ProfileController extends Controller
 
         $path = ltrim($path, '/');
 
+        if (str_starts_with($path, 'storage/app/public/')) {
+            $path = 'storage/'.substr($path, strlen('storage/app/public/'));
+        } elseif (str_starts_with($path, 'public/')) {
+            $path = substr($path, strlen('public/'));
+        }
+
         if (str_starts_with($path, 'storage/')) {
             return url($path);
         }
@@ -2178,8 +2200,19 @@ class ProfileController extends Controller
             $path = substr($path, strlen('uploads/'));
         }
 
-        if (str_starts_with($path, 'uploads/melava_documents/')) {
-            return url($path);
+        foreach ([
+            'uploads/melava_documents/',
+            'uploads/melava_birth_docs/',
+            'uploads/melava_candidate_photos/',
+            'uploads/melava_additional_photos/',
+        ] as $publicUploadPrefix) {
+            if (str_starts_with($path, $publicUploadPrefix)) {
+                return url($path);
+            }
+        }
+
+        if (str_starts_with($path, 'uploads/profile_photos/')) {
+            $path = substr($path, strlen('uploads/'));
         }
 
         return Storage::disk('public')->url($path);

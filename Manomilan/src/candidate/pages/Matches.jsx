@@ -124,7 +124,7 @@ export default function Matches() {
 
   const hasMore = Boolean(pagination?.has_more);
   const canBrowseMatches = profileCompletion.status === "complete"
-    || (profileCompletion.status === "required" && profileCompletion.completion > 50);
+    || (profileCompletion.status === "required" && profileCompletion.completion >= 30);
   useEffect(() => {
     if (!canBrowseMatches) return;
     Promise.resolve().then(load);
@@ -275,7 +275,7 @@ export default function Matches() {
           <EmptyState
             icon={Users}
             title={profileCompletion.hasProfile ? "Complete your profile first" : "Create your profile first"}
-            message="Complete more than 50% of your profile to unlock compatible matches and recommendations."
+            message="Complete your profile to at least 30% to unlock compatible matches and recommendations."
             action={(
               <Link to="/candidate/profile" className="cnd-btn cnd-btn-primary">
                 {profileCompletion.hasProfile ? "Complete profile" : "Create profile"}

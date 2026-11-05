@@ -66,19 +66,91 @@ const fmt = (value, type) => {
   return text;
 };
 
+const PHOTO_PATH_KEYS = [
+  "url",
+  "photo_url",
+  "profile_photo",
+  "profile_photo_url",
+  "photo",
+  "path",
+  "file_path",
+  "image_url",
+  "src",
+];
+
+function collectPhotoEntries(value, labelPrefix, entries) {
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return;
+
+    if (text.startsWith("[") || text.startsWith("{") || text.startsWith('"')) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed !== text) {
+          collectPhotoEntries(parsed, labelPrefix, entries);
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+
+    entries.push({ label: `${labelPrefix} ${entries.length + 1}`, url: text });
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectPhotoEntries(item, labelPrefix, entries));
+    return;
+  }
+
+  if (!value || typeof value !== "object") return;
+
+  const photoKey = PHOTO_PATH_KEYS.find((key) => value[key]);
+  if (photoKey && typeof value[photoKey] === "string") {
+    entries.push({
+      id: value.id,
+      label: String(value.label || `${labelPrefix} ${entries.length + 1}`),
+      url: value[photoKey],
+    });
+    return;
+  }
+
+  Object.entries(value).forEach(([key, item]) => {
+    if (/^\d+$/.test(key) || /photo|image/i.test(key)) {
+      collectPhotoEntries(item, labelPrefix, entries);
+    }
+  });
+}
+
 function normalizeProfile(profile) {
   const documents = Array.isArray(profile.documents) ? profile.documents : [];
+  const photoEntries = [];
+  collectPhotoEntries(profile.profile_photo || profile.photo || profile.photo_url, "Profile Photo", photoEntries);
+  collectPhotoEntries(profile.photos, "Photo", photoEntries);
+  collectPhotoEntries(profile.full_body_photo_url || profile.full_body_photo, "Full Body Photo", photoEntries);
+  collectPhotoEntries(profile.half_body_photo_url || profile.half_body_photo, "Half Body Photo", photoEntries);
+  collectPhotoEntries(profile.selfie_photo_url || profile.selfie_photo, "Selfie Photo", photoEntries);
+  collectPhotoEntries(profile.additional_photo_urls, "Additional Photo", photoEntries);
+  collectPhotoEntries(profile.additional_photos || profile.additionalPhotos, "Additional Photo", photoEntries);
+  collectPhotoEntries(profile.candidate_photos || profile.candidatePhotos, "Candidate Photo", photoEntries);
+  const seenPhotoUrls = new Set();
+  const photos = photoEntries
+    .map((photo, index) => ({
+      id: photo.id ?? index,
+      label: photo.label,
+      url: normalizeUrl(photo.url),
+    }))
+    .filter((photo) => {
+      if (!photo.url || seenPhotoUrls.has(photo.url)) return false;
+      seenPhotoUrls.add(photo.url);
+      return true;
+    });
+
   return {
     ...profile,
     _photo: normalizeUrl(getProfilePhoto(profile, ["profile_photo", "photo", "photo_url"])),
-    photos: (Array.isArray(profile.photos) ? profile.photos : [])
-      .filter((photo) => photo && typeof photo === "object")
-      .map((photo, index) => ({
-        id: photo.id ?? index,
-        label: String(photo.label || `Photo ${index + 1}`),
-        url: normalizeUrl(photo.url || photo.path || ""),
-      }))
-      .filter((photo) => photo.url),
+    photos,
     documents: documents
       .filter((document) => document && typeof document === "object")
       .map((document, index) => ({
