@@ -128,7 +128,9 @@ function ReceiptCard({ registration }) {
           ) : null}
           <div className="candidate-receipt-export" ref={paperRef}>
           <header className="candidate-receipt-export-head">
-            <img src={receiptOrg.logo} alt="" />
+            <span className="candidate-receipt-export-logo">
+              <img src={receiptOrg.logo} alt="" />
+            </span>
             <div>
               <strong>Aaryans Manomilan</strong>
               <span>Melava Registration Receipt</span>

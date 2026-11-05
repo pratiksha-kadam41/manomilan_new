@@ -1885,14 +1885,23 @@ body.candidate-mode *::after {
   transform: rotate(-18deg);
 }
 
-.candidate-receipt-export-head img {
+.candidate-receipt-export-logo {
   position: relative;
   z-index: 1;
   width: 116px;
   height: 64px;
-  object-fit: contain;
-  border-right: 2px solid rgba(255, 255, 255, 0.75);
+  flex: 0 0 116px;
   padding-right: 17px;
+  border-right: 2px solid rgba(255, 255, 255, 0.75);
+}
+
+.candidate-receipt-export-head img {
+  width: 99px;
+  height: 58px;
+  padding: 4px 8px;
+  object-fit: contain;
+  border-radius: 50%;
+  background: #fff;
 }
 
 .candidate-receipt-export-head div {
@@ -5277,10 +5286,16 @@ body.candidate-mode *::after {
     gap: 10px;
   }
 
-  .candidate-receipt-export-head img {
+  .candidate-receipt-export-logo {
     width: 78px;
     height: 54px;
     padding-right: 10px;
+  }
+
+  .candidate-receipt-export-head img {
+    width: 67px;
+    height: 50px;
+    padding: 4px 6px;
   }
 
   .candidate-receipt-export-head strong {
