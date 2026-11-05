@@ -66,7 +66,7 @@ abstract class CandidateController extends Controller
             return null;
         }
 
-        $profile = Profile::with(['user', 'preference'])->find($user->profile_id);
+        $profile = $user->profile()->with(['user', 'preference'])->first();
 
         if (! $profile && $required) {
             throw ValidationException::withMessages([

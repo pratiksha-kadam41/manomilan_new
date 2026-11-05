@@ -16,9 +16,7 @@ class DashboardController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $profile = $user->profile_id
-                ? Profile::with('preference')->find($user->profile_id)
-                : null;
+            $profile = $user->profile()->with('preference')->first();
             $preference = $profile?->preference;
 
             $stats = [

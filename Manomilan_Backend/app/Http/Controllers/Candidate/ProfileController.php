@@ -61,10 +61,15 @@ class ProfileController extends CandidateController
     public function status(Request $request)
     {
         $user = $this->candidate($request);
-        $profile = $user->profile_id
-            ? Profile::query()->with(['user', 'familyDetails', 'educations', 'employments', 'religionDetails', 'profileDocuments', 'partnerPreferences'])
-                ->find($user->profile_id)
-            : null;
+        $profile = $user->profile()->with([
+            'user',
+            'familyDetails',
+            'educations',
+            'employments',
+            'religionDetails',
+            'profileDocuments',
+            'partnerPreferences',
+        ])->first();
         if ($profile) {
             $profile->calculateCompletionPercentage();
             $profile->refresh();

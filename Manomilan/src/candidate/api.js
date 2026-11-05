@@ -29,6 +29,7 @@ let matchesRequestCache = new Map();
 let matchesCacheVersion = 0;
 let matchCache = new Map();
 let matchRequestCache = new Map();
+let candidateCacheOwner = null;
 
 const CANDIDATE_PROFILE_CACHE_MS = 5 * 60 * 1000;
 const MATCHES_CACHE_MS = 5 * 60 * 1000;
@@ -37,6 +38,35 @@ const DASHBOARD_CACHE_MS = 60 * 60 * 1000;
 const CANDIDATE_QUERY_CACHE_PREFIX = "candidate_query_cache:";
 const CANDIDATE_QUERY_CACHE_MS = 5 * 60 * 1000;
 let dashboardRequest = null;
+
+const currentCandidateIdentity = () => {
+  const user = getSession()?.user;
+  return user?.id || user?.username || null;
+};
+
+const ensureCandidateCacheOwner = () => {
+  const owner = currentCandidateIdentity();
+  if (candidateCacheOwner === owner) return owner;
+
+  candidateCacheOwner = owner;
+  candidateProfileCache = null;
+  candidateProfileCachedAt = 0;
+  dashboardRequest = null;
+  matchesCache.clear();
+  matchesRequestCache.clear();
+  matchCache.clear();
+  matchRequestCache.clear();
+  matchesCacheVersion += 1;
+  getCandidateProfile.pending = null;
+  return owner;
+};
+
+const dashboardCacheKey = () => {
+  const owner = currentCandidateIdentity();
+  return owner
+    ? `${DASHBOARD_CACHE_KEY}:${encodeURIComponent(owner)}`
+    : DASHBOARD_CACHE_KEY;
+};
 
 const queryString = (params) => new URLSearchParams(
   Object.entries(params).filter(([, value]) => value !== "" && value != null),
@@ -93,6 +123,7 @@ const interestCacheKey = (mode = "sent", params = {}) =>
 const notificationCacheKey = (params = {}) => `notifications:${queryString(params)}`;
 
 export const getCachedMatches = (params = {}) => {
+  ensureCandidateCacheOwner();
   const query = queryString(params);
   const cached = matchesCache.get(query || "__default__");
   if (cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
@@ -108,31 +139,38 @@ export const createRecommendationSeed = () => {
   return Math.floor(Math.random() * 2147483647) + 1;
 };
 
-export const getCachedInterests = (mode = "sent", params = {}) =>
-  readQueryCache(interestCacheKey(mode, params), true);
+export const getCachedInterests = (mode = "sent", params = {}) => {
+  ensureCandidateCacheOwner();
+  return readQueryCache(interestCacheKey(mode, params), true);
+};
 
-export const getCachedNotifications = (params = {}) =>
-  readQueryCache(notificationCacheKey(params), true);
+export const getCachedNotifications = (params = {}) => {
+  ensureCandidateCacheOwner();
+  return readQueryCache(notificationCacheKey(params), true);
+};
 
-export const peekCandidateProfile = () => (
-  candidateProfileCache && Date.now() - candidateProfileCachedAt < CANDIDATE_PROFILE_CACHE_MS
+export const peekCandidateProfile = () => {
+  ensureCandidateCacheOwner();
+  return candidateProfileCache && Date.now() - candidateProfileCachedAt < CANDIDATE_PROFILE_CACHE_MS
     ? candidateProfileCache
-    : null
-);
+    : null;
+};
 
 export const readDashboardCache = () => {
+  ensureCandidateCacheOwner();
   try {
-    const cached = JSON.parse(sessionStorage.getItem(DASHBOARD_CACHE_KEY));
+    const cached = JSON.parse(sessionStorage.getItem(dashboardCacheKey()));
     if (cached?.savedAt && Date.now() - cached.savedAt < DASHBOARD_CACHE_MS) {
       return normalizeCandidateMedia(cached.data || null);
     }
   } catch {
-    sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+    sessionStorage.removeItem(dashboardCacheKey());
   }
   return null;
 };
 
 export const getCandidateProfile = async () => {
+  const owner = ensureCandidateCacheOwner();
   const now = Date.now();
   if (candidateProfileCache && now - candidateProfileCachedAt < CANDIDATE_PROFILE_CACHE_MS) {
     return candidateProfileCache;
@@ -142,15 +180,18 @@ export const getCandidateProfile = async () => {
   }
   if (!candidateProfileCache || now - candidateProfileCachedAt >= CANDIDATE_PROFILE_CACHE_MS) {
     if (!getCandidateProfile.pending) {
-      getCandidateProfile.pending = request("/candidate/profile").then((body) => {
+      const pending = request("/candidate/profile").then((body) => {
         const result = data(body);
-        candidateProfileCache = result || null;
-        candidateProfileCachedAt = Date.now();
-        if (result?.profile) updateCachedUserProfile(result.profile);
+        if (currentCandidateIdentity() === owner) {
+          candidateProfileCache = result || null;
+          candidateProfileCachedAt = Date.now();
+          if (result?.profile) updateCachedUserProfile(result.profile);
+        }
         return result;
       }).finally(() => {
-        getCandidateProfile.pending = null;
+        if (getCandidateProfile.pending === pending) getCandidateProfile.pending = null;
       });
+      getCandidateProfile.pending = pending;
     }
     return getCandidateProfile.pending;
   }
@@ -163,11 +204,13 @@ export const getCandidateMelavaRegistrations = async () => {
 };
 
 export const invalidateCandidateProfileCache = () => {
+  ensureCandidateCacheOwner();
   candidateProfileCache = null;
   candidateProfileCachedAt = 0;
   dashboardRequest = null;
   invalidateMatchesCache();
   try {
+    sessionStorage.removeItem(dashboardCacheKey());
     sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
   } catch {
     clearQueryCache("");
@@ -186,6 +229,7 @@ const notifyCandidateProfileChanged = (result) => {
 };
 
 export const getDashboard = async ({ force = false } = {}) => {
+  const owner = ensureCandidateCacheOwner();
   if (!force) {
     const cached = readDashboardCache();
     if (cached) return cached;
@@ -196,7 +240,10 @@ export const getDashboard = async ({ force = false } = {}) => {
     });
   }
   const result = await dashboardRequest;
-  sessionStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({
+  const cacheKey = owner
+    ? `${DASHBOARD_CACHE_KEY}:${encodeURIComponent(owner)}`
+    : DASHBOARD_CACHE_KEY;
+  sessionStorage.setItem(cacheKey, JSON.stringify({
     savedAt: Date.now(),
     data: result,
   }));
@@ -273,6 +320,7 @@ export const savePreferences = async (payload) =>
   );
 
 export const getMatches = async (params = {}, { signal } = {}) => {
+  ensureCandidateCacheOwner();
   const query = queryString(params);
   const cacheKey = query || "__default__";
   const cacheable = !params.shuffle_seed && (!params.feed || Number(params.page || 1) === 1);
@@ -312,6 +360,7 @@ export const getMatches = async (params = {}, { signal } = {}) => {
 };
 
 export const getMatch = async (id) => {
+  ensureCandidateCacheOwner();
   const cacheKey = String(id);
   if (matchCache.has(cacheKey)) return matchCache.get(cacheKey);
   if (!matchRequestCache.has(cacheKey)) {
@@ -324,7 +373,7 @@ export const getMatch = async (id) => {
       .finally(() => matchRequestCache.delete(cacheKey)));
   }
   const result = await matchRequestCache.get(cacheKey);
-  sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
+  sessionStorage.removeItem(dashboardCacheKey());
   return result;
 };
 
