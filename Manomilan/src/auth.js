@@ -261,6 +261,7 @@ async function loadDashboard(endpoint, {
 
 export const getDashboard = (options = {}) => loadDashboard("/dashboard", options);
 export const getAdminDashboard = (options = {}) => loadDashboard("/reports", options);
+export const getAdminDashboardOverview = (options = {}) => loadDashboard("/dashboard", options);
 
 export async function getHomeData() {
   const body = await request("/home-data");

@@ -1,6 +1,6 @@
 import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { getAdminDashboard, getSession } from "../../auth";
+import { getAdminDashboardOverview, getSession } from "../../auth";
 import { AdminPermissionContext, hasModulePermission } from "../../permission-context.jsx";
 import { Link } from "react-router-dom";
 import {
@@ -288,7 +288,7 @@ export default function Dashboard({ currentPath = "/admin" }) {
       ? { force: true, period: "", from: fromDate, to: toDate }
       : { force: true, period };
 
-    getAdminDashboard(params)
+    getAdminDashboardOverview(params)
       .then((data) => {
         if (active) {
           setStats(data);

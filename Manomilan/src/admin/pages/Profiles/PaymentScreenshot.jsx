@@ -10,21 +10,6 @@ import { getSession, clearSession } from "../../../auth";
 import { useAdminPermission } from "../../../permission-context";
 import "./payment.css";
 
-/* =====================================================================
-   1. BACKEND SETTINGS  (the only part you need to adjust later)
-   ---------------------------------------------------------------------
-   Load:    GET  {BASE}/profiles/:id/payment-screenshots
-            → {
-                profile:     { id, full_name, registration_number, mobile },
-                screenshots: [ { id, type, status, image_url, payment_details }, ... ]
-              }
-              payment_details is a JSON record of amount, date, method, reference, remarks and proof path
-              screenshots contains every payment entry for the profile
-              status = "pending" or "verified"
-   Verify:  POST {BASE}/profiles/:id/payment-screenshots/:screenshotId/verify
-   Upload:  POST {BASE}/profiles/:id/payment-screenshot
-            (multipart/form-data, the file is sent in the field "payment_screenshot")
-   ===================================================================== */
 const BASE = apiUrl;
 const LINKS = { back: "/admin/profiles" };
 

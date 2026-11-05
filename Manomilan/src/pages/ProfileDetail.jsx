@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiMediaUrl, apiUrl, getToken } from "../api";
+import { useAdminPermission } from "../permission-context.jsx";
 import AdminLayout from "../admin/components/AdminLayout";
 import BioDataModal from "../admin/pages/Profiles/BioDataModal.jsx";
 import {
@@ -637,7 +638,7 @@ function Cards({ sections, profile }) {
   );
 }
 
-function PaymentHistory({ payments, onVerify, verifyingId }) {
+function PaymentHistory({ payments, onVerify, verifyingId, canVerify }) {
   const entries = Array.isArray(payments) ? payments : [];
 
   return (
@@ -677,7 +678,7 @@ function PaymentHistory({ payments, onVerify, verifyingId }) {
                       )}
                     </a>
                   ) : <span className="pd-melava-no-proof">No payment proof uploaded</span>}
-                  {!verified && proof ? (
+                  {!verified && proof && canVerify ? (
                     <button
                       type="button"
                       className="pd-payment-verify"
@@ -699,7 +700,7 @@ function PaymentHistory({ payments, onVerify, verifyingId }) {
   );
 }
 
-function MelavaRegistrationHistory({ registrations, payments, onVerify, verifyingId }) {
+function MelavaRegistrationHistory({ registrations, payments, onVerify, verifyingId, canVerify }) {
   return (
     <>
     <section className="pd-card pd-melava-history">
@@ -745,7 +746,7 @@ function MelavaRegistrationHistory({ registrations, payments, onVerify, verifyin
                         <><FaFileAlt /> View payment proof</>
                       )}
                     </a>
-                    {!registration.payment_verified ? (
+                    {!registration.payment_verified && canVerify ? (
                       <button
                         type="button"
                         className="pd-payment-verify"
@@ -782,7 +783,7 @@ function MelavaRegistrationHistory({ registrations, payments, onVerify, verifyin
                         <><FaFileAlt /> View booklet proof</>
                       )}
                     </a>
-                    {!registration.booklet_payment_verified ? (
+                    {!registration.booklet_payment_verified && canVerify ? (
                       <button
                         type="button"
                         className="pd-payment-verify"
@@ -805,7 +806,7 @@ function MelavaRegistrationHistory({ registrations, payments, onVerify, verifyin
         )}
       </div>
     </section>
-    <PaymentHistory payments={payments} onVerify={onVerify} verifyingId={verifyingId} />
+    <PaymentHistory payments={payments} onVerify={onVerify} verifyingId={verifyingId} canVerify={canVerify} />
     </>
   );
 }
@@ -913,7 +914,7 @@ function DocumentEditor({ docs, files, onFileChange, onOpen, openingId }) {
   );
 }
 
-function Documents({ docs, onOpen, openingId, onDelete, deletingId }) {
+function Documents({ docs, onOpen, openingId, onDelete, deletingId, canDelete }) {
   return (
     <section className="pd-card">
       <h3 className="pd-card-head"><span className="pd-card-ic"><FaFileAlt /></span>Uploaded Documents</h3>
@@ -928,10 +929,12 @@ function Documents({ docs, onOpen, openingId, onDelete, deletingId }) {
                 <button type="button" className="pd-doc-link" onClick={() => onOpen(d)} disabled={openingId === d.id}>
                   {openingId === d.id ? "Opening…" : d.label}
                 </button>
-                <button type="button" className="pd-icon-btn" aria-label={`Delete ${d.label}`}
-                  disabled={deletingId === d.id} onClick={() => onDelete(d)}>
-                  <FaTrash />
-                </button>
+                {canDelete ? (
+                  <button type="button" className="pd-icon-btn" aria-label={`Delete ${d.label}`}
+                    disabled={deletingId === d.id} onClick={() => onDelete(d)}>
+                    <FaTrash />
+                  </button>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -1181,7 +1184,7 @@ function Gallery({ photos }) {
   );
 }
 
-function Hero({ p, onView, onEdit, onDownload, downloading, editing }) {
+function Hero({ p, onView, onEdit, onDownload, downloading, editing, canEdit, canExport }) {
   const [imgFailed, setImgFailed] = useState(false);
   const name = fmt(p.full_name) || "Unnamed profile";
   const initials = name.split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -1246,10 +1249,12 @@ function Hero({ p, onView, onEdit, onDownload, downloading, editing }) {
       <div className="pd-quick">
         <h3 className="pd-block-title">Quick Actions</h3>
         <button type="button" className="pd-qa pd-qa-blue" onClick={onView}><FaEye /> View Details</button>
-        {!editing && <button type="button" className="pd-qa pd-qa-teal" onClick={onEdit}><FaEdit /> Edit Profile</button>}
-        <button type="button" className="pd-qa pd-qa-green" onClick={onDownload} disabled={downloading}>
-          <FaDownload /> {downloading ? "Preparing…" : "BioData Download"}
-        </button>
+        {!editing && canEdit ? <button type="button" className="pd-qa pd-qa-teal" onClick={onEdit}><FaEdit /> Edit Profile</button> : null}
+        {canExport ? (
+          <button type="button" className="pd-qa pd-qa-green" onClick={onDownload} disabled={downloading}>
+            <FaDownload /> {downloading ? "Preparing…" : "BioData Download"}
+          </button>
+        ) : null}
       </div>
     </section>
   );
@@ -1295,6 +1300,11 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   const routeParams = useParams();
   const id = params?.id ?? routeParams.id;
   const idOk = isValidId(id);
+  const canEditProfile = useAdminPermission("edit", null, "admin_side_profile");
+  const canExportProfile = useAdminPermission("export", null, "admin_side_profile");
+  const canDeleteDocument = useAdminPermission("delete", null, "admin_side_profile");
+  const canApproveProfile = useAdminPermission("approve", null, "verified_and_unverified");
+  const canVerifyPayments = useAdminPermission("approve", null, "payments_verification");
 
   const [state, setState] = useState({ status: "loading", profile: null, error: "", notFound: false });
   const [tab, setTab] = useState("personal");
@@ -1324,6 +1334,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   }, [id]);
 
   const handleVerifyPayment = async (payment, busyId) => {
+    if (!canVerifyPayments) return;
     setVerifyingPaymentId(busyId);
     setNotice(null);
     try {
@@ -1372,14 +1383,15 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   const profile = state.profile;
 
   useEffect(() => {
-    if (startInEdit && profile && !editing) {
+    if (canEditProfile && startInEdit && profile && !editing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setForm(buildEditForm(profile));
       setDocumentFiles({});
       setPhotoFiles([]);
       setRemovedPhotoUrls([]);
       setEditing(true);
     }
-  }, [startInEdit, profile, editing]);
+  }, [canEditProfile, startInEdit, profile, editing]);
 
   const goToTab = (tabId) => {
     setTab(tabId);
@@ -1389,6 +1401,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   };
 
   const handleOpenBioData = async () => {
+    if (!canExportProfile) return;
     setLoadingBioData(true);
     setNotice(null);
     try {
@@ -1401,7 +1414,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   };
 
   const startEditing = () => {
-    if (!profile) return;
+    if (!canEditProfile || !profile) return;
     setForm(buildEditForm(profile));
     setDocumentFiles({});
     setPhotoFiles([]);
@@ -1477,6 +1490,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   };
 
   const handleSave = async () => {
+    if (!canEditProfile) return;
     if (!form.full_name?.trim()) {
       setNotice({ type: "error", text: "Full name is required." });
       return;
@@ -1533,6 +1547,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
   };
 
   const handleDeleteDoc = async (doc) => {
+    if (!canDeleteDocument) return;
     if (!window.confirm(`Delete "${doc.label}"? This cannot be undone.`)) return;
     setDeletingId(doc.id);
     setNotice(null);
@@ -1563,7 +1578,8 @@ export default function ProfileDetail({ params, startInEdit = false }) {
     body = (
       <>
         <Hero p={profile} onView={() => goToTab("personal")} onEdit={startEditing}
-          onDownload={handleOpenBioData} downloading={loadingBioData} editing={editing} />
+          onDownload={handleOpenBioData} downloading={loadingBioData} editing={editing}
+          canEdit={canEditProfile} canExport={canExportProfile} />
 
         <Gallery photos={[
           ...(profile.photos || []).filter((photo) => !removedPhotoUrls.includes(photo.url)),
@@ -1600,6 +1616,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
               payments={profile.payment_screenshots}
               onVerify={handleVerifyPayment}
               verifyingId={verifyingPaymentId}
+              canVerify={canVerifyPayments}
             />
           ) : editing ? (
             active.id === "documents" ? (
@@ -1610,7 +1627,7 @@ export default function ProfileDetail({ params, startInEdit = false }) {
             )
           ) : active.id === "documents" ? (
             <Documents docs={profile.documents} onOpen={handleOpenDocument} openingId={openingId}
-              onDelete={handleDeleteDoc} deletingId={deletingId} />
+              onDelete={handleDeleteDoc} deletingId={deletingId} canDelete={canDeleteDocument} />
           ) : (
             <Cards sections={active.sections} profile={profile} />
           )}
@@ -1647,10 +1664,10 @@ export default function ProfileDetail({ params, startInEdit = false }) {
                 <button type="button" className="pd-btn pd-btn-outline" onClick={() => goToTab("documents")}>
                   <FaFileAlt /> Documents
                 </button>
-                {!editing && (isVerified(profile)
+                {!editing && canApproveProfile && (isVerified(profile)
                   ? <button type="button" className="pd-btn pd-btn-green" disabled><FaShieldAlt /> Verified</button>
                   : <Link to={`/admin/profiles/${id}`} className="pd-btn pd-btn-green"><FaShieldAlt /> Verify Profile</Link>)}
-                {!editing && <button type="button" className="pd-btn pd-btn-teal" onClick={startEditing}><FaEdit /> Edit Profile</button>}
+                {!editing && canEditProfile && <button type="button" className="pd-btn pd-btn-teal" onClick={startEditing}><FaEdit /> Edit Profile</button>}
               </>
             )}
           </div>
