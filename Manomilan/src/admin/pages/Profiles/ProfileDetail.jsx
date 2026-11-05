@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   FaAddressBook, FaArrowLeft, FaBriefcase, FaCalendarAlt, FaChevronLeft,
-  FaChevronRight, FaCommentDots, FaDownload, FaEdit, FaFileAlt, FaGraduationCap,
+  FaChevronRight, FaDownload, FaEdit, FaFileAlt, FaGraduationCap,
   FaHeartbeat, FaHome, FaIdCard, FaImages, FaInfoCircle, FaListUl, FaMapMarkerAlt,
   FaPause, FaPhoneAlt, FaPlay, FaRedo, FaStar, FaTrash, FaUsers,
 } from "react-icons/fa";
 import AdminLayout from "../../components/AdminLayout";
 import RecordEditorName from "../../components/RecordEditorName";
 import { ApiError, apiMediaUrl, download, request } from "../../../api";
+import { useAdminPermission } from "../../../permission-context";
 import "../../components/admin-ui.css";
 import "./ProfileDetail.css";
 
@@ -407,7 +408,7 @@ function PhotoGrid({ photos }) {
   );
 }
 
-function Documents({ docs, onDelete, deletingId }) {
+function Documents({ docs, onDelete, deletingId, canDelete }) {
   return (
     <section className="pd-section">
       <h3 className="pd-section-title"><span className="pd-section-ic"><FaFileAlt /></span>Uploaded Documents</h3>
@@ -421,15 +422,17 @@ function Documents({ docs, onDelete, deletingId }) {
               <li key={document.id}>
                 <span className="pd-doc-ic">{/birth/i.test(document.label) ? <FaCalendarAlt /> : <FaIdCard />}</span>
                 {url ? <a href={url} target="_blank" rel="noopener noreferrer">{document.label}</a> : <span>{document.label}</span>}
-                <button
-                  type="button"
-                  className="pd-icon-btn"
-                  aria-label={`Delete ${document.label}`}
-                  disabled={deletingId === document.id}
-                  onClick={() => onDelete(document)}
-                >
-                  <FaTrash />
-                </button>
+                {canDelete ? (
+                  <button
+                    type="button"
+                    className="pd-icon-btn"
+                    aria-label={`Delete ${document.label}`}
+                    disabled={deletingId === document.id}
+                    onClick={() => onDelete(document)}
+                  >
+                    <FaTrash />
+                  </button>
+                ) : null}
               </li>
             );
           })}
@@ -539,6 +542,9 @@ export default function ProfileDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const idOk = isValidId(id);
+  const canEditProfile = useAdminPermission("edit", "/admin/profiles");
+  const canExportProfile = useAdminPermission("export", "/admin/profiles");
+  const canDeleteDocument = useAdminPermission("delete", "/admin/profiles");
 
   const [state, setState] = useState({ status: "loading", profile: null, error: "", notFound: false });
   const [tab, setTab] = useState("personal");
@@ -656,12 +662,16 @@ export default function ProfileDetail() {
             <p className="pd-subtitle">Candidate information, uploaded photos, and verification details.</p>
           </div>
           <div className="pd-top-actions">
-            <button type="button" className="ui-btn secondary" onClick={() => navigate(`/admin/profiles/edit/${id}`)}>
-              <FaEdit /> Edit Profile
-            </button>
-            <button type="button" className="ui-btn" onClick={handleDownload} disabled={downloading}>
-              <FaDownload /> {downloading ? "Preparing…" : "BioData Download"}
-            </button>
+            {canEditProfile ? (
+              <button type="button" className="ui-btn secondary" onClick={() => navigate(`/admin/profiles/edit/${id}`)}>
+                <FaEdit /> Edit Profile
+              </button>
+            ) : null}
+            {canExportProfile ? (
+              <button type="button" className="ui-btn" onClick={handleDownload} disabled={downloading}>
+                <FaDownload /> {downloading ? "Preparing…" : "BioData Download"}
+              </button>
+            ) : null}
           </div>
         </div>
 
@@ -691,7 +701,7 @@ export default function ProfileDetail() {
             {active.id === "photos"
               ? <PhotoGrid photos={profile.photos} />
               : active.id === "documents"
-                ? <Documents docs={profile.documents} onDelete={handleDeleteDoc} deletingId={deletingId} />
+                ? <Documents docs={profile.documents} onDelete={handleDeleteDoc} deletingId={deletingId} canDelete={canDeleteDocument} />
                 : active.id === "melava"
                   ? <RecordList
                       title="Melava Registration"

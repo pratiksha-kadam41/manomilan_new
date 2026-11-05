@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { apiUrl } from "../../../api";
 import { getSession, clearSession } from "../../../auth";
+import { useAdminPermission } from "../../../permission-context";
 import "./receipt.css";
 
 // Footer details printed on every receipt
@@ -64,6 +65,7 @@ const fileSafe = (s) => String(s || "").replace(/[^a-zA-Z0-9]+/g, "_").replace(/
 export default function Receipt({ params }) {
   const id = params?.id;
   const idOk = isValidId(id);
+  const canExportReceipt = useAdminPermission("export", null, "payments_verification");
 
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(idOk);
@@ -75,14 +77,14 @@ export default function Receipt({ params }) {
   const paper = useRef(null);
 
   useEffect(() => {
-    if (!idOk) return;
+    if (!idOk || !canExportReceipt) return undefined;
     let cancelled = false;
     getReceipt(id)
       .then((data) => { if (!cancelled) setReceipt(data); })
       .catch((e) => { if (!cancelled) setLoadError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [id, idOk, reloadKey]);
+  }, [id, idOk, reloadKey, canExportReceipt]);
 
   const retry = () => { setLoadError(""); setLoading(true); setReloadKey((k) => k + 1); };
 
@@ -114,14 +116,23 @@ export default function Receipt({ params }) {
   return (
     <div className="rc-page">
       {/* ---------- Buttons (not printed) ---------- */}
-      <div className="rc-bar">
-        <button type="button" className="rc-btn rc-btn-red" onClick={downloadPdf} disabled={!receipt || making}>
-          {making ? <><Loader2 size={16} className="rc-spin" /> Creating PDF…</> : <>Download Receipt PDF</>}
-        </button>
-      </div>
-      {pdfError && <p className="rc-pdf-error" role="alert">{pdfError}</p>}
+      {canExportReceipt ? (
+        <>
+          <div className="rc-bar">
+            <button type="button" className="rc-btn rc-btn-red" onClick={downloadPdf} disabled={!receipt || making}>
+              {making ? <><Loader2 size={16} className="rc-spin" /> Creating PDF…</> : <>Download Receipt PDF</>}
+            </button>
+          </div>
+          {pdfError && <p className="rc-pdf-error" role="alert">{pdfError}</p>}
+        </>
+      ) : null}
 
-      {error ? (
+      {!canExportReceipt ? (
+        <div className="rc-state">
+          <AlertTriangle size={34} />
+          <p>You do not have permission to view receipts.</p>
+        </div>
+      ) : error ? (
         <div className="rc-state">
           <AlertTriangle size={34} />
           <p>{error}</p>

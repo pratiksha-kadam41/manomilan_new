@@ -55,10 +55,6 @@ async function getProfiles(params) {
   return request(`/profiles/allProfiles${qs ? `?${qs}` : ""}`);
 }
 
-async function deactivateProfile(id) {
-  return request(`/profiles/deactivate/${id}`, { method: "PATCH" });
-}
-
 function exportFallbackName() {
   const date = new Date();
   const pad = (value) => String(value).padStart(2, "0");
@@ -110,8 +106,10 @@ export default function Profiles() {
   const { pathname } = useLocation();
   const currentPath = pathname.replace(/\/+$/, "") || "/";
   const view = PROFILE_VIEWS[currentPath] || PROFILE_VIEWS["/admin/profiles"];
-  const canEditProfiles = useAdminPermission("edit", currentPath);
-  const canDeactivateProfiles = useAdminPermission("edit", "/admin/verified-profiles");
+  const canEditProfiles = useAdminPermission("edit", null, "admin_side_profile");
+  const canDeactivateProfiles = useAdminPermission("approve", null, "verified_and_unverified");
+  const canViewPayments = useAdminPermission("view", null, "payments_verification");
+  const canExportReceipts = useAdminPermission("export", null, "payments_verification");
   const verificationStatus =
     currentPath === "/admin/verified-profiles"
       ? "verified"
@@ -314,7 +312,7 @@ export default function Profiles() {
           </div>
           <div className="ui-head-actions">
             <a href={LINKS.inactive} className="ui-btn secondary"><Archive size={16} /> Inactive List</a>
-            <PermissionGate permission="export" currentPath={currentPath}>
+            <PermissionGate permission="export" moduleKey="admin_side_profile">
               <button type="button" className="ui-btn" onClick={handleExport} disabled={exporting}>
                 <Download size={16} /> {exporting ? "Exporting…" : "Export"}
               </button>
@@ -431,25 +429,29 @@ export default function Profiles() {
                             ) : null}
                             {canEditProfiles ? <a href={LINKS.edit(p.id)} className="ui-icon-btn amber" title="Edit" aria-label="Edit"><Pencil size={15} /></a> : null}
 
-                            <a href={LINKS.payment(p.id)} className="ui-icon-btn teal" title="Payment" aria-label="Payment">
-                              <CreditCard size={15} />
-                            </a>
-
-                            {p.payment_verified ? (
-                              <a href={LINKS.receipt(p.id)} onClick={(event) => openReceipt(event, p.id)} className="ui-icon-btn green" title="Receipt" aria-label="Receipt">
-                                <Receipt size={15} />
+                            {canViewPayments ? (
+                              <a href={LINKS.payment(p.id)} className="ui-icon-btn teal" title="Payment" aria-label="Payment">
+                                <CreditCard size={15} />
                               </a>
-                            ) : (
-                              <button
-                                type="button"
-                                className="ui-icon-btn"
-                                onClick={() => showToast("error", "Please verify the payment first.")}
-                                title="Verify the payment first"
-                                aria-label="Receipt unavailable"
-                              >
-                                <Receipt size={15} />
-                              </button>
-                            )}
+                            ) : null}
+
+                            {canExportReceipts ? (
+                              p.payment_verified ? (
+                                <a href={LINKS.receipt(p.id)} onClick={(event) => openReceipt(event, p.id)} className="ui-icon-btn green" title="Receipt" aria-label="Receipt">
+                                  <Receipt size={15} />
+                                </a>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="ui-icon-btn"
+                                  onClick={() => showToast("error", "Please verify the payment first.")}
+                                  title="Verify the payment first"
+                                  aria-label="Receipt unavailable"
+                                >
+                                  <Receipt size={15} />
+                                </button>
+                              )
+                            ) : null}
 
                             {canDeactivateProfiles ? <button type="button" className={`ui-icon-btn ${isInactiveView ? "green" : "red"}`} onClick={() => setConfirm(p)} title={isInactiveView ? "Activate" : "Deactivate"} aria-label={isInactiveView ? "Activate" : "Deactivate"}>
                               {isInactiveView ? <UserCheck size={15} /> : <UserX size={15} />}

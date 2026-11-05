@@ -138,6 +138,16 @@ const isSuperAdminSession = (user) => {
 
 const SUPER_ADMIN_PERMISSIONS = { is_super_admin: true, modules: [] };
 
+const ADMIN_ROUTE_PERMISSIONS = [
+  { pattern: /^\/admin\/profiles\/edit\//, moduleKey: "admin_side_profile", permission: "edit" },
+  { pattern: /^\/admin\/melava-biodata\//, moduleKey: "admin_side_profile", permission: "export" },
+  { pattern: /^\/admin\/profiles\/payment\//, moduleKey: "payments_verification", permission: "view" },
+  { pattern: /^\/admin\/profiles\/receipt\//, moduleKey: "payments_verification", permission: "export" },
+  { pattern: /^\/admin\/software-tickets\/\d+\/edit$/, moduleKey: "software_ticket_module", permission: "edit" },
+];
+
+const routePermission = (path) => ADMIN_ROUTE_PERMISSIONS.find(({ pattern }) => pattern.test(path));
+
 const MOBILE_NAV_PATHS = new Set([
   "/",
   "/aboutus",
@@ -341,8 +351,14 @@ export default function App() {
     (isAdminPath && session && !isAdminRole(session.role))
     || (isCandidatePath && session && isAdminRole(session.role));
   const isChangePasswordPath = path === "/admin/change-password";
+  const requiredRoutePermission = routePermission(path);
   const permittedAdminRoute = Boolean(
-    hasModulePermission(adminPermissions, "view", path),
+    hasModulePermission(
+      adminPermissions,
+      requiredRoutePermission?.permission || "view",
+      path,
+      requiredRoutePermission?.moduleKey,
+    ),
   );
   const canOpenAdminDashboard = Boolean(
     hasModulePermission(adminPermissions, "view", "/admin"),

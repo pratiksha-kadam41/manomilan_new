@@ -121,7 +121,7 @@ class EnforceApiModulePermissions
         if (preg_match('/(^|\/)(export|biodata|receipt)(\/|$)/i', $path)) {
             return 'export';
         }
-        if (preg_match('/(^|\/)(verify|approve|payment-status|activate|deactivate|status)(\/|$)/i', $path)) {
+        if (preg_match('/(^|\/)(verify|approve|payment|payment-status|activate|deactivate|status)(\/|$)/i', $path)) {
             return 'approve';
         }
         if (in_array($method, ['POST'], true)) {

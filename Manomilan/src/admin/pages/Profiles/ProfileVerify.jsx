@@ -184,7 +184,7 @@ export default function ProfileVerify({ params }) {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (saving || !dirty) return;               // blocks double-clicks and empty saves
+    if (!canApproveProfile || saving || !dirty) return;               // blocks double-clicks and empty saves
     setSaving(true);
     try {
       await saveVerification(id, form);
@@ -295,6 +295,7 @@ export default function ProfileVerify({ params }) {
                             name={`${d.key}_status`}
                             value={s.value}
                             checked={v.status === s.value}
+                            disabled={!canApproveProfile}
                             onChange={() => setField(d.key, "status", s.value)}
                           />
                           {s.label}
@@ -313,6 +314,7 @@ export default function ProfileVerify({ params }) {
                       placeholder="Add remarks…"
                       aria-label={`${d.label} remarks`}
                       autoComplete="off"
+                      disabled={!canApproveProfile}
                       maxLength={MAX_REMARKS}
                     />
                   </div>

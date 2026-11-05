@@ -7,6 +7,7 @@ import AdminLayout from "../../components/AdminLayout";
 import RecordEditorName from "../../components/RecordEditorName";
 import { apiMediaUrl, apiUrl } from "../../../api";
 import { getSession, clearSession } from "../../../auth";
+import { useAdminPermission } from "../../../permission-context";
 import "./payment.css";
 
 /* =====================================================================
@@ -108,7 +109,7 @@ function StatusBadge({ status, label }) {
   );
 }
 
-function Screenshot({ item, title, busy, onVerify, onOpen }) {
+function Screenshot({ item, title, busy, onVerify, onOpen, canVerify }) {
   const [broken, setBroken] = useState(false);
   const verified = item.status === "verified";
   const isPdf = /\.pdf(?:[?#]|$)/i.test(item.image_url || "");
@@ -152,7 +153,7 @@ function Screenshot({ item, title, busy, onVerify, onOpen }) {
             <Download size={16} /> Download
           </a>
         )}
-        {!verified && (
+        {!verified && canVerify && (
           <button type="button" className="ps-btn ps-btn-teal" onClick={() => onVerify(item, title)} disabled={busy}>
             {busy ? <><Loader2 size={16} className="ps-spin" /> Verifying…</> : <><Check size={16} /> Verify Payment</>}
           </button>
@@ -168,6 +169,9 @@ function Screenshot({ item, title, busy, onVerify, onOpen }) {
 export default function PaymentScreenshot({ params }) {
   const id = params?.id;
   const idOk = isValidId(id);
+  const canViewPayments = useAdminPermission("view", null, "payments_verification");
+  const canCreatePayments = useAdminPermission("create", null, "payments_verification");
+  const canApprovePayments = useAdminPermission("approve", null, "payments_verification");
 
   const [profile, setProfile] = useState(null);
   const [shots, setShots] = useState([]);
@@ -205,7 +209,7 @@ export default function PaymentScreenshot({ params }) {
 
   /* ---- load from the backend ---- */
   useEffect(() => {
-    if (!idOk) return;
+    if (!idOk || !canViewPayments) return undefined;
     let cancelled = false;
     getPayments(id)
       .then((data) => {
@@ -228,7 +232,7 @@ export default function PaymentScreenshot({ params }) {
       .catch((e) => { if (!cancelled) setLoadError(e.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [id, idOk, reloadKey]);
+  }, [id, idOk, reloadKey, canViewPayments]);
 
   const reload = () => { setLoadError(""); setLoading(true); setReloadKey((k) => k + 1); };
 
@@ -242,7 +246,7 @@ export default function PaymentScreenshot({ params }) {
 
   /* ---- verify ---- */
   const doVerify = async () => {
-    if (!confirm || verifyingId) return;
+    if (!confirm || verifyingId || !canApprovePayments) return;
     const { item } = confirm;
     setVerifyingId(`${item.type}:${item.id}`);
     try {
@@ -346,7 +350,13 @@ export default function PaymentScreenshot({ params }) {
           <a href={LINKS.back} className="ps-btn ps-btn-teal"><ArrowLeft size={16} /> Back to Profiles</a>
         </div>
 
-        {error ? (
+        {!canViewPayments ? (
+          <div className="ps-card ps-state">
+            <AlertTriangle size={34} />
+            <p>You do not have permission to view payments.</p>
+            <a href={LINKS.back} className="ps-btn ps-btn-teal"><ArrowLeft size={16} /> Back to Profiles</a>
+          </div>
+        ) : error ? (
           <div className="ps-card ps-state">
             <AlertTriangle size={34} />
             <p>{error}</p>
@@ -411,13 +421,14 @@ export default function PaymentScreenshot({ params }) {
                     busy={verifyingId === `${s.type}:${s.id}`}
                     onVerify={(item, t) => setConfirm({ item, title: t })}
                     onOpen={setViewer}
+                    canVerify={canApprovePayments}
                   />
                 );
               })}
             </div>
 
             {/* ---------- Upload another screenshot ---------- */}
-            {!loading && (
+            {!loading && canCreatePayments && (
               <form className="ps-card ps-upload" onSubmit={doUpload}>
                 <h3>Add Payment Entry</h3>
                 <p>Add another payment record for this candidate. Entries are saved individually and await verification.</p>
@@ -479,7 +490,7 @@ export default function PaymentScreenshot({ params }) {
         )}
 
         {/* ---------- Confirm "Verify Payment" ---------- */}
-        {confirm && (
+        {confirm && canApprovePayments && (
           <div className="ps-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget && !verifyingId) setConfirm(null); }}>
             <div className="ps-modal" role="dialog" aria-modal="true" aria-labelledby="ps-confirm-title">
               <div className="ps-modal-icon"><BadgeCheck size={30} /></div>

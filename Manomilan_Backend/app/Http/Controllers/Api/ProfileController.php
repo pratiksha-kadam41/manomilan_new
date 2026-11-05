@@ -1377,39 +1377,66 @@ class ProfileController extends Controller
         }
 
         try {
-            $profile = Profile::with(['user.preference'])->find((int) $id);
+            $profile = Profile::with([
+                'user.preference',
+                'familyDetails',
+                'educations',
+                'employments',
+                'religionDetails',
+                'partnerPreferences',
+                'profileMelavaRegistrations',
+            ])->find((int) $id);
 
             if (! $profile) {
                 return response()->json(['message' => 'Profile not found.'], 404);
             }
 
             $preference = $profile->user?->preference;
+            $family = $profile->familyDetails;
+            $education = $profile->educations->sortBy('id')->first();
+            $employment = $profile->employments->sortBy('id')->first();
+            $religion = $profile->religionDetails;
+            $partnerPreference = $profile->partnerPreferences;
+            $latestMelava = $profile->profileMelavaRegistrations->sortByDesc('id')->first();
+            $photos = is_array($profile->photos) ? $profile->photos : [];
+            $photo = $photos['profile_photo'] ?? $profile->profile_photo ?? $profile->profilePhoto;
+            $birthDate = $profile->birth_date ?: $profile->birthDate ?: $latestMelava?->birthDate;
+            $height = $profile->height_cm
+                ? rtrim(rtrim(number_format((float) $profile->height_cm, 2, '.', ''), '0'), '.').' cm'
+                : $profile->height;
 
             return response()->json([
                 'data' => [
                     'id' => $profile->id,
-                    'full_name' => $profile->fullName,
-                    'photo_url' => $this->fileUrl($profile->profilePhoto),
-                    'gender' => $profile->groomOrBride,
-                    'dob' => $profile->birthDate,
+                    'full_name' => $profile->full_name ?: $profile->fullName ?: $profile->user?->name,
+                    'photo_url' => $this->fileUrl(is_string($photo) ? $photo : null),
+                    'gender' => $profile->groomorbride ?: $profile->groomOrBride,
+                    'dob' => $birthDate,
                     'mobile' => $profile->user?->username ?? $profile->phone,
-                    'height' => $profile->height,
-                    'caste' => $profile->caste,
-                    'sub_caste' => $profile->subCaste,
-                    'home_town' => $profile->professionalCity ?: $profile->cityOfEducation,
-                    'current_city' => $profile->professionalCity ?: $profile->cityOfEducation,
-                    'education' => $profile->education,
-                    'profession' => $profile->profession,
-                    'monthly_income' => $profile->monthlyIncome,
-                    'father_name' => $profile->fathersName,
-                    'father_occupation' => $profile->fathersOccupation,
-                    'mother_name' => $profile->mothersName,
-                    'mother_occupation' => $profile->mothersOccupation,
-                    'brothers' => $profile->noOfBrothers,
-                    'sisters' => $profile->noOfSisters,
-                    'pref_caste' => $preference?->preferred_caste,
-                    'pref_age_range' => $this->rangeText($preference?->age_from, $preference?->age_to),
-                    'other_expectations' => $preference?->other_expectations,
+                    'height' => $height,
+                    'caste' => $religion?->caste ?: $profile->caste,
+                    'sub_caste' => $religion?->sub_caste ?: $profile->subCaste,
+                    'home_town' => $employment?->employment_city ?: $education?->education_city
+                        ?: $profile->professionalCity ?: $profile->cityOfEducation,
+                    'current_city' => $employment?->employment_city ?: $education?->education_city
+                        ?: $profile->professionalCity ?: $profile->cityOfEducation,
+                    'education' => $education?->education_level ?: $profile->education,
+                    'profession' => $employment?->profession ?: $profile->profession,
+                    'monthly_income' => $employment?->monthly_income
+                        ?: $profile->monthly_income ?: $profile->monthlyIncome,
+                    'father_name' => $family?->father_name ?: $profile->fathersName,
+                    'father_occupation' => $family?->father_occupation ?: $profile->fathersOccupation,
+                    'mother_name' => $family?->mother_name ?: $profile->mothersName,
+                    'mother_occupation' => $family?->mother_occupation ?: $profile->mothersOccupation,
+                    'brothers' => $family?->brothers_count ?? $profile->noOfBrothers,
+                    'sisters' => $family?->sisters_count ?? $profile->noOfSisters,
+                    'pref_caste' => $partnerPreference?->preferred_caste ?? $preference?->preferred_caste,
+                    'pref_age_range' => $this->rangeText(
+                        $partnerPreference?->age_from ?? $preference?->age_from,
+                        $partnerPreference?->age_to ?? $preference?->age_to,
+                    ),
+                    'other_expectations' => $partnerPreference?->other_expectations
+                        ?? $preference?->other_expectations,
                 ],
             ]);
         } catch (Throwable $e) {

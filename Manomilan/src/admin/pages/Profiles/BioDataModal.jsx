@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Download, ExternalLink, X } from "lucide-react";
+import { apiMediaUrl } from "../../../api";
 import { BIODATA_TEMPLATES } from "./biodataTemplates.js";
 import "./BioDataModal.css";
 

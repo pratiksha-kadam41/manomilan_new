@@ -63,6 +63,7 @@ const initials = (value) => String(value || "")
 
 export default function MelavaPayments() {
   const canApprovePayments = useAdminPermission("approve", "/admin/melava");
+  const canExportBiodata = useAdminPermission("export", null, "admin_side_profile");
   const [registrations, setRegistrations] = useState([]);
   const [stats, setStats] = useState(EMPTY_STATS);
   const [search, setSearch] = useState("");
@@ -201,7 +202,7 @@ export default function MelavaPayments() {
   };
 
   const showBiodata = (row, rowNumber) => {
-    if (!row.profile_id) return;
+    if (!canExportBiodata || !row.profile_id) return;
     setBioData({ profile: null, profileId: row.profile_id, rowNumber, loading: true, error: "" });
 
     request(`/profiles/${row.profile_id}/biodata-preview`)
@@ -219,7 +220,7 @@ export default function MelavaPayments() {
   };
 
   const openBiodataFullPage = ({ template, orientation }) => {
-    if (!bioData) return;
+    if (!canExportBiodata || !bioData) return;
     const cacheKey = `melava-biodata-preview:${bioData.profileId}:${Date.now()}`;
     const urlParams = new URLSearchParams({
       template: template.id,
@@ -415,17 +416,19 @@ export default function MelavaPayments() {
                       <td className="ui-muted">{formatDate(row.melava_registered_at || row.created_at)}</td>
                       <td>
                         <div className="ui-actions">
-                          <button
-                            type="button"
-                            className="ui-btn small secondary"
-                            onClick={() => showBiodata(row, (pagination?.from || 1) + index)}
-                            disabled={!row.profile_id}
-                            title={row.profile_id
-                              ? "Choose a template and preview candidate BioData"
-                              : "A candidate profile is not linked to this registration"}
-                          >
-                            <FileText size={14} /> BioData
-                          </button>
+                          {canExportBiodata ? (
+                            <button
+                              type="button"
+                              className="ui-btn small secondary"
+                              onClick={() => showBiodata(row, (pagination?.from || 1) + index)}
+                              disabled={!row.profile_id}
+                              title={row.profile_id
+                                ? "Choose a template and preview candidate BioData"
+                                : "A candidate profile is not linked to this registration"}
+                            >
+                              <FileText size={14} /> BioData
+                            </button>
+                          ) : null}
                           {canApprovePayments ? (
                             <button type="button" className="ui-btn small" onClick={() => openPayment(row)}>
                               <Wallet size={14} /> Payment

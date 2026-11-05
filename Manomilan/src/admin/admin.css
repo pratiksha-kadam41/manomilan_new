@@ -44,6 +44,17 @@ body {
   border-right: 1px solid var(--adm-border);
   box-shadow: 4px 0 24px rgba(16, 24, 40, 0.04);
   transition: width 0.25s ease, transform 0.25s ease;
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
+}
+
+.adm-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.adm-sidebar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #cbd5e1;
 }
 
 .adm-sidebar-overlay {
@@ -282,6 +293,32 @@ body {
   justify-content: center;
 }
 
+.adm-wrapper.collapsed .adm-nav {
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.adm-wrapper.collapsed .adm-link {
+  gap: 0;
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.adm-wrapper.collapsed .adm-sidebar-footer {
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.adm-wrapper.collapsed .wm-nav-parent {
+  gap: 0;
+  padding-right: 4px;
+  padding-left: 4px;
+}
+
+.adm-wrapper.collapsed .wm-nav-chevron {
+  display: none;
+}
+
 @media (max-width: 1024px) {
   .adm-sidebar {
     width: min(280px, 86vw);
@@ -320,6 +357,57 @@ body {
 
   .adm-user-text {
     display: none;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-sidebar {
+    width: min(280px, 86vw);
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-brand {
+    min-height: 190px;
+    padding: 8px 12px;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-brand-icon {
+    height: 174px;
+    transform: scale(1.12);
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-brand-text {
+    display: flex;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-menu-label {
+    display: block;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-link-text {
+    display: inline;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-nav {
+    padding: 0 12px;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-link {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .adm-sidebar-footer {
+    padding: 12px 16px 22px;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .wm-nav-parent {
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+  }
+
+  .adm-wrapper.collapsed.mobile-open .wm-nav-chevron,
+  .adm-wrapper.collapsed.mobile-open .wm-nav-children {
+    display: grid;
   }
 }
 

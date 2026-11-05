@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { request, apiMediaUrl } from "../../api";
+import { request } from "../../api";
+import { useAdminPermission } from "../../permission-context";
 import BioDataModal from "./Profiles/BioDataModal.jsx";
 import "./melavaBioDataPage.css";
 
@@ -18,15 +19,18 @@ const getCachedProfile = (cacheKey, profileId) => {
 };
 
 export default function MelavaBioDataPage({ params }) {
+  const canExportBiodata = useAdminPermission("export", null, "admin_side_profile");
   const profileId = params?.id || "";
   const search = new URLSearchParams(window.location.search);
   const templateId = search.get("template") || "";
   const orientation = search.get("orientation") === "landscape" ? "landscape" : "portrait";
-  const [profile, setProfile] = useState(() => getCachedProfile(search.get("cache_key"), profileId));
+  const [profile, setProfile] = useState(() => (canExportBiodata
+    ? getCachedProfile(search.get("cache_key"), profileId)
+    : null));
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (profile) return undefined;
+    if (!canExportBiodata || profile) return undefined;
     let active = true;
     request(`/profiles/${profileId}/biodata-preview`)
       .then((response) => {
@@ -40,7 +44,7 @@ export default function MelavaBioDataPage({ params }) {
     return () => {
       active = false;
     };
-  }, [profileId, profile]);
+  }, [profileId, profile, canExportBiodata]);
 
   const closePage = () => {
     if (window.opener) {
@@ -49,6 +53,18 @@ export default function MelavaBioDataPage({ params }) {
     }
     window.location.assign("/admin/melava");
   };
+
+  if (!canExportBiodata) {
+    return (
+      <main className="mbp-state">
+        <section>
+          <h1>Access denied</h1>
+          <p>You do not have permission to view candidate BioData.</p>
+          <button type="button" onClick={closePage}>Back to Melava registrations</button>
+        </section>
+      </main>
+    );
+  }
 
   if (error) {
     return (

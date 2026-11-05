@@ -139,6 +139,7 @@
 .bd-preview-scroll {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
   padding: 6px;
   border-radius: 12px;
@@ -207,8 +208,9 @@
 .bd-paper {
   position: relative;
   flex: none;
-  width: 740px;
-  height: 1046px;
+  width: min(740px, 100%);
+  height: auto;
+  aspect-ratio: 210 / 297;
   margin: 0 auto;
   overflow: hidden;
   background-color: #fff;
@@ -220,8 +222,7 @@
 }
 
 .bd-paper-landscape {
-  width: 100%;
-  max-width: 1046px;
+  width: min(1046px, 100%);
   height: auto;
   aspect-ratio: 297 / 210;
   background-position: center top;
