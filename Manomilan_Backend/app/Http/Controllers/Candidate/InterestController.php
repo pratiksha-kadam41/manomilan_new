@@ -159,12 +159,27 @@ class InterestController extends CandidateController
             ]);
 
             $interest->load('profile');
+            $senderName = $me->full_name ?: $user->name ?: 'A candidate';
+            $senderPhoto = is_array($me->photos)
+                ? ($me->photos['profile_photo']
+                    ?? $me->photos['profilePhoto']
+                    ?? $me->photos['profilePicture']
+                    ?? $me->photos[0]
+                    ?? null)
+                : null;
             $this->notifyUser(
                 $profile->user,
                 'interest_received',
                 'You received a new interest',
-                ($me->full_name ?: $user->name ?: 'A candidate').' sent you an interest.',
-                ['interest_id' => $interest->id, 'profile_id' => $profile->id]
+                $senderName.' has sent you an interest request.',
+                [
+                    'interest_id' => $interest->id,
+                    'profile_id' => $me->id,
+                    'actor_profile_id' => $me->id,
+                    'actor_user_id' => $user->id,
+                    'actor_name' => $senderName,
+                    'actor_photo_url' => $senderPhoto ? $this->fileUrl($senderPhoto) : '',
+                ]
             );
 
             return response()->json([

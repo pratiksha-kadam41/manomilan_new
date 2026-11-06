@@ -8,7 +8,7 @@ import CandidateLayout from "../components/CandidateLayout";
 import MatchDetailModal from "../components/MatchDetailModal";
 import {
   ConfirmDialog, EmptyState, ErrorState, PageHeader, Pagination, Skeleton,
-  Toasts,
+  Toasts, Avatar,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
@@ -150,7 +150,7 @@ export default function Notifications() {
 
   const openNotification = (item) => {
     markRead(item);
-    const profileId = Number(item.data?.profile_id || 0);
+    const profileId = Number(item.data?.actor_profile_id || item.data?.profile_id || 0);
     if (profileId) setSelected({ id: profileId });
   };
 
@@ -278,11 +278,19 @@ export default function Notifications() {
                 <ul>
                   {group.items.map((item) => {
                     const Icon = iconFor(item.type);
-                    const profileId = Number(item.data?.profile_id || 0);
+                    const profileId = Number(item.data?.actor_profile_id || item.data?.profile_id || 0);
                     return (
                       <li key={item.id} className={`cnd-notification-row ${item.read ? "" : "unread"}`}>
                         <button type="button" className="cnd-notification-main" onClick={() => openNotification(item)}>
-                          <span className="cnd-notification-icon"><Icon size={18} /></span>
+                          <span className="cnd-notification-icon">
+                            {item.data?.actor_photo_url ? (
+                              <Avatar
+                                name={item.data?.actor_name || ""}
+                                src={item.data.actor_photo_url}
+                                size="sm"
+                              />
+                            ) : <Icon size={18} />}
+                          </span>
                           <span className="cnd-notification-copy">
                             <span className="cnd-notification-title">
                               <strong>{item.title}</strong>

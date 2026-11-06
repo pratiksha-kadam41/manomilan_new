@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Candidate;
 
+use App\UserInterest;
 use App\Models\CandidateNotification;
 use Illuminate\Http\Request;
 use Throwable;
@@ -20,7 +21,7 @@ class NotificationController extends CandidateController
                 'per_page' => ['nullable', 'integer', 'min:5', 'max:50'],
             ]);
 
-            $query = CandidateNotification::where('user_id', $user->id);
+            $query = CandidateNotification::with('user')->where('user_id', $user->id);
 
             if (($filters['filter'] ?? 'all') === 'unread') {
                 $query->whereNull('read_at');
@@ -195,12 +196,38 @@ class NotificationController extends CandidateController
 
     private function present(CandidateNotification $notification): array
     {
+        $data = $notification->data ?: [];
+        if ($notification->type === 'interest_received' && ! empty($data['interest_id'])) {
+            $interest = UserInterest::with(['user.profile'])
+                ->whereKey((int) $data['interest_id'])
+                ->where('profile_id', $notification->user?->profile_id)
+                ->first();
+
+            if ($interest?->user?->profile) {
+                $senderProfile = $interest->user->profile;
+                $senderPhoto = is_array($senderProfile->photos)
+                    ? ($senderProfile->photos['profile_photo']
+                        ?? $senderProfile->photos['profilePhoto']
+                        ?? $senderProfile->photos['profilePicture']
+                        ?? $senderProfile->photos[0]
+                        ?? null)
+                    : null;
+                $data = array_merge($data, [
+                    'profile_id' => $senderProfile->id,
+                    'actor_profile_id' => $senderProfile->id,
+                    'actor_user_id' => $interest->user_id,
+                    'actor_name' => $senderProfile->full_name ?: $interest->user->name ?: 'A candidate',
+                    'actor_photo_url' => $senderPhoto ? $this->fileUrl($senderPhoto) : '',
+                ]);
+            }
+        }
+
         return [
             'id' => $notification->id,
             'type' => $notification->type,
             'title' => $notification->title,
             'message' => $notification->message,
-            'data' => $notification->data ?: [],
+            'data' => $data,
             'read' => $notification->read_at !== null,
             'read_at' => optional($notification->read_at)->toIso8601String(),
             'created_at' => optional($notification->created_at)->toIso8601String(),

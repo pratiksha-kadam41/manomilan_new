@@ -3153,6 +3153,14 @@ body.candidate-mode *::after {
   background: var(--cnd-pink);
 }
 
+.cnd-notification-icon .cnd-avatar {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
 .cnd-quick-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4485,6 +4493,7 @@ body.candidate-mode *::after {
   display: flex;
   flex-direction: column;
   width: 100%;
+  min-height: 0;
   max-height: calc(100vh - 48px);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.4);
@@ -4504,12 +4513,22 @@ body.candidate-mode *::after {
 .cnd-modal-lg { max-width: 900px; }
 
 .cnd-modal-head {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  padding: 20px 22px 16px;
+  flex: 0 0 auto;
+  overflow: visible;
+  padding: 20px 70px 16px 22px;
   border-bottom: 1px solid var(--cnd-line);
+}
+
+.cnd-modal-head > .cnd-icon-btn {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 2;
 }
 
 .cnd-modal-head h2 {
@@ -4526,8 +4545,11 @@ body.candidate-mode *::after {
 
 .cnd-modal-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px 22px;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cnd-modal-foot {
@@ -6146,10 +6168,12 @@ body.candidate-mode *::after {
   .cnd-modal-layer {
     align-items: flex-end;
     padding: 0;
+    z-index: 1000;
   }
 
   .cnd-modal {
     max-height: 92vh;
+    min-height: 0;
     border-radius: 22px 22px 0 0;
   }
 
@@ -6158,6 +6182,16 @@ body.candidate-mode *::after {
   .cnd-modal-foot {
     padding-left: 17px;
     padding-right: 17px;
+  }
+
+  .cnd-modal-head {
+    padding-right: 60px;
+  }
+
+  .cnd-modal-head > .cnd-icon-btn {
+    top: 15px;
+    right: 15px;
+    z-index: 3;
   }
 
   .cnd-pm-hero {
