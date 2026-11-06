@@ -424,7 +424,9 @@
 @media (max-width: 900px) {
   .login-page {
     display: block;
+    min-height: auto;
     padding: 0 0 28px;
+    overflow: visible;
     background: linear-gradient(180deg, #fff3f7 0%, #fde1ea 55%, #f9c3d4 100%);
   }
 

@@ -2054,6 +2054,31 @@
     border-color: rgba(139, 0, 56, 0.22);
     background: rgba(255, 255, 255, 0.75);
   }
+
+  .site-header--login .mmh-login-mobile-nav {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 0.4rem;
+    width: 100%;
+    overflow-x: auto;
+    padding: 0.15rem 0 0.35rem;
+    scrollbar-width: thin;
+  }
+
+  .site-header--login .mmh-login-mobile-nav a {
+    flex: 0 0 auto;
+    padding: 0.4rem 0.65rem;
+    border-radius: 999px;
+    color: var(--mm-maroon);
+    font-size: 0.76rem;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .site-header--login .mmh-login-mobile-nav a[aria-current="page"] {
+    background: var(--mm-maroon);
+    color: #fff;
+  }
 }
 
 @media (max-width: 374px) {

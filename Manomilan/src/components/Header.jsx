@@ -31,6 +31,7 @@ const LOGIN_URL = "/login";
 
 export default function Header() {
   const { pathname } = useLocation();
+  const isAuthPage = [LOGIN_URL, "/register"].includes(pathname.replace(/\/+$/, ""));
   const [menu, setMenu] = useState({ path: pathname, open: false });
   const [regMenu, setRegMenu] = useState({ path: pathname, open: false });
   const closeRef = useRef(null);
@@ -66,7 +67,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="site-header site-header--premium">
+      <header className={`site-header site-header--premium${isAuthPage ? " site-header--login" : ""}`}>
         <div className="mmh-bar">
           <div className="site-container mmh-bar-inner">
             <img
@@ -156,6 +157,16 @@ export default function Header() {
             <a href={LOGIN_URL} className="mmh-mobile-login">Login</a>
             <a href={REGISTER_URL} className="mmh-mobile-register">Register</a>
           </div>
+
+          {isAuthPage && (
+            <nav className="mmh-login-mobile-nav" aria-label="Primary">
+              {MOBILE_LINKS.map(([label, href]) => (
+                <a key={href} href={href} aria-current={isActive(href) ? "page" : undefined}>
+                  {label}
+                </a>
+              ))}
+            </nav>
+          )}
         </div>
       </header>
 

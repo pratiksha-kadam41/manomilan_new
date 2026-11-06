@@ -456,7 +456,9 @@ export default function App() {
   // CHANGED: find the page (and the id from the URL, if any)
   const { Page: Matched, params } = matchRoute(path);
   const Page = needsLogin ? Login : Matched;
-  const hideChrome = isAdminPath || isCandidatePath || isLogin || isMelavaRegistration || isWorkshopRegistration || isMaintenancePath;
+  const showChrome = isLogin || !(
+    isAdminPath || isCandidatePath || isMelavaRegistration || isWorkshopRegistration || isMaintenancePath
+  );
   const showMobileBottomNavigation = MOBILE_NAV_PATHS.has(path);
 
   if (maintenanceActive && isPublicPath) {
@@ -474,7 +476,7 @@ export default function App() {
 
   return (
     <>
-      {!hideChrome && <Header />}
+      {showChrome && <Header />}
       {Page ? (
         <AdminPermissionContext.Provider value={permissionContext}>
           <ProfileCompletionContext.Provider value={{
@@ -494,7 +496,7 @@ export default function App() {
           </ProfileCompletionContext.Provider>
         </AdminPermissionContext.Provider>
       ) : <ComingSoon path={path} />}
-      {!hideChrome && <Footer />}
+      {showChrome && <Footer />}
       {showMobileBottomNavigation && <MobileBottomNavigation />}
     </>
   );
