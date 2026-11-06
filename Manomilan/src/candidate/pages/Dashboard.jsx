@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, BadgeCheck, Bell, BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Eye, Heart, MapPin, RefreshCw, Send, Settings2, Sparkles, UserRound, Users, X,
+  ArrowRight, BadgeCheck, Bell, BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Eye, Heart, MapPin, RefreshCw, Send, Settings2, Shuffle, Sparkles, UserRound, Users, X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import CandidateLayout from "../components/CandidateLayout";
@@ -13,7 +13,8 @@ import {
 import { useToasts } from "../useToasts";
 import { getCachedHomeData } from "../../auth";
 import {
-  createRecommendationSeed, getDashboard, getMatch, getMatches, readDashboardCache, sendInterest,
+  createRecommendationSeed, getCachedCandidateFeed, getDashboard, getMatch, getMatches,
+  readDashboardCache, refreshRecommendationSeed, saveCandidateFeedCache, sendInterest,
 } from "../api";
 import { humanGender, text, timeAgo } from "../utils";
 
@@ -46,6 +47,14 @@ const candidatePhotos = (candidate) => [
   ...(candidate?.additional_photo_urls || []),
   ...(candidate?.candidate_photo_urls || []),
 ].filter((photo, index, all) => typeof photo === "string" && photo && all.indexOf(photo) === index);
+
+const nextAvailablePhotoIndex = (photos, currentIndex, direction, failedPhotos = []) => {
+  for (let step = 1; step <= photos.length; step += 1) {
+    const index = (currentIndex + direction * step + photos.length) % photos.length;
+    if (!failedPhotos.includes(photos[index])) return index;
+  }
+  return currentIndex;
+};
 
 function CandidateImage({ photos = [], name, size = "lg" }) {
   const [failedPhotos, setFailedPhotos] = useState([]);
@@ -144,13 +153,18 @@ function HomeProfileCard({ match, featured = false, onOpen, onInterest, interest
 export default function Dashboard() {
   const cached = useMemo(() => getCachedHomeData(), []);
   const dashboardCache = useMemo(() => readDashboardCache(), []);
-  const [shuffleSeed] = useState(createRecommendationSeed);
+  const [shuffleSeed, setShuffleSeed] = useState(createRecommendationSeed);
+  const [feedCache] = useState(() => ({
+    recent: getCachedCandidateFeed("recent", shuffleSeed),
+    suggested: getCachedCandidateFeed("suggested", shuffleSeed),
+  }));
+  const feedCacheSeed = useRef(shuffleSeed);
   const [data, setData] = useState(() => dashboardCache || cached);
-  const [suggested, setSuggested] = useState([]);
-  const [recentProfiles, setRecentProfiles] = useState([]);
-  const [suggestedLoading, setSuggestedLoading] = useState(true);
+  const [suggested, setSuggested] = useState(() => feedCache.suggested?.profiles || []);
+  const [recentProfiles, setRecentProfiles] = useState(() => feedCache.recent?.profiles || []);
+  const [suggestedLoading, setSuggestedLoading] = useState(() => !feedCache.suggested);
   const [suggestedLoadingMore, setSuggestedLoadingMore] = useState(false);
-  const [recentLoading, setRecentLoading] = useState(true);
+  const [recentLoading, setRecentLoading] = useState(() => !feedCache.recent);
   const [loading, setLoading] = useState(() => !dashboardCache);
   const [error, setError] = useState("");
   const [suggestedError, setSuggestedError] = useState("");
@@ -160,15 +174,16 @@ export default function Dashboard() {
   const [selected, setSelected] = useState(null);
   const [story, setStory] = useState(null);
   const [showMissingDetails, setShowMissingDetails] = useState(false);
-  const recentSection = useRef(null);
-  const suggestedSection = useRef(null);
   const suggestedLoadMoreRef = useRef(null);
   const recentRequestProfile = useRef(null);
   const suggestedRequestProfile = useRef(null);
-  const suggestedLoadedIds = useRef(new Set());
-  const suggestedHasMore = useRef(false);
+  const suggestedLoadedIds = useRef(new Set(
+    (feedCache.suggested?.profiles || []).map((match) => String(match.id)),
+  ));
+  const suggestedHasMore = useRef(Boolean(feedCache.suggested?.hasMore));
   const suggestedLoadingMoreRef = useRef(false);
-  const suggestedPage = useRef(1);
+  const suggestedPage = useRef(feedCache.suggested?.page || 1);
+  const suggestedProfilesRef = useRef(feedCache.suggested?.profiles || []);
   const { toasts, push, dismiss } = useToasts();
 
   const load = useCallback(async (force = false) => {
@@ -231,6 +246,13 @@ export default function Dashboard() {
       const matches = Array.isArray(result?.matches) ? result.matches : [];
       suggestedLoadedIds.current = new Set(matches.map((match) => String(match.id)));
       suggestedHasMore.current = Boolean(result?.pagination?.has_more);
+      suggestedPage.current = 1;
+      suggestedProfilesRef.current = matches;
+      saveCandidateFeedCache("suggested", shuffleSeed, {
+        profiles: matches,
+        page: 1,
+        hasMore: suggestedHasMore.current,
+      });
       setSuggested(matches);
     } catch (matchError) {
       suggestedRequestProfile.current = null;
@@ -267,7 +289,13 @@ export default function Dashboard() {
       nextMatches.forEach((match) => suggestedLoadedIds.current.add(String(match.id)));
       suggestedPage.current = page;
       suggestedHasMore.current = Boolean(result?.pagination?.has_more);
-      setSuggested((current) => [...current, ...nextMatches]);
+      suggestedProfilesRef.current = [...suggestedProfilesRef.current, ...nextMatches];
+      saveCandidateFeedCache("suggested", shuffleSeed, {
+        profiles: suggestedProfilesRef.current,
+        page,
+        hasMore: suggestedHasMore.current,
+      });
+      setSuggested(suggestedProfilesRef.current);
     } catch (matchError) {
       setSuggestedMoreError(matchError.message || "Could not load more compatible profiles.");
     } finally {
@@ -285,7 +313,9 @@ export default function Dashboard() {
       const result = await getMatches({
         sort: "newest", per_page: 6, include_filters: 0, shuffle_seed: shuffleSeed,
       });
-      setRecentProfiles(Array.isArray(result?.matches) ? result.matches : []);
+      const profiles = Array.isArray(result?.matches) ? result.matches : [];
+      saveCandidateFeedCache("recent", shuffleSeed, { profiles, page: 1, hasMore: false });
+      setRecentProfiles(profiles);
     } catch (matchError) {
       recentRequestProfile.current = null;
       setRecentError(matchError.message || "Could not load new candidates.");
@@ -295,28 +325,46 @@ export default function Dashboard() {
   }, [profile?.id, completion, shuffleSeed]);
 
   useEffect(() => {
-    const section = recentSection.current;
-    if (!section || !profile?.id || completion < 30 || recentRequestProfile.current === profile.id) return undefined;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
+    if (!profile?.id || completion < 30) {
+      if (!loading) {
+        setRecentLoading(false);
+        setSuggestedLoading(false);
+      }
+      return;
+    }
+    const hasCachedSeed = feedCacheSeed.current === shuffleSeed;
+    if (hasCachedSeed && feedCache.recent) {
+      recentRequestProfile.current = profile.id;
+    } else {
       loadRecent();
-    }, { rootMargin: "400px 0px" });
-    observer.observe(section);
-    return () => observer.disconnect();
-  }, [profile?.id, completion, loadRecent]);
-
-  useEffect(() => {
-    const section = suggestedSection.current;
-    if (!section || !profile?.id || completion < 30 || suggestedRequestProfile.current === profile.id) return undefined;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (!entry.isIntersecting) return;
-      observer.disconnect();
+    }
+    if (hasCachedSeed && feedCache.suggested) {
+      suggestedRequestProfile.current = profile.id;
+    } else {
       loadSuggested();
-    }, { rootMargin: "400px 0px" });
-    observer.observe(section);
-    return () => observer.disconnect();
-  }, [profile?.id, completion, loadSuggested]);
+    }
+    feedCacheSeed.current = shuffleSeed;
+  }, [profile?.id, completion, loading, shuffleSeed, feedCache, loadRecent, loadSuggested]);
+
+  const shuffleCandidates = useCallback(() => {
+    if (!profile?.id || completion < 30 || suggestedLoading || recentLoading) return;
+    recentRequestProfile.current = null;
+    suggestedRequestProfile.current = null;
+    suggestedLoadedIds.current = new Set();
+    suggestedHasMore.current = false;
+    suggestedPage.current = 1;
+    suggestedProfilesRef.current = [];
+    suggestedLoadingMoreRef.current = false;
+    setRecentProfiles([]);
+    setSuggested([]);
+    setRecentError("");
+    setSuggestedError("");
+    setSuggestedMoreError("");
+    setRecentLoading(true);
+    setSuggestedLoading(true);
+    setSuggestedLoadingMore(false);
+    setShuffleSeed(refreshRecommendationSeed());
+  }, [profile?.id, completion, suggestedLoading, recentLoading]);
 
   useEffect(() => {
     const sentinel = suggestedLoadMoreRef.current;
@@ -337,9 +385,16 @@ export default function Dashboard() {
   }, [completion, loadMoreSuggested, suggested.length, suggestedLoading, suggestedLoadingMore, suggestedMoreError]);
 
   const updateMatch = (profileId, patch) => {
-    setSuggested((items) => items.map((item) => (
+    const updated = suggestedProfilesRef.current.map((item) => (
       item.id === profileId ? { ...item, ...patch } : item
-    )));
+    ));
+    suggestedProfilesRef.current = updated;
+    saveCandidateFeedCache("suggested", shuffleSeed, {
+      profiles: updated,
+      page: suggestedPage.current,
+      hasMore: suggestedHasMore.current,
+    });
+    setSuggested(updated);
   };
 
   const handleInterest = async (match) => {
@@ -370,7 +425,10 @@ export default function Dashboard() {
   };
 
   const openCandidateStory = async (match, initialIndex = 0) => {
-    setStory({ match, photos: [], activeIndex: initialIndex, loading: true, error: "" });
+    setStory({
+      match, photos: [], activeIndex: initialIndex, loading: true, error: "",
+      imageError: "", failedPhotos: [],
+    });
     try {
       const result = await getMatch(match.id);
       if (!result?.profile) {
@@ -396,16 +454,21 @@ export default function Dashboard() {
   const moveStory = useCallback((direction) => {
     setStory((current) => {
       if (!current?.photos.length) return current;
-      const count = current.photos.length;
       return {
         ...current,
-        activeIndex: (current.activeIndex + direction + count) % count,
+        activeIndex: nextAvailablePhotoIndex(
+          current.photos,
+          current.activeIndex,
+          direction,
+          current.failedPhotos,
+        ),
         imageError: "",
       };
     });
   }, []);
 
   const isStoryOpen = Boolean(story);
+  const activeStoryPhoto = story?.photos[story.activeIndex];
   useEffect(() => {
     if (!isStoryOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
@@ -455,7 +518,7 @@ export default function Dashboard() {
             <span className="mm-home-heart" aria-hidden="true">♡</span>
           </section>
 
-          <section className="mm-home-section mm-recent-section" ref={recentSection}>
+          <section className="mm-home-section mm-recent-section">
             <div className="mm-section-heading">
               <h2>New candidates</h2>
               <Link to="/candidate/matches?sort=newest">View all <ArrowRight size={15} /></Link>
@@ -483,13 +546,23 @@ export default function Dashboard() {
             )}
           </section>
 
-          <section
-            className={`mm-home-section ${suggested.length ? "" : "mm-empty-candidates"}`}
-            ref={suggestedSection}
-          >
+          <section className={`mm-home-section ${suggested.length ? "" : "mm-empty-candidates"}`}>
             <div className="mm-section-heading">
               <h2>Recommended for you</h2>
-              <Link to="/candidate/matches">See all <ArrowRight size={15} /></Link>
+              <div className="mm-section-heading-actions">
+                <button
+                  type="button"
+                  className="mm-shuffle-button"
+                  onClick={shuffleCandidates}
+                  disabled={!profile?.id || completion < 30 || suggestedLoading || recentLoading}
+                  aria-label="Shuffle candidate recommendations"
+                  title="Show a different set of candidates"
+                >
+                  <Shuffle size={14} className={suggestedLoading || recentLoading ? "cnd-spin" : ""} />
+                  Shuffle
+                </button>
+                <Link to="/candidate/matches">See all <ArrowRight size={15} /></Link>
+              </div>
             </div>
             {suggested.length ? (
               <div className="mm-recommended-grid">
@@ -812,12 +885,30 @@ export default function Dashboard() {
                 <p className="mm-story-message" role="alert">{story.error}</p>
               ) : story.photos.length ? (
                 <img
-                  key={story.photos[story.activeIndex]}
-                  src={story.photos[story.activeIndex]}
+                  key={activeStoryPhoto}
+                  src={activeStoryPhoto}
                   alt={`${story.match.full_name || "Candidate"} photo ${story.activeIndex + 1}`}
                   onError={(event) => {
                     event.currentTarget.style.display = "none";
-                    setStory((current) => current ? { ...current, imageError: "This photo could not be loaded." } : current);
+                    setStory((current) => {
+                      if (!current || current.photos[current.activeIndex] !== activeStoryPhoto) return current;
+                      const failedPhotos = current.failedPhotos.includes(activeStoryPhoto)
+                        ? current.failedPhotos
+                        : [...current.failedPhotos, activeStoryPhoto];
+                      const nextIndex = nextAvailablePhotoIndex(
+                        current.photos,
+                        current.activeIndex,
+                        1,
+                        failedPhotos,
+                      );
+                      const allPhotosFailed = failedPhotos.length === current.photos.length;
+                      return {
+                        ...current,
+                        failedPhotos,
+                        activeIndex: nextIndex,
+                        imageError: allPhotosFailed ? "No photos could be loaded." : "",
+                      };
+                    });
                   }}
                   onLoad={() => setStory((current) => current?.imageError ? { ...current, imageError: "" } : current)}
                 />

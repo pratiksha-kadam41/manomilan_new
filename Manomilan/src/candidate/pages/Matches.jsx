@@ -11,7 +11,7 @@ import {
 import { useToasts } from "../useToasts";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  createRecommendationSeed, getMatches, sendInterest,
+  createRecommendationSeed, getCachedMatches, getMatches, sendInterest,
 } from "../api";
 import { useProfileCompletion } from "../profile-completion-context";
 import { humanGender, text } from "../utils";
@@ -46,14 +46,22 @@ export default function Matches() {
   const [initialFilters] = useState(() => (
     { ...EMPTY_FILTERS, ...(validRequestedSort ? { sort: validRequestedSort } : {}) }
   ));
+  const [initialPageOne] = useState(() => getCachedMatches({
+    ...initialFilters,
+    page: 1,
+    per_page: 12,
+    feed: 1,
+    include_filters: 1,
+    shuffle_seed: shuffleSeed,
+  }));
   const profileCompletion = useProfileCompletion();
   const [draft, setDraft] = useState(initialFilters);
   const [applied, setApplied] = useState(initialFilters);
   const [page, setPage] = useState(1);
-  const [matches, setMatches] = useState([]);
-  const [options, setOptions] = useState({});
-  const [pagination, setPagination] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [matches, setMatches] = useState(() => initialPageOne?.matches || []);
+  const [options, setOptions] = useState(() => initialPageOne?.filters || {});
+  const [pagination, setPagination] = useState(() => initialPageOne?.pagination || null);
+  const [loading, setLoading] = useState(() => !initialPageOne);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [loadMoreError, setLoadMoreError] = useState("");
@@ -61,7 +69,7 @@ export default function Matches() {
   const [showMoreFilters, setShowMoreFilters] = useState(false);
   const loadRequestId = useRef(0);
   const loadAbortController = useRef(null);
-  const loadedIds = useRef(new Set());
+  const loadedIds = useRef(new Set((initialPageOne?.matches || []).map((item) => String(item.id))));
   const loadingMoreRef = useRef(false);
   const feedSentinel = useRef(null);
   const { toasts, push, dismiss } = useToasts();

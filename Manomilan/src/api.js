@@ -145,7 +145,7 @@ export function apiMediaUrl(value) {
     let path = parsedUrl.pathname;
 
     if (/^https?:/i.test(mediaPath)
-      && !/^\/(?:storage|uploads|candidate|profile_photos)\//i.test(path)
+      && !/^\/(?:storage|uploads|candidate|profile_photos|additional_photos)\//i.test(path)
       && !mediaFolders.test(path)) {
       return mediaPath;
     }

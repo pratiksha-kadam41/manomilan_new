@@ -1,8 +1,8 @@
 .match-details-page {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   width: 100%;
-  max-width: 1180px;
+  max-width: 1280px;
   min-width: 0;
   margin: 0 auto;
 }
@@ -15,26 +15,29 @@
 
 .match-details-page .cnd-profile-hero {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr) auto;
+  grid-template-columns: 188px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 24px;
+  gap: 28px;
   margin: 0;
-  padding: 24px;
+  padding: 28px;
   border: 1px solid #efdee4;
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 9px 28px rgba(80, 20, 42, 0.07);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 100% 0, rgba(232, 62, 108, 0.1), transparent 22rem),
+    #fff;
+  box-shadow: 0 14px 36px rgba(80, 20, 42, 0.08);
 }
 
 .match-details-page .cnd-profile-hero-photo {
   display: grid;
   place-items: center;
-  width: 176px;
-  height: 190px;
+  width: 188px;
+  height: 208px;
   overflow: hidden;
-  border: 1px solid #f1e2e7;
-  border-radius: 12px;
-  background: #fff5f8;
+  border: 4px solid #fff;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fdeef3, #f6dbe4);
+  box-shadow: 0 12px 30px rgba(95, 18, 44, 0.15);
 }
 
 .match-details-page .cnd-profile-hero-photo img {
@@ -48,20 +51,26 @@
 }
 
 .match-details-page .cnd-profile-name {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
   gap: 8px 12px;
 }
 
 .match-details-page .cnd-profile-name h1 {
   color: #311622;
-  font-size: clamp(23px, 3vw, 32px);
+  font-size: clamp(26px, 3vw, 36px);
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
 .match-details-page .cnd-profile-name > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   color: #137650;
   font-size: 12px;
+  font-weight: 600;
 }
 
 .match-details-page .cnd-profile-hero-copy > p {
@@ -73,6 +82,8 @@
 }
 
 .match-details-page .cnd-profile-tags {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -89,8 +100,8 @@
 
 .match-details-page .cnd-profile-interest {
   min-width: 150px;
-  min-height: 44px;
-  border-radius: 10px;
+  min-height: 46px;
+  border-radius: 12px;
 }
 
 .match-details-page .cnd-profile-interest.done {
@@ -101,11 +112,11 @@
 
 .match-details-page .cnd-profile-section {
   min-width: 0;
-  padding: 21px;
+  padding: 24px;
   border: 1px solid #efdee4;
-  border-radius: 14px;
+  border-radius: 18px;
   background: #fff;
-  box-shadow: 0 7px 22px rgba(80, 20, 42, 0.05);
+  box-shadow: 0 9px 26px rgba(80, 20, 42, 0.055);
 }
 
 .match-details-page .cnd-profile-section h2 {
@@ -132,10 +143,18 @@
 }
 
 .match-details-page .cnd-profile-photo-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 14px;
 }
 
 .match-details-page .cnd-profile-slideshow-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-height: 38px;
   padding: 8px 12px;
   border: 1px solid #ead4dc;
@@ -146,40 +165,83 @@
 }
 
 .match-details-page .cnd-profile-carousel {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
   height: auto;
   min-height: 0;
+  overflow: hidden;
   aspect-ratio: 16 / 9;
   border: 1px solid #f0e2e7;
-  border-radius: 12px;
+  border-radius: 16px;
   background: #f9f4f6;
 }
 
 .match-details-page .cnd-profile-carousel-image {
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
 .match-details-page .cnd-profile-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
   width: 42px;
   height: 42px;
   border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
   background: rgba(57, 22, 38, 0.68);
+  transform: translateY(-50%);
+}
+
+.match-details-page .cnd-profile-carousel-prev {
+  left: 16px;
+}
+
+.match-details-page .cnd-profile-carousel-next {
+  right: 16px;
 }
 
 .match-details-page .cnd-profile-carousel-count {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #fff;
   background: rgba(57, 22, 38, 0.76);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .match-details-page .cnd-profile-thumbnails {
+  display: flex;
+  overflow-x: auto;
   gap: 9px;
   margin-top: 12px;
+  padding-bottom: 3px;
 }
 
 .match-details-page .cnd-profile-thumbnails button {
-  flex-basis: 76px;
+  flex: 0 0 76px;
+  overflow: hidden;
+  cursor: pointer;
   height: 76px;
   padding: 2px;
   border: 2px solid transparent;
   border-radius: 10px;
+}
+
+.match-details-page .cnd-profile-thumbnails img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 7px;
+  object-fit: cover;
 }
 
 .match-details-page .cnd-profile-thumbnails button.active {
@@ -187,14 +249,23 @@
 }
 
 .match-details-page .cnd-profile-details-grid {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  align-items: start;
+  gap: 18px;
+}
+
+.match-details-page .cnd-profile-section dl {
+  display: grid;
+  margin: 0;
 }
 
 .match-details-page .cnd-profile-section dl div {
+  display: grid;
   grid-template-columns: minmax(120px, 0.8fr) minmax(0, 1.2fr);
-  gap: 12px;
-  padding: 10px 0;
+  align-items: baseline;
+  gap: 16px;
+  padding: 12px 0;
   border-bottom: 1px solid #f3e8ec;
 }
 
@@ -204,18 +275,20 @@
 
 .match-details-page .cnd-profile-section dt {
   color: #8d7580;
-  font-size: 12px;
+  font-size: 12.5px;
   overflow-wrap: anywhere;
 }
 
 .match-details-page .cnd-profile-section dd {
+  margin: 0;
   color: #39232c;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .match-details-page .cnd-profile-view-loading {
+  display: grid;
   grid-template-columns: minmax(220px, 0.7fr) minmax(0, 1fr);
   gap: 18px;
 }
@@ -300,14 +373,14 @@
 
 @media (max-width: 900px) {
   .match-details-page .cnd-profile-hero {
-    grid-template-columns: 140px minmax(0, 1fr);
+    grid-template-columns: 156px minmax(0, 1fr);
     gap: 18px;
-    padding: 18px;
+    padding: 20px;
   }
 
   .match-details-page .cnd-profile-hero-photo {
-    width: 140px;
-    height: 160px;
+    width: 156px;
+    height: 176px;
   }
 
   .match-details-page .cnd-profile-interest {
@@ -350,7 +423,7 @@
   }
 
   .match-details-page .cnd-profile-section {
-    padding: 16px;
+    padding: 18px;
   }
 
   .match-details-page .cnd-profile-photo-heading {
@@ -367,8 +440,8 @@
   }
 
   .match-details-page .cnd-profile-section dl div {
-    grid-template-columns: minmax(105px, 0.8fr) minmax(0, 1.2fr);
-    gap: 9px;
+    grid-template-columns: minmax(100px, 0.8fr) minmax(0, 1.2fr);
+    gap: 12px;
   }
 
   .match-details-page .cnd-profile-view-loading {
@@ -388,5 +461,11 @@
   .match-details-page .cnd-photo-slideshow-arrow {
     width: 40px;
     height: 40px;
+  }
+}
+
+@media (max-width: 760px) {
+  .match-details-page .cnd-profile-details-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

@@ -32,12 +32,15 @@ let matchRequestCache = new Map();
 let candidateCacheOwner = null;
 
 const CANDIDATE_PROFILE_CACHE_MS = 5 * 60 * 1000;
-const MATCHES_CACHE_MS = 5 * 60 * 1000;
+const MATCHES_CACHE_MS = 60 * 60 * 1000;
+const CANDIDATE_FEED_CACHE_MS = 60 * 60 * 1000;
 const DASHBOARD_CACHE_KEY = "candidate_dashboard_cache";
 const DASHBOARD_CACHE_MS = 60 * 60 * 1000;
 const CANDIDATE_QUERY_CACHE_PREFIX = "candidate_query_cache:";
 const CANDIDATE_QUERY_CACHE_MS = 5 * 60 * 1000;
+const CANDIDATE_FEED_CACHE_PREFIX = "candidate_feed_cache:";
 let dashboardRequest = null;
+let fallbackRecommendationSeed = null;
 
 const currentCandidateIdentity = () => {
   const user = getSession()?.user;
@@ -72,7 +75,7 @@ const queryString = (params) => new URLSearchParams(
   Object.entries(params).filter(([, value]) => value !== "" && value != null),
 ).toString();
 
-const readQueryCache = (key, allowStale = false) => {
+const readQueryCache = (key, allowStale = false, maxAge = CANDIDATE_QUERY_CACHE_MS) => {
   try {
     const user = getSession()?.user;
     const namespace = user?.id || user?.username || "session";
@@ -80,7 +83,7 @@ const readQueryCache = (key, allowStale = false) => {
     const cached = JSON.parse(sessionStorage.getItem(storageKey));
     if (
       cached?.savedAt &&
-      (allowStale || Date.now() - cached.savedAt < CANDIDATE_QUERY_CACHE_MS)
+      (allowStale || Date.now() - cached.savedAt < maxAge)
     ) {
       return cached.data;
     }
@@ -130,13 +133,121 @@ export const getCachedMatches = (params = {}) => {
   return readQueryCache(`matches:${query}`, true);
 };
 
-export const createRecommendationSeed = () => {
+const recommendationSeedKey = () => {
+  const owner = currentCandidateIdentity() || "session";
+  const day = new Date().toISOString().slice(0, 10);
+  return `candidate_recommendation_seed:${encodeURIComponent(owner)}:${day}`;
+};
+
+const randomRecommendationSeed = () => {
   const values = new Uint32Array(1);
   if (globalThis.crypto?.getRandomValues) {
     globalThis.crypto.getRandomValues(values);
-    return (values[0] % 2147483647) + 1;
+    fallbackRecommendationSeed = (values[0] % 2147483647) + 1;
+  } else {
+    fallbackRecommendationSeed = Math.floor(Math.random() * 2147483647) + 1;
   }
-  return Math.floor(Math.random() * 2147483647) + 1;
+  return fallbackRecommendationSeed;
+};
+
+export const createRecommendationSeed = () => {
+  const key = recommendationSeedKey();
+  try {
+    const savedSeed = Number(sessionStorage.getItem(key));
+    if (Number.isSafeInteger(savedSeed) && savedSeed > 0) return savedSeed;
+  } catch {
+    if (fallbackRecommendationSeed) return fallbackRecommendationSeed;
+  }
+
+  randomRecommendationSeed();
+  try {
+    sessionStorage.setItem(key, String(fallbackRecommendationSeed));
+  } catch {
+    return fallbackRecommendationSeed;
+  }
+  return fallbackRecommendationSeed;
+};
+
+export const refreshRecommendationSeed = () => {
+  const key = recommendationSeedKey();
+  const previous = createRecommendationSeed();
+  const generated = randomRecommendationSeed();
+  const next = generated === previous ? (previous % 2147483647) + 1 : generated;
+  try {
+    sessionStorage.setItem(key, String(next));
+  } catch {
+    invalidateMatchesCache();
+    clearCandidateFeedCache();
+    return next;
+  }
+  invalidateMatchesCache();
+  clearCandidateFeedCache();
+  return next;
+};
+
+const candidateFeedCacheKey = (feed, seed) => {
+  const user = getSession()?.user;
+  const namespace = user?.id || user?.username || "session";
+  return `${CANDIDATE_FEED_CACHE_PREFIX}${encodeURIComponent(namespace)}:${feed}:${seed}`;
+};
+
+const clearCandidateFeedCache = () => {
+  const user = getSession()?.user;
+  const namespace = user?.id || user?.username || "session";
+  const prefix = `${CANDIDATE_FEED_CACHE_PREFIX}${encodeURIComponent(namespace)}:`;
+  try {
+    const keys = [];
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    return;
+  }
+};
+
+const updateCachedCandidateFeeds = (profileId, patch) => {
+  const user = getSession()?.user;
+  const namespace = user?.id || user?.username || "session";
+  const prefix = `${CANDIDATE_FEED_CACHE_PREFIX}${encodeURIComponent(namespace)}:`;
+  try {
+    for (let index = 0; index < sessionStorage.length; index += 1) {
+      const key = sessionStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+      const cached = JSON.parse(sessionStorage.getItem(key));
+      if (!Array.isArray(cached?.data?.profiles)) continue;
+      cached.data.profiles = cached.data.profiles.map((profile) => (
+        String(profile.id) === String(profileId) ? { ...profile, ...patch } : profile
+      ));
+      sessionStorage.setItem(key, JSON.stringify(cached));
+    }
+  } catch {
+    return;
+  }
+};
+
+export const getCachedCandidateFeed = (feed, seed) => {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem(candidateFeedCacheKey(feed, seed)));
+    if (cached?.savedAt && Date.now() - cached.savedAt < CANDIDATE_FEED_CACHE_MS) {
+      return cached.data;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+
+export const saveCandidateFeedCache = (feed, seed, data) => {
+  try {
+    sessionStorage.setItem(candidateFeedCacheKey(feed, seed), JSON.stringify({
+      savedAt: Date.now(),
+      data,
+    }));
+  } catch {
+    return;
+  }
 };
 
 export const getCachedInterests = (mode = "sent", params = {}) => {
@@ -214,9 +325,11 @@ export const invalidateCandidateProfileCache = () => {
     sessionStorage.removeItem(DASHBOARD_CACHE_KEY);
   } catch {
     clearQueryCache("");
+    clearCandidateFeedCache();
     return;
   }
   clearQueryCache("");
+  clearCandidateFeedCache();
 };
 
 const notifyCandidateProfileChanged = (result) => {
@@ -323,11 +436,13 @@ export const getMatches = async (params = {}, { signal } = {}) => {
   ensureCandidateCacheOwner();
   const query = queryString(params);
   const cacheKey = query || "__default__";
-  const cacheable = !params.shuffle_seed && (!params.feed || Number(params.page || 1) === 1);
+  const cacheable = Number(params.page || 1) === 1;
   const cached = matchesCache.get(cacheKey);
   if (cacheable && cached && Date.now() - cached.cachedAt < MATCHES_CACHE_MS) return cached.result;
   if (cached) matchesCache.delete(cacheKey);
-  const persisted = cacheable ? readQueryCache(`matches:${query}`) : null;
+  const persisted = cacheable
+    ? readQueryCache(`matches:${query}`, false, MATCHES_CACHE_MS)
+    : null;
   if (persisted) {
     matchesCache.set(cacheKey, { result: persisted, cachedAt: Date.now() });
     return persisted;
@@ -373,7 +488,6 @@ export const getMatch = async (id) => {
       .finally(() => matchRequestCache.delete(cacheKey)));
   }
   const result = await matchRequestCache.get(cacheKey);
-  sessionStorage.removeItem(dashboardCacheKey());
   return result;
 };
 
@@ -400,6 +514,7 @@ export const sendInterest = async (profileId) => {
     method: "POST",
     body: { to_profile_id: profileId },
   }));
+  updateCachedCandidateFeeds(profileId, { interest_id: result?.interest?.id || -1 });
   invalidateMatchesCache();
   clearQueryCache("interests:");
   matchRequestCache.clear();

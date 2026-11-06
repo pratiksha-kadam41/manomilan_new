@@ -185,7 +185,7 @@ class MatchController extends CandidateController
         if ($sort === 'newest') {
             $query->orderByRaw('DATE(profiles.created_at) DESC');
             if ($shuffleSeed !== null) {
-                $query->orderByRaw('RAND(?)', [$shuffleSeed]);
+                $query->orderByRaw("CRC32(CONCAT(?, ':', profiles.id)) ASC", [$shuffleSeed]);
             }
             $query->orderByDesc('profiles.id');
         } elseif ($sort === 'age_asc') {
@@ -248,11 +248,11 @@ class MatchController extends CandidateController
             $query->orderByRaw(
                 "CASE WHEN JSON_LENGTH(profiles.photos) > 0 THEN 1 ELSE 0 END DESC"
             );
+            if ($shuffleSeed !== null) {
+                $query->orderByRaw("CRC32(CONCAT(?, ':', profiles.id)) ASC", [$shuffleSeed]);
+            }
             $query->orderByRaw('DATE(profiles.updated_at) DESC')
                 ->orderByRaw("CASE WHEN profiles.verification_status = 'Completed' THEN 1 ELSE 0 END DESC");
-            if ($shuffleSeed !== null) {
-                $query->orderByRaw('RAND(?)', [$shuffleSeed]);
-            }
             $query->orderByDesc('profiles.updated_at');
         }
 
