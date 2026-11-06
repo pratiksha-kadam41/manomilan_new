@@ -77,6 +77,27 @@ abstract class CandidateController extends Controller
         return $profile;
     }
 
+    protected function matchingProfile(Request $request, User $user): Profile
+    {
+        $profile = $this->candidateProfile($request);
+        if ($profile) {
+            return $profile;
+        }
+
+        $gender = strtolower(trim((string) $user->gender));
+        if (! in_array($gender, ['groom', 'bride'], true)) {
+            throw ValidationException::withMessages([
+                'gender' => ['Your candidate gender could not be determined.'],
+            ]);
+        }
+
+        return new Profile([
+            'groomorbride' => $gender,
+            'full_name' => $user->name,
+            'birth_date' => $user->birth_date,
+        ]);
+    }
+
     protected function presentUser(User $user): array
     {
         return [
@@ -107,7 +128,26 @@ abstract class CandidateController extends Controller
         }
 
         $getPhoto = function ($key) use ($photos, $profile) {
-            return $photos[$key] ?? $profile->{$key} ?? $profile->getAttribute($key) ?? null;
+            $photo = $photos[$key] ?? null;
+            if (filled($photo)) {
+                return $photo;
+            }
+
+            if ($key === 'profile_photo') {
+                foreach ([
+                    $photos[0] ?? null,
+                    $photos['profilePhoto'] ?? null,
+                    $photos['profilePicture'] ?? null,
+                    $profile->profilePhoto ?? null,
+                    $profile->getAttribute('profilePhoto'),
+                ] as $legacyPhoto) {
+                    if (filled($legacyPhoto)) {
+                        return $legacyPhoto;
+                    }
+                }
+            }
+
+            return $profile->{$key} ?? $profile->getAttribute($key) ?? null;
         };
 
         $docsModel = $profile->profileDocuments;
@@ -157,7 +197,7 @@ abstract class CandidateController extends Controller
                 ->values()
                 ->all(),
             'email' => $profile->email ?: $user->email,
-            'mobile' => $user->username ?: $profile->phone,
+            'mobile' => $profile->phone ?: $user->username,
             'city' => $this->profileCity($profile),
             'verification_status' => $profile->verification_status ?: $profile->profileVerificationStatus,
             'profile_completion' => (int) $profile->profile_completion,
@@ -382,7 +422,14 @@ abstract class CandidateController extends Controller
             'direction' => $direction,
             'created_at' => optional($interest->created_at)->toIso8601String(),
             'updated_at' => optional($interest->updated_at)->toIso8601String(),
-            'profile' => $otherProfile ? $this->presentPublicProfile($otherProfile) : null,
+            'profile' => $otherProfile
+                ? $this->presentPublicProfile($otherProfile)
+                : ($direction === 'received' && $interest->user ? [
+                    'id' => null,
+                    'full_name' => $interest->user->name ?: 'Candidate',
+                    'gender' => $interest->user->gender,
+                    'photo_url' => '',
+                ] : null),
         ];
 
         if ($otherProfile) {

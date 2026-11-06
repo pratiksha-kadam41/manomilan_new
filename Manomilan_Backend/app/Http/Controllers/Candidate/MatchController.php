@@ -16,8 +16,8 @@ class MatchController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $me = $this->candidateProfile($request, true);
-            $preference = $me->preference;
+            $me = $this->matchingProfile($request, $user);
+            $preference = $me->exists ? $me->preference : $user->preference;
 
             $filters = $request->validate([
                 'q' => ['nullable', 'string', 'max:100'],
@@ -56,8 +56,10 @@ class MatchController extends CandidateController
                 ->with(['educations', 'employments', 'religionDetails', 'familyDetails'])
                 ->where('groomorbride', ucfirst($opposite))
                 ->where('status', 'active')
-                ->where('id', '!=', $me->id)
                 ->whereNotNull('full_name');
+            if ($me->exists) {
+                $query->where('id', '!=', $me->id);
+            }
 
             $this->applyFilters($query, $filters);
             $sort = $filters['sort'] ?? 'best_match';
@@ -133,7 +135,8 @@ class MatchController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $me = $this->candidateProfile($request, true);
+            $me = $this->matchingProfile($request, $user);
+            $preference = $me->exists ? $me->preference : $user->preference;
 
             $profile = Profile::with(['educations', 'employments', 'religionDetails', 'familyDetails'])
                 ->where('status', 'active')
@@ -146,7 +149,7 @@ class MatchController extends CandidateController
                 ], 404);
             }
 
-            $match = $this->calculateMatch($me, $profile, $me->preference);
+            $match = $this->calculateMatch($me, $profile, $preference);
 
             $interest = UserInterest::where('user_id', $user->id)
                 ->where('profile_id', $profile->id)
@@ -185,7 +188,10 @@ class MatchController extends CandidateController
         if ($sort === 'newest') {
             $query->orderByRaw('DATE(profiles.created_at) DESC');
             if ($shuffleSeed !== null) {
-                $query->orderByRaw("CRC32(CONCAT(?, ':', profiles.id)) ASC", [$shuffleSeed]);
+                $query->orderByRaw(
+                    'MOD((profiles.id * ?) + 104729, 2147483647) ASC',
+                    [$shuffleSeed]
+                );
             }
             $query->orderByDesc('profiles.id');
         } elseif ($sort === 'age_asc') {
@@ -249,7 +255,10 @@ class MatchController extends CandidateController
                 "CASE WHEN JSON_LENGTH(profiles.photos) > 0 THEN 1 ELSE 0 END DESC"
             );
             if ($shuffleSeed !== null) {
-                $query->orderByRaw("CRC32(CONCAT(?, ':', profiles.id)) ASC", [$shuffleSeed]);
+                $query->orderByRaw(
+                    'MOD((profiles.id * ?) + 104729, 2147483647) ASC',
+                    [$shuffleSeed]
+                );
             }
             $query->orderByRaw('DATE(profiles.updated_at) DESC')
                 ->orderByRaw("CASE WHEN profiles.verification_status = 'Completed' THEN 1 ELSE 0 END DESC");

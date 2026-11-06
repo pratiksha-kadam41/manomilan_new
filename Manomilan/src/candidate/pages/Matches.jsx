@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Filter, Loader2, RotateCcw, Search, SlidersHorizontal, Users,
+  Filter, Loader2, RotateCcw, Search, Shuffle, SlidersHorizontal, Users,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
 import MatchResultCard from "../components/MatchResultCard";
@@ -9,9 +9,9 @@ import {
   Toasts,
 } from "../components/Ui";
 import { useToasts } from "../useToasts";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
-  createRecommendationSeed, getCachedMatches, getMatches, sendInterest,
+  createRecommendationSeed, getCachedMatches, getMatches, refreshRecommendationSeed, sendInterest,
 } from "../api";
 import { useProfileCompletion } from "../profile-completion-context";
 import { humanGender, text } from "../utils";
@@ -42,7 +42,7 @@ export default function Matches() {
   const location = useLocation();
   const requestedSort = new URLSearchParams(location.search).get("sort");
   const validRequestedSort = SORTS.some(([value]) => value === requestedSort) ? requestedSort : null;
-  const [shuffleSeed] = useState(createRecommendationSeed);
+  const [shuffleSeed, setShuffleSeed] = useState(createRecommendationSeed);
   const [initialFilters] = useState(() => (
     { ...EMPTY_FILTERS, ...(validRequestedSort ? { sort: validRequestedSort } : {}) }
   ));
@@ -131,20 +131,17 @@ export default function Matches() {
   }, [applied, page, shuffleSeed]);
 
   const hasMore = Boolean(pagination?.has_more);
-  const canBrowseMatches = profileCompletion.status === "complete"
-    || (profileCompletion.status === "required" && profileCompletion.completion >= 30);
   useEffect(() => {
-    if (!canBrowseMatches) return;
     Promise.resolve().then(load);
     return () => {
       loadAbortController.current?.abort();
       loadRequestId.current += 1;
     };
-  }, [applied, canBrowseMatches, load, page]);
+  }, [applied, load, page]);
 
   useEffect(() => {
     const sentinel = feedSentinel.current;
-    if (!sentinel || !hasMore || loading || loadingMore || !canBrowseMatches) return undefined;
+    if (!sentinel || !hasMore || loading || loadingMore) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
       if (!entry.isIntersecting || loadingMoreRef.current) return;
       loadingMoreRef.current = true;
@@ -153,7 +150,7 @@ export default function Matches() {
     }, { rootMargin: "500px 0px" });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [canBrowseMatches, hasMore, loading, loadingMore]);
+  }, [hasMore, loading, loadingMore]);
 
   useEffect(() => {
     if (!showMoreFilters) return undefined;
@@ -196,6 +193,21 @@ export default function Matches() {
     setApplied(EMPTY_FILTERS);
     setPage(1);
     closeFilters();
+  };
+
+  const shuffleMatches = () => {
+    loadRequestId.current += 1;
+    loadAbortController.current?.abort();
+    loadedIds.current = new Set();
+    loadingMoreRef.current = false;
+    setMatches([]);
+    setPagination(null);
+    setError("");
+    setLoadMoreError("");
+    setLoading(true);
+    setLoadingMore(false);
+    setPage(1);
+    setShuffleSeed(refreshRecommendationSeed());
   };
 
   useEffect(() => {
@@ -264,34 +276,17 @@ export default function Matches() {
           title="Find your match"
           subtitle="Search verified profiles ranked by your partner preferences and compatibility."
           actions={(
-            <button type="button" className="cnd-btn cnd-btn-ghost" onClick={clearFilters}>
-              <RotateCcw size={16} /> Reset filters
-            </button>
+            <div className="cnd-match-page-actions">
+              <button type="button" className="cnd-btn cnd-btn-ghost" onClick={shuffleMatches} disabled={loading}>
+                <Shuffle size={16} /> Shuffle
+              </button>
+              <button type="button" className="cnd-btn cnd-btn-ghost" onClick={clearFilters}>
+                <RotateCcw size={16} /> Reset filters
+              </button>
+            </div>
           )}
         />
 
-        {profileCompletion.status === "checking" || profileCompletion.status === "idle" ? (
-          <CardGridSkeleton count={6} />
-        ) : profileCompletion.status === "error" ? (
-          <EmptyState
-            icon={Users}
-            title="Unable to check profile completion"
-            message="Your candidate page is still available. Try again shortly, or open your profile to continue."
-            action={<Link to="/candidate/profile" className="cnd-btn cnd-btn-primary">Open profile</Link>}
-          />
-        ) : !canBrowseMatches ? (
-          <EmptyState
-            icon={Users}
-            title={profileCompletion.hasProfile ? "Complete your profile first" : "Create your profile first"}
-            message="Complete your profile to at least 30% to unlock compatible matches and recommendations."
-            action={(
-              <Link to="/candidate/profile" className="cnd-btn cnd-btn-primary">
-                {profileCompletion.hasProfile ? "Complete profile" : "Create profile"}
-              </Link>
-            )}
-          />
-        ) : (
-          <>
           <section className="cnd-card cnd-filter-card">
             <header className="cnd-filter-head">
               <div>
@@ -481,8 +476,6 @@ export default function Matches() {
               {hasMore ? <div ref={feedSentinel} className="cnd-feed-sentinel" aria-hidden="true" /> : null}
             </>
           )}
-        </>
-      )}
       </div>
     </CandidateLayout>
   );

@@ -161,7 +161,7 @@ export function apiMediaUrl(value) {
       path = `/storage/${storedPath}`;
     } else if (/^candidate_documents\//i.test(storedPath)) {
       path = `/storage/${storedPath}`;
-    } else if (/^uploads\/(?:melava_documents|melava_birth_docs|melava_additional_photos)\//i.test(storedPath)) {
+    } else if (/^uploads\/(?:melava_documents|melava_birth_docs|melava_additional_photos|melava_qr)\//i.test(storedPath)) {
       path = `/${storedPath}`;
     } else if (/^uploads\/profile_photos\//i.test(storedPath)) {
       path = `/storage/${storedPath.replace(/^uploads\//i, "")}`;

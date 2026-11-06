@@ -135,18 +135,11 @@ export const getCachedMatches = (params = {}) => {
 
 const recommendationSeedKey = () => {
   const owner = currentCandidateIdentity() || "session";
-  const day = new Date().toISOString().slice(0, 10);
-  return `candidate_recommendation_seed:${encodeURIComponent(owner)}:${day}`;
+  return `candidate_recommendation_seed:${encodeURIComponent(owner)}`;
 };
 
 const randomRecommendationSeed = () => {
-  const values = new Uint32Array(1);
-  if (globalThis.crypto?.getRandomValues) {
-    globalThis.crypto.getRandomValues(values);
-    fallbackRecommendationSeed = (values[0] % 2147483647) + 1;
-  } else {
-    fallbackRecommendationSeed = Math.floor(Math.random() * 2147483647) + 1;
-  }
+  fallbackRecommendationSeed = Math.floor(Math.random() * 2147483646) + 1;
   return fallbackRecommendationSeed;
 };
 
@@ -171,8 +164,8 @@ export const createRecommendationSeed = () => {
 export const refreshRecommendationSeed = () => {
   const key = recommendationSeedKey();
   const previous = createRecommendationSeed();
-  const generated = randomRecommendationSeed();
-  const next = generated === previous ? (previous % 2147483647) + 1 : generated;
+  let next = randomRecommendationSeed();
+  while (next === previous) next = randomRecommendationSeed();
   try {
     sessionStorage.setItem(key, String(next));
   } catch {
@@ -334,6 +327,7 @@ export const invalidateCandidateProfileCache = () => {
 
 const notifyCandidateProfileChanged = (result) => {
   if (result?.profile) {
+    updateCachedUserProfile(result.profile);
     window.dispatchEvent(new CustomEvent("candidate:profile-updated", {
       detail: { profile: result.profile },
     }));
@@ -502,8 +496,6 @@ export const getInterests = async (mode = "sent", params = {}) => {
   const path = mode === "received" ? "/candidate/interests/received" : "/candidate/interests/sent";
   const query = queryString(params);
   const cacheKey = interestCacheKey(mode, params);
-  const cached = readQueryCache(cacheKey);
-  if (cached) return cached;
   const result = data(await request(`${path}${query ? `?${query}` : ""}`));
   writeQueryCache(cacheKey, result);
   return result;
@@ -530,19 +522,19 @@ export const respondToInterest = async (id, status) => {
   return result;
 };
 
-export const getNotifications = async (params = {}) => {
+export const getNotifications = async (params = {}, { force = false } = {}) => {
   const query = queryString(params);
   const cacheKey = notificationCacheKey(params);
-  const cached = readQueryCache(cacheKey);
+  const cached = force ? null : readQueryCache(cacheKey);
   if (cached) return cached;
   const result = data(await request(`/candidate/notifications${query ? `?${query}` : ""}`));
   writeQueryCache(cacheKey, result);
   return result;
 };
 
-export const getUnreadNotificationCount = async () => {
+export const getUnreadNotificationCount = async ({ force = false } = {}) => {
   const cacheKey = "notifications:unread-count";
-  const cached = readQueryCache(cacheKey);
+  const cached = force ? null : readQueryCache(cacheKey);
   if (cached) return cached;
   const result = data(await request("/candidate/notifications/unread-count"));
   writeQueryCache(cacheKey, result);

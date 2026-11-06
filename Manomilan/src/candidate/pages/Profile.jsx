@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   BadgeCheck, Briefcase, Camera, CheckCircle2, Copy, FileText, GraduationCap,
-  Eye, Heart, Loader2, MapPin, Minus, Plus, Save, Settings2, ShieldCheck, Sparkles,
+  Eye, Heart, Loader2, MapPin, Minus, Phone, Plus, Save, Settings2, ShieldCheck, Sparkles,
   Trash2, Upload, UserRound, Users,
 } from "lucide-react";
 import CandidateLayout from "../components/CandidateLayout";
@@ -500,6 +500,7 @@ export default function CandidateProfile() {
   const [savingPreference, setSavingPreference] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [photoError, setPhotoError] = useState("");
+  const [failedProfilePhoto, setFailedProfilePhoto] = useState("");
   const [removePhotoOpen, setRemovePhotoOpen] = useState(false);
   const [docFiles, setDocFiles] = useState({});
   const [docBusy, setDocBusy] = useState(false);
@@ -1093,6 +1094,9 @@ export default function CandidateProfile() {
 
       {!profile ? (
         <SectionCard title="Start your profile" subtitle="These details are required to create your candidate profile" icon={UserRound}>
+          <div className="cnd-profile-id-row">
+            <span><Phone size={14} /> Registered mobile: {text(account?.mobile || account?.username, "Not available")}</span>
+          </div>
           {formNotice ? <InlineNote tone="error">{formNotice}</InlineNote> : null}
           <form className="cnd-profile-form" onSubmit={saveProfile}>
             <div className="cnd-form-grid">
@@ -1122,8 +1126,14 @@ export default function CandidateProfile() {
           <section className="cnd-profile-hero">
             <div className="cnd-profile-hero-photo">
               <div className="cnd-profile-photo-frame">
-                {profile.photo_url ? (
-                  <img src={profile.photo_url} alt={`${text(profile.full_name, "Candidate")} profile`} decoding="async" fetchPriority="high" />
+                {profile.photo_url && failedProfilePhoto !== profile.photo_url ? (
+                  <img
+                    src={profile.photo_url}
+                    alt={`${text(profile.full_name, "Candidate")} profile`}
+                    decoding="async"
+                    fetchPriority="high"
+                    onError={() => setFailedProfilePhoto(profile.photo_url)}
+                  />
                 ) : (
                   <Avatar name={profile.full_name} size="xl" />
                 )}
@@ -1155,6 +1165,7 @@ export default function CandidateProfile() {
               </div>
               <div className="cnd-profile-id-row">
                 <span>ID: {text(profile.registration_number || profile.profile_id, "Not assigned")}</span>
+                <span><Phone size={14} /> Registered mobile: {text(profile.mobile || account?.mobile || account?.username, "Not available")}</span>
                 {profile.verification_status === "Completed" ? (
                   <span><BadgeCheck size={15} /> Verified profile</span>
                 ) : null}

@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Info, Loader2,
   RefreshCw, X,
@@ -42,9 +42,19 @@ export function SectionCard({ title, subtitle, action, children, className = "",
 }
 
 export function Avatar({ name = "", src = "", size = "md", className = "" }) {
+  const [failedSrc, setFailedSrc] = useState("");
+
   return (
     <span className={cx("cnd-avatar", `cnd-avatar-${size}`, className)}>
-      {src ? <img src={src} alt={name ? `${name} profile` : ""} loading="lazy" decoding="async" /> : initials(name)}
+      {src && failedSrc !== src ? (
+        <img
+          src={src}
+          alt={name ? `${name} profile` : ""}
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailedSrc(src)}
+        />
+      ) : initials(name)}
     </span>
   );
 }

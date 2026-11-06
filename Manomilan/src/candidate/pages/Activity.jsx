@@ -12,12 +12,9 @@ import { getCachedHomeData } from "../../auth";
 import {
   getCachedInterests, getCandidateProfile, getInterests, respondToInterest,
 } from "../api";
-import { useProfileCompletion } from "../profile-completion-context";
 import { formatDate, text } from "../utils";
 
 export default function Activity({ currentPath, mode = "sent" }) {
-  const profileCompletion = useProfileCompletion();
-  const canRespond = profileCompletion.status === "complete";
   const cached = useMemo(() => getCachedHomeData(), []);
   const initialInterests = useMemo(
     () => getCachedInterests(mode, { q: "", page: 1, per_page: 10 }),
@@ -85,7 +82,6 @@ export default function Activity({ currentPath, mode = "sent" }) {
   };
 
   const respond = async (interest, status) => {
-    if (!canRespond) return;
     setResponding((current) => ({ ...current, [interest.id]: true }));
     try {
       await respondToInterest(interest.id, status);
@@ -157,19 +153,24 @@ export default function Activity({ currentPath, mode = "sent" }) {
                 const name = text(member.full_name, "Member");
                 const status = String(interest.status || "pending").toLowerCase();
                 const statusText = status === "pending" ? "Awaiting response" : status === "accepted" ? "Accepted" : "Declined";
+                const openProfile = () => {
+                  if (member.id) setSelected({ id: member.id, match: { ...member, ...interest } });
+                };
                 return (
                   <li key={interest.id} className="cnd-interest-row">
-                    <button type="button" className="cnd-interest-main" onClick={() => setSelected({ id: member.id, match: { ...member, ...interest } })}>
+                    <button type="button" className="cnd-interest-main" onClick={openProfile} disabled={!member.id}>
                       <Avatar name={name} src={member.photo_url} size="lg" />
                       <span className="cnd-interest-info">
                         <span className="cnd-interest-name"><strong>{name}</strong><StatusBadge status={interest.status || "pending"}>{statusText}</StatusBadge></span>
-                        <small>{[member.age ? `${member.age} years` : "", member.city, member.profession].filter(Boolean).join(" • ") || "Profile details added"}</small>
+                        <small>{[member.age ? `${member.age} years` : "", member.city, member.profession].filter(Boolean).join(" • ") || (member.id ? "Profile details added" : "Profile details not available yet")}</small>
                         <span className="cnd-interest-meta"><span>{interest.match_percentage || 0}% match</span><span><Clock3 size={13} /> {formatDate(interest.created_at, "Recently")}</span></span>
                       </span>
                     </button>
                     <div className="cnd-interest-actions">
-                      <button type="button" className="cnd-btn cnd-btn-ghost" onClick={() => setSelected({ id: member.id, match: { ...member, ...interest } })}>View profile</button>
-                      {mode === "received" && String(interest.status || "pending").toLowerCase() === "pending" && canRespond ? (
+                      {member.id ? (
+                        <button type="button" className="cnd-btn cnd-btn-ghost" onClick={openProfile}>View profile</button>
+                      ) : null}
+                      {mode === "received" && String(interest.status || "pending").toLowerCase() === "pending" ? (
                         <>
                           <button type="button" className="cnd-btn cnd-btn-primary" onClick={() => respond(interest, "accepted")} disabled={responding[interest.id]}>
                             {responding[interest.id] ? <Loader2 size={16} className="cnd-spin" /> : <Check size={16} />} Accept
@@ -188,10 +189,6 @@ export default function Activity({ currentPath, mode = "sent" }) {
           </>
         )}
       </section>
-
-      {mode === "received" && !canRespond && records.length > 0 ? (
-        <p className="cnd-inline-note">Complete your profile to 100% to accept or reject interests.</p>
-      ) : null}
 
       <MatchDetailModal key={selected?.id || "closed"} open={Boolean(selected)} profileId={selected?.id} initialMatch={selected?.match} onClose={() => setSelected(null)} allowInterest={mode === "received" ? false : true} />
     </CandidateLayout>

@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { EmptyState, ErrorState, PageHeader, Skeleton, StatusBadge } from "../components/Ui";
 import CandidateLayout from "../components/CandidateLayout";
+import CandidateMelavaApplyButton from "../components/CandidateMelavaApplyButton";
 import { getCachedHomeData } from "../../auth";
 import { getCandidateMelavaRegistrations } from "../api";
 
@@ -216,7 +217,12 @@ export default function MelavaReceipts() {
         eyebrow="Payments & registrations"
         title="Melava Receipts"
         subtitle="View your registered Melava events and download your payment receipts."
-        actions={<span className="cnd-receipt-header-art" aria-hidden="true"><ReceiptText size={29} /></span>}
+        actions={(
+          <div className="cnd-receipt-header-actions">
+            <CandidateMelavaApplyButton />
+            <span className="cnd-receipt-header-art" aria-hidden="true"><ReceiptText size={29} /></span>
+          </div>
+        )}
       />
       {loading ? (
         <div className="cnd-receipt-list">

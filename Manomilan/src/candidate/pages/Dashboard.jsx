@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, BadgeCheck, Bell, BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Eye, Heart, MapPin, RefreshCw, Send, Settings2, Shuffle, Sparkles, UserRound, Users, X,
+  ArrowRight, BadgeCheck, Bell, BriefcaseBusiness, CheckCircle2, ChevronLeft, ChevronRight, Eye, Grid2X2, Heart, MapPin, RefreshCw, Send, Settings2, Shuffle, Sparkles, UserRound, UserRoundPlus, Users, X,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import CandidateLayout from "../components/CandidateLayout";
+import CandidateMelavaApplyButton from "../components/CandidateMelavaApplyButton";
 import MatchResultCard from "../components/MatchResultCard";
 import MatchDetailModal from "../components/MatchDetailModal";
 import {
@@ -69,6 +70,69 @@ function CandidateImage({ photos = [], name, size = "lg" }) {
       onError={() => setFailedPhotos((current) => [...current, src])}
     />
   ) : <Avatar name={name} size={size} />;
+}
+
+function NewCandidateCard({ match, interestBusy, onOpen, onInterest }) {
+  const name = text(match.full_name, "Member");
+  const photos = candidatePhotos(match);
+  const interestDone = Boolean(match.interest_id);
+  const location = [match.city, match.state].filter(Boolean).join(", ");
+  const community = [match.religion, match.caste, match.sub_caste].filter(Boolean).join(" · ");
+
+  return (
+    <article className="mm-new-candidate-card">
+      <div className="mm-new-candidate-image">
+        <button
+          type="button"
+          className="mm-new-candidate-photo-open"
+          onClick={() => onOpen(match)}
+          aria-label={`View ${name}'s photos`}
+        >
+          <CandidateImage photos={photos} name={name} size="xl" />
+        </button>
+        <span className="mm-new-candidate-badge">New</span>
+        <button
+          type="button"
+          className={`mm-new-candidate-heart ${interestDone ? "is-done" : ""}`}
+          onClick={() => onInterest(match)}
+          disabled={interestDone || interestBusy}
+          aria-label={interestDone ? "Interest already sent" : `Express interest in ${name}`}
+          title={interestDone ? "Interest sent" : "Express interest"}
+        >
+          <Heart size={17} fill={interestDone ? "currentColor" : "none"} />
+        </button>
+        {match.verified ? (
+          <span className="mm-new-candidate-verified"><BadgeCheck size={13} /> Verified</span>
+        ) : null}
+      </div>
+      <div className="mm-new-candidate-body">
+        <div className="mm-new-candidate-name">
+          <strong>{name}</strong>
+          {match.age ? <span>{match.age} yrs</span> : null}
+        </div>
+        {community ? <p className="mm-new-candidate-community">{community}</p> : null}
+        {match.profession ? (
+          <p className="mm-new-candidate-detail"><BriefcaseBusiness size={14} /> {match.profession}</p>
+        ) : null}
+        {location ? (
+          <p className="mm-new-candidate-detail"><MapPin size={14} /> {location}</p>
+        ) : null}
+        <div className="mm-new-candidate-actions">
+          <Link className="mm-new-candidate-view" to={`/candidate/matches/${match.id}`}>
+            <Eye size={14} /> View Profile
+          </Link>
+          <button
+            type="button"
+            className="mm-new-candidate-interest"
+            onClick={() => onInterest(match)}
+            disabled={interestDone || interestBusy}
+          >
+            <Send size={13} /> {interestDone ? "Sent" : "Express Interest"}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
 }
 
 function HomeProfileCard({ match, featured = false, onOpen, onInterest, interestBusy }) {
@@ -162,6 +226,7 @@ export default function Dashboard() {
   const [data, setData] = useState(() => dashboardCache || cached);
   const [suggested, setSuggested] = useState(() => feedCache.suggested?.profiles || []);
   const [recentProfiles, setRecentProfiles] = useState(() => feedCache.recent?.profiles || []);
+  const [recentFilter, setRecentFilter] = useState("all");
   const [suggestedLoading, setSuggestedLoading] = useState(() => !feedCache.suggested);
   const [suggestedLoadingMore, setSuggestedLoadingMore] = useState(false);
   const [recentLoading, setRecentLoading] = useState(() => !feedCache.recent);
@@ -400,13 +465,27 @@ export default function Dashboard() {
   const handleInterest = async (match) => {
     if (busy[match.id]) return;
     setBusy((state) => ({ ...state, [match.id]: "interest" }));
+    const markRecentInterestSent = () => {
+      const markSent = (item) => (
+        item.id === match.id ? { ...item, interest_id: item.interest_id || -1 } : item
+      );
+      setRecentProfiles((current) => current.map(markSent));
+      const cachedRecent = getCachedCandidateFeed("recent", shuffleSeed)?.profiles || recentProfiles;
+      saveCandidateFeedCache("recent", shuffleSeed, {
+        profiles: cachedRecent.map(markSent),
+        page: 1,
+        hasMore: false,
+      });
+    };
     try {
       await sendInterest(match.id);
       updateMatch(match.id, { interest_id: -1 });
+      markRecentInterestSent();
       push(`Interest sent to ${text(match.full_name, "this profile")}.`);
     } catch (sendError) {
       if (sendError.status === 409) {
         updateMatch(match.id, { interest_id: -1 });
+        markRecentInterestSent();
         push("You have already sent an interest to this profile.", "info");
       } else {
         push(sendError.message || "Could not send the interest.", "error");
@@ -499,6 +578,14 @@ export default function Dashboard() {
   const ageRange = data?.profile?.preference
     ? [data.profile.preference.age_from, data.profile.preference.age_to].filter(Boolean).join(" - ")
     : "";
+  const filteredRecentProfiles = useMemo(() => {
+    if (recentFilter === "verified") return recentProfiles.filter((match) => Boolean(match.verified));
+    if (recentFilter === "matches") {
+      const suggestedIds = new Set(suggested.map((match) => String(match.id)));
+      return recentProfiles.filter((match) => suggestedIds.has(String(match.id)));
+    }
+    return recentProfiles;
+  }, [recentFilter, recentProfiles, suggested]);
 
   return (
     <CandidateLayout currentPath="/candidate" candidateInfo={candidateInfo}>
@@ -514,27 +601,53 @@ export default function Dashboard() {
               <span className="mm-home-kicker">Manomilan</span>
               <h1>{greeting()}, {displayName}</h1>
               <p>Your journey to a meaningful connection starts here.</p>
+              <CandidateMelavaApplyButton className="mm-home-melava-apply-button" />
             </div>
             <span className="mm-home-heart" aria-hidden="true">♡</span>
           </section>
 
-          <section className="mm-home-section mm-recent-section">
-            <div className="mm-section-heading">
-              <h2>New candidates</h2>
+          <section className="mm-home-section mm-recent-section mm-new-candidates-section">
+            <div className="mm-new-candidates-heading">
+              <div className="mm-new-candidates-title">
+                <h2>New Candidates</h2>
+                <span>New</span>
+              </div>
               <Link to="/candidate/matches?sort=newest">View all <ArrowRight size={15} /></Link>
             </div>
+            <div className="mm-new-candidate-filters" role="group" aria-label="Filter new candidates">
+              {[
+                ["all", "All", Grid2X2],
+                ["matches", "Matches for You", Heart],
+                ["recent", "Recently Joined", UserRoundPlus],
+                ["verified", "Verified", BadgeCheck],
+              ].map(([filter, label, Icon]) => (
+                <button
+                  type="button"
+                  key={filter}
+                  className={`mm-new-candidate-filter ${recentFilter === filter ? "is-active" : ""}`}
+                  onClick={() => setRecentFilter(filter)}
+                  aria-pressed={recentFilter === filter}
+                >
+                  <Icon size={15} /> {label}
+                </button>
+              ))}
+            </div>
             {recentProfiles.length ? (
-              <div className="mm-recent-rail">
-                {recentProfiles.map((match) => (
-                  <button type="button" className="mm-recent-person" key={match.id} onClick={() => openCandidateStory(match)}>
-                    <span className="mm-recent-photo">
-                      <CandidateImage photos={candidatePhotos(match)} name={text(match.full_name, "Member")} />
-                    </span>
-                    <strong>{text(match.full_name, "Member").split(" ")[0]}</strong>
-                    <small>NEW</small>
-                  </button>
-                ))}
-              </div>
+              filteredRecentProfiles.length ? (
+                <div className="mm-new-candidate-grid">
+                  {filteredRecentProfiles.map((match) => (
+                    <NewCandidateCard
+                      key={match.id}
+                      match={match}
+                      interestBusy={busy[match.id] === "interest"}
+                      onOpen={openCandidateStory}
+                      onInterest={handleInterest}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="mm-new-candidates-empty">No candidates match this filter yet.</div>
+              )
             ) : recentError ? (
               <ErrorState message={recentError} onRetry={loadRecent} />
             ) : recentLoading ? (

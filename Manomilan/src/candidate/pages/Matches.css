@@ -16,6 +16,12 @@
   margin-bottom: 0;
 }
 
+.find-matches-page .cnd-match-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .find-matches-page .cnd-filter-card {
   margin: 0;
   padding: 22px;

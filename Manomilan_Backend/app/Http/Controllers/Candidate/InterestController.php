@@ -15,7 +15,8 @@ class InterestController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $me = $this->candidateProfile($request, true);
+            $me = $this->matchingProfile($request, $user);
+            $preference = $me->exists ? $me->preference : $user->preference;
             $filters = $request->validate([
                 'status' => ['nullable', 'in:pending,accepted,rejected,declined'],
                 'q' => ['nullable', 'string', 'max:100'],
@@ -40,8 +41,7 @@ class InterestController extends CandidateController
             $paginator = $query->latest()->paginate((int) ($filters['per_page'] ?? 10));
             $paginator->setCollection(
                 $paginator->getCollection()
-                    ->map(fn (UserInterest $interest) => $this->presentInterest($interest, 'received', $me, $me->preference))
-                    ->filter(fn (array $item) => $item['profile'] !== null)
+                    ->map(fn (UserInterest $interest) => $this->presentInterest($interest, 'received', $me, $preference))
                     ->values()
             );
 
@@ -50,7 +50,7 @@ class InterestController extends CandidateController
                 'data' => [
                     'interests' => $paginator->items(),
                     'pagination' => $this->pagination($paginator),
-                    'counts' => $this->counts($me),
+                    'counts' => $this->counts($me, $user->id),
                 ],
             ]);
         } catch (Throwable $e) {
@@ -64,7 +64,8 @@ class InterestController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $me = $this->candidateProfile($request, true);
+            $me = $this->matchingProfile($request, $user);
+            $preference = $me->exists ? $me->preference : $user->preference;
             $filters = $request->validate([
                 'q' => ['nullable', 'string', 'max:100'],
                 'page' => ['nullable', 'integer', 'min:1'],
@@ -87,7 +88,7 @@ class InterestController extends CandidateController
             $paginator = $query->latest()->paginate((int) ($filters['per_page'] ?? 10));
             $paginator->setCollection(
                 $paginator->getCollection()
-                    ->map(fn (UserInterest $interest) => $this->presentInterest($interest, 'sent', $me, $me->preference))
+                    ->map(fn (UserInterest $interest) => $this->presentInterest($interest, 'sent', $me, $preference))
                     ->filter(fn (array $item) => $item['profile'] !== null)
                     ->values()
             );
@@ -97,7 +98,7 @@ class InterestController extends CandidateController
                 'data' => [
                     'interests' => $paginator->items(),
                     'pagination' => $this->pagination($paginator),
-                            'counts' => $this->counts($me),
+                    'counts' => $this->counts($me, $user->id),
                 ],
             ]);
         } catch (Throwable $e) {
@@ -115,7 +116,8 @@ class InterestController extends CandidateController
     {
         try {
             $user = $this->candidate($request);
-            $me = $this->candidateProfile($request, true);
+            $me = $this->matchingProfile($request, $user);
+            $preference = $me->exists ? $me->preference : $user->preference;
             $profile = Profile::where('status', 'active')->find($request->validated('to_profile_id'));
 
             if (! $profile) {
@@ -157,12 +159,19 @@ class InterestController extends CandidateController
             ]);
 
             $interest->load('profile');
+            $this->notifyUser(
+                $profile->user,
+                'interest_received',
+                'You received a new interest',
+                ($me->full_name ?: $user->name ?: 'A candidate').' sent you an interest.',
+                ['interest_id' => $interest->id, 'profile_id' => $profile->id]
+            );
 
             return response()->json([
                 'success' => true,
                 'message' => 'Profile suggested successfully.',
                 'data' => [
-                    'interest' => $this->presentInterest($interest, 'sent', $me, $me->preference),
+                    'interest' => $this->presentInterest($interest, 'sent', $me, $preference),
                 ],
             ], 201);
         } catch (Throwable $e) {
@@ -191,10 +200,11 @@ class InterestController extends CandidateController
     public function respond(RespondInterestRequest $request, int $id)
     {
         try {
-            $me = $this->candidateProfile($request, true);
+            $this->candidate($request);
+            $me = $this->candidateProfile($request);
             $interest = UserInterest::with(['user.profile', 'profile'])
                 ->where('id', $id)
-                ->where('profile_id', $me->id)
+                ->where('profile_id', $me?->id)
                 ->first();
 
             if (! $interest) {
@@ -204,6 +214,13 @@ class InterestController extends CandidateController
             $status = $request->validated('status') === 'declined' ? 'rejected' : $request->validated('status');
             $interest->status = $status;
             $interest->save();
+            $this->notifyUser(
+                $interest->user,
+                $status === 'accepted' ? 'interest_accepted' : 'interest_declined',
+                $status === 'accepted' ? 'Your interest was accepted' : 'Your interest was declined',
+                'Your sent interest has been '.($status === 'accepted' ? 'accepted.' : 'declined.'),
+                ['interest_id' => $interest->id, 'profile_id' => $interest->profile_id]
+            );
 
             return response()->json([
                 'success' => true,
@@ -226,10 +243,10 @@ class InterestController extends CandidateController
         $query->whereRaw('LOWER(status) = ?', [strtolower($status)]);
     }
 
-    private function counts(Profile $me): array
+    private function counts(Profile $me, ?int $userId = null): array
     {
         $received = UserInterest::where('profile_id', $me->id);
-        $sent = UserInterest::where('user_id', $me->user_id);
+        $sent = UserInterest::where('user_id', $userId ?? $me->user_id);
 
         return [
             'received' => (clone $received)->count(),

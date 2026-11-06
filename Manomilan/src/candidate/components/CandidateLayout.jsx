@@ -1,17 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Bell, Heart, Home, KeyRound, LogOut, Menu,
-  User, Users, Compass,
+  Bell, Heart, Home, Menu, ReceiptText, User, Compass,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import CandidateSidebar from "./CandidateSidebar";
 import { useProfileCompletion } from "../profile-completion-context";
-import {
-  clearSession, getCachedHomeData, getSession,
-} from "../../auth";
-import { apiMediaUrl } from "../../api";
-import { getUnreadNotificationCount } from "../api";
-import { initials } from "../utils";
+import { clearSession, getCachedHomeData } from "../../auth";
+import { apiMediaUrl, getProfilePhoto } from "../../api";
+import { getCandidateProfile, getUnreadNotificationCount } from "../api";
 import "../candidate.css";
 
 const TABS = [
@@ -19,37 +15,53 @@ const TABS = [
   ["/candidate/matches", "Discover", Compass],
   ["/candidate/interests-received", "Interests", Heart],
   ["/candidate/profile", "Profile", User],
+  ["/candidate/melava-receipts", "Receipts", ReceiptText],
 ];
 
 export default function CandidateLayout({ currentPath, candidateInfo, children }) {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
-  const profileCompletion = useProfileCompletion();
   const cachedHome = getCachedHomeData();
-  const menuRef = useRef(null);
-  const session = getSession();
-  const sessionUser = session?.user;
-  const sessionProfile = sessionUser?.profile || {};
+  const photoUrl = (profile) => apiMediaUrl(getProfilePhoto(profile, [
+    "photo",
+    "photo_url",
+    "profilePhoto",
+    "profile_photo",
+    "profile_photo_url",
+    "photos",
+  ]));
+  const [candidatePhoto, setCandidatePhoto] = useState(() => (
+    photoUrl(candidateInfo) || photoUrl(cachedHome?.profile)
+  ));
+  const [failedCandidatePhoto, setFailedCandidatePhoto] = useState("");
+  const profileCompletion = useProfileCompletion();
 
-  const candidateName =
-    (candidateInfo?.name && !["Candidate", "Your profile"].includes(candidateInfo.name)
-      ? candidateInfo.name
-      : "")
-    || sessionProfile.full_name
-    || sessionProfile.fullName
-    || cachedHome?.profile?.full_name
-    || sessionUser?.name
-    || sessionUser?.username
-    || "Candidate";
-  const candidatePhoto =
-    apiMediaUrl(
-      candidateInfo?.photo
-      || cachedHome?.profile?.photo_url
-      || sessionProfile.photo_url
-      || sessionProfile.profilePhoto,
-    );
+  useEffect(() => {
+    let active = true;
+    getCandidateProfile()
+      .then((result) => {
+        if (active) {
+          setCandidatePhoto(photoUrl(result?.profile));
+          setFailedCandidatePhoto("");
+        }
+      })
+      .catch((error) => {
+        console.error("Could not load the candidate header profile photo.", error);
+      });
+
+    const handleProfileUpdated = (event) => {
+      if (!Object.prototype.hasOwnProperty.call(event.detail?.profile || {}, "photo_url")) return;
+      setCandidatePhoto(photoUrl(event.detail.profile));
+      setFailedCandidatePhoto("");
+    };
+    window.addEventListener("candidate:profile-updated", handleProfileUpdated);
+
+    return () => {
+      active = false;
+      window.removeEventListener("candidate:profile-updated", handleProfileUpdated);
+    };
+  }, []);
 
   useEffect(() => {
     document.body.classList.add("candidate-mode");
@@ -60,7 +72,7 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
     let active = true;
     const loadCount = async () => {
       try {
-        const result = await getUnreadNotificationCount();
+        const result = await getUnreadNotificationCount({ force: true });
         if (active) setUnreadCount(Number(result?.unread_count) || 0);
       } catch {
         /* The bell is non-critical; ignore transient failures. */
@@ -77,26 +89,6 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
       window.removeEventListener("candidate:notifications-updated", loadCount);
     };
   }, []);
-
-  useEffect(() => {
-    const onClick = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuOpen(false);
-    };
-    const onKey = (event) => {
-      if (event.key === "Escape") setMenuOpen(false);
-    };
-    document.addEventListener("mousedown", onClick);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onClick);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
-
-  const go = (path) => {
-    setMenuOpen(false);
-    navigate(path);
-  };
 
   const handleLogout = () => {
     clearSession();
@@ -130,55 +122,27 @@ export default function CandidateLayout({ currentPath, candidateInfo, children }
                 type="button"
                 className="mm-icon-btn"
                 aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ""}`}
-                onClick={() => go("/candidate/notifications")}
+                onClick={() => navigate("/candidate/notifications")}
               >
                 <Bell size={24} />
                 {unreadCount > 0 ? (
                   <span className="mm-notification-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
                 ) : null}
               </button>
-
-              <div className="cnd-user-menu" ref={menuRef}>
-                <button
-                  type="button"
+              {candidatePhoto && failedCandidatePhoto !== candidatePhoto ? (
+                <Link
+                  to="/candidate/profile"
                   className="mm-avatar-small"
-                  onClick={() => setMenuOpen((value) => !value)}
-                  aria-expanded={menuOpen}
-                  aria-haspopup="menu"
+                  aria-label="View profile"
+                  title="View profile"
                 >
-                  {candidatePhoto ? (
-                    <img
-                      src={candidatePhoto}
-                      alt=""
-                      onError={(event) => event.currentTarget.remove()}
-                    />
-                  ) : (
-                    <span style={{display:'flex',alignItems:'center',justifyContent:'center',width:'100%',height:'100%',background:'var(--mm-border)',color:'var(--mm-primary)',fontSize:'12px',fontWeight:'600'}}>{initials(candidateName)}</span>
-                  )}
-                </button>
-
-              {menuOpen ? (
-                <div className="cnd-dropdown" role="menu">
-                  <button type="button" role="menuitem" onClick={() => go("/candidate/profile")}>
-                    <User size={17} /> My Profile
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => go("/candidate/matches")}>
-                    <Users size={17} /> Find Matches
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => go("/candidate/notifications")}>
-                    <Bell size={17} /> Notifications
-                    {unreadCount > 0 ? <span className="cnd-dropdown-count">{unreadCount}</span> : null}
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => go("/candidate/change-password")}>
-                    <KeyRound size={17} /> Change Password
-                  </button>
-                  <span className="cnd-dropdown-divider" />
-                  <button type="button" role="menuitem" className="danger" onClick={handleLogout}>
-                    <LogOut size={17} /> Log Out
-                  </button>
-                </div>
+                  <img
+                    src={candidatePhoto}
+                    alt=""
+                    onError={() => setFailedCandidatePhoto(candidatePhoto)}
+                  />
+                </Link>
               ) : null}
-            </div>
             </div>
           </div>
         </header>

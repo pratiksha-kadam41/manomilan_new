@@ -8,6 +8,6 @@ export const menuItems = [
 ];
 
 export const accountItems = [
-  { label: "Notifications", path: "/candidate/notifications", icon: "bell", requiresComplete: true },
+  { label: "Notifications", path: "/candidate/notifications", icon: "bell", requiresComplete: false },
   { label: "Change Password", path: "/candidate/change-password", icon: "key", requiresComplete: false },
 ];

@@ -83,7 +83,7 @@ export default function Notifications() {
     }
     setError("");
     try {
-      const result = await getNotifications(params);
+      const result = await getNotifications(params, { force: true });
       if (requestId !== loadRequestId.current) return;
       setItems(result?.notifications || []);
       setPagination(result?.pagination || null);
