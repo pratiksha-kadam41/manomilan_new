@@ -30,7 +30,8 @@ const dateText = (value) => {
 };
 
 function BioDataPaper({ profile, template, orientation, paperRef }) {
-  const profilePhoto = apiMediaUrl(getProfilePhoto(profile, ["photo_url", "photo", "profile_photo"]));
+  const profilePhoto = profile.photo_data_url
+    || apiMediaUrl(getProfilePhoto(profile, ["photo_url", "photo", "profile_photo"]));
   const personal = [
     ["Date of Birth", dateText(profile.dob)],
     ["Mobile No", display(profile.mobile)],

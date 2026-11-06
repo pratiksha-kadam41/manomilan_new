@@ -1381,6 +1381,7 @@ class ProfileController extends Controller
                     'id' => $profile->id,
                     'full_name' => $profile->full_name ?: $profile->fullName ?: $profile->user?->name,
                     'photo_url' => $this->fileUrl(is_string($photo) ? $photo : null),
+                    'photo_data_url' => $this->imageDataUrl($photo),
                     'gender' => $profile->groomorbride ?: $profile->groomOrBride,
                     'dob' => $birthDate,
                     'mobile' => $profile->user?->username ?? $profile->phone,
@@ -2032,6 +2033,26 @@ class ProfileController extends Controller
         }
 
         return null;
+    }
+
+    private function imageDataUrl($path): string
+    {
+        $filePath = $this->localUploadPath($path);
+        if (! $filePath) {
+            return '';
+        }
+
+        $mimeType = (new \finfo(FILEINFO_MIME_TYPE))->file($filePath);
+        if (! is_string($mimeType) || ! str_starts_with($mimeType, 'image/')) {
+            return '';
+        }
+
+        $contents = file_get_contents($filePath);
+        if ($contents === false) {
+            return '';
+        }
+
+        return 'data:'.$mimeType.';base64,'.base64_encode($contents);
     }
 
     private function documentPath(Profile $profile, string $key, ?array $documentColumns = null): ?string
